@@ -9,7 +9,7 @@ The images bellow (1280x864) were rendered using my (very slow) notebook:
 
 Intel i5-5200U @2.20GHz,
 8.0GB RAM,
-Geforce 920M 2GB
+Geforce 920M 2GB - Compute Capability 3.5
 
 Image rendered using the CPU version - 120 samples per pixel ( 5 hours 20 minutes and 45 seconds )
 
