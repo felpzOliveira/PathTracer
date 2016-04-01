@@ -3,8 +3,6 @@ Path Tracer based on the mini-book series written by Peter Shirley
 
 This repo contains 2 implementations, CPU/GPU version (C/C++ , Cuda C).
 
-Currently only worked on the first volume of the mini-books series : "Ray Tracing in One Weekend"
-
 The images bellow (1280x864) were rendered using my (very slow) notebook:
 
 Intel i5-5200U @2.20GHz,
