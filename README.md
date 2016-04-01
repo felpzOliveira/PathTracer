@@ -17,6 +17,6 @@ Image rendered using the CPU version - 120 samples per pixel ( 5 hours 20 minute
 
 Image rendered using the GPU version - 150 samples per pixel ( 55 minutes and 24 seconds )
 
-![Alt text](gpu.png "CPU")
+![Alt text](gpu.png "GPU")
 
 *GPU version uses cudaMallocManaged and recursion on __device__ function. Be sure your GPU supports that if you wish to build the program.
