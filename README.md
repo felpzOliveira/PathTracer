@@ -1,6 +1,8 @@
 # PathTracer
 Path Tracer based on the mini-book series written by Peter Shirley
 
+#NEW BRANCH
+
 This repo contains 2 implementations, CPU/GPU version (C/C++ , Cuda C).
 
 Currently only worked on the first volume of the mini-books series : "Ray Tracing in One Weekend"
