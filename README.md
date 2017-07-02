@@ -7,7 +7,7 @@ Path Tracer based on the mini-book series written by Peter Shirley
 some info
 some more info
 someoeomeoemsiojnegfj info
-int i = 2
+int i = 3
 
 This repo contains 2 implementations, CPU/GPU version (C/C++ , Cuda C).
 
