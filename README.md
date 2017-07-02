@@ -1,6 +1,13 @@
 # PathTracer
 Path Tracer based on the mini-book series written by Peter Shirley
 
+#NEW BRANCH
+
+
+some info
+some more info
+someoeomeoemsiojnegfj info
+
 This repo contains 2 implementations, CPU/GPU version (C/C++ , Cuda C).
 
 The images bellow (1280x864) were rendered using my (very slow) notebook:
