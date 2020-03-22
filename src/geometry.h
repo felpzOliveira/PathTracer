@@ -163,6 +163,44 @@ inline __host__ __device__ bool hit_yz_rect(Rectangle *rect, Ray r, float t_min,
     return true;
 }
 
+
+inline __host__ __device__ bool hit_triangle(Triangle *tri, Ray ray, float t_min,
+                                             float t_max, hit_record *record)
+{
+    glm::vec3 v0v1 = tri->v1 - tri->v0;
+    glm::vec3 v0v2 = tri->v2 - tri->v0;
+    glm::vec3 N = glm::normalize(glm::cross(v0v1, v0v2));
+    if(glm::dot(N, ray.direction) > 0){
+        N = -N;
+    }
+    glm::vec3 pvec = glm::cross(ray.direction, v0v2);
+    float u = 0.0f, v = 0.0f;
+    float det = glm::dot(v0v1, pvec);
+    if(glm::abs(det) < 0.0001f) return false;
+    
+    float invdet = 1.0f / det;
+    glm::vec3 tvec = ray.origin - tri->v0;
+    u = glm::dot(tvec, pvec) * invdet;
+    if(u < 0.0f || u > 1.0f) return false;
+    
+    glm::vec3 qvec = glm::cross(tvec, v0v1);
+    v = glm::dot(ray.direction, qvec) * invdet;
+    if(v < 0.0f || v + u > 1.0f) return false;
+    
+    float t = glm::dot(v0v2, qvec) * invdet;
+    
+    if(t < t_min || t > t_max) return false;
+    
+    record->u = u;
+    record->v = v;
+    record->t = t;
+    record->normal = N;
+    record->p = ray.origin + t * ray.direction;
+    record->mat_handle = tri->mat_handle;
+    
+    return true;
+}
+
 inline __host__ __device__ bool hit_box(Box *box, Ray ray, float t_min, 
                                         float t_max, hit_record *record)
 {
@@ -248,6 +286,10 @@ inline __host__ __device__ bool _hit_object(Scene *scene, Ray ray, Object object
         case OBJECT_SPHERE: {
             Sphere *sphere = &scene->spheres[id];
             hit_anything = hit_sphere(sphere, ray, tmin, tmax, record);
+        } break;
+        case OBJECT_TRIANGLE: {
+            Triangle *tri = &scene->triangles[id];
+            hit_anything = hit_triangle(tri, ray, tmin, tmax, record);
         } break;
         
         default: return false;

@@ -4,7 +4,58 @@
 #include <cuda_util.cuh>
 #include <material.h>
 #include <parser_v2.h>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+#include <fstream>
+
 #define OUT_FILE "result.png"
+
+struct MeshData{
+    std::vector<glm::vec3> vertices;
+    std::vector<unsigned int> indices;
+};
+
+MeshData * LoadMesh(const char *path){
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    MeshData * data = new MeshData;
+    std::ifstream ifs(path);
+    std::string err;
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, &ifs);
+    if(!err.empty()){
+        std::cout << "Failed to load model " << path << " " << err << std::endl;
+        exit(0);
+    }
+    
+    std::cout << "Found " << attrib.vertices.size() <<
+        " " << attrib.normals.size() << std::endl;
+    
+    for(size_t idx = 0; idx < attrib.vertices.size()/3; ++idx){
+        tinyobj::real_t vx = attrib.vertices[3 * idx + 0];
+        tinyobj::real_t vy = attrib.vertices[3 * idx + 1];
+        tinyobj::real_t vz = attrib.vertices[3 * idx + 2];
+        
+        data->vertices.push_back(glm::vec3(vx,vy,vz));
+    }
+    
+    for(auto &shape : shapes){
+        size_t idx = 0;
+        for(size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f){
+            const size_t fx = shape.mesh.num_face_vertices[f];
+            if(fx == 3){
+                data->indices.push_back(shape.mesh.indices[idx + 0].vertex_index);
+                data->indices.push_back(shape.mesh.indices[idx + 1].vertex_index);
+                data->indices.push_back(shape.mesh.indices[idx + 2].vertex_index);
+            }
+            
+            idx += fx;
+        }
+    }
+    
+    return data;
+}
 
 inline void perlin_generate(glm::vec3 *p, int size){
     for(int i = 0; i < size; i += 1){
@@ -253,10 +304,13 @@ int render_cornell(){
     texture_handle gridTex = scene_add_texture_image(scene, "/home/felpz/Downloads/desert_grid.png");
     texture_handle floor = scene_add_texture_image(scene, "/home/felpz/Downloads/wood.png");
     
+    texture_handle spike = scene_add_texture_image(scene, "/home/felpz/Downloads/vase_exp.png");
+    
     
     texture_handle white = scene_add_texture_solid(scene, glm::vec3(1.0f));
     
     material_handle floorBox = scene_add_material_diffuse(scene, floor);
+    material_handle vasemat = scene_add_material_diffuse(scene, spike);
     material_handle green = scene_add_material_diffuse(scene, solidGreen);
     material_handle emit = scene_add_material_emitter(scene, solidWhite);
     material_handle gray = scene_add_material_diffuse(scene, solidGray);
@@ -306,13 +360,18 @@ int render_cornell(){
     
     glm::vec3 p = glm::vec3(1.5*radius, radius/10.0f, 555.0f - 5.5f*radius);
     glm::vec3 s = glm::vec3(5.0f*radius,radius/10.0f,5.0f*radius);
-    scene_add_box(scene, p, s, glm::vec3(0.0f), floorBox);
-    
     float rad = radius;
-    data = scene_add_sphere(scene, glm::vec3(rad,rad+1.0f,555.0f - 1.5f*radius),
+    
+    glm::vec3 vc = glm::vec3(rad,2.0f*rad,555.0f - 1.5f*radius);
+    scene_add_box(scene, p, s, glm::vec3(0.0f), floorBox);
+    scene_add_box(scene, vc, glm::vec3(2.0f*rad,4.0f*rad,rad), 
+                  glm::vec3(0.0f,-18.0f,0.0f), vasemat);
+    
+    
+    data = scene_add_sphere(scene, vc + glm::vec3(0.0f,2.0f*rad+rad,0.0f),
                             rad, glassSphereYellow);
     
-    scene_add_sphere(scene, glm::vec3(rad,rad+1.0f,555.0f - 1.5f*radius),
+    scene_add_sphere(scene, vc + glm::vec3(0.0f,2.0f*rad+rad,0.0f),
                      rad, glassSphereYellow);
     scene_add_medium(scene, data, 0.2f, iso);
     
@@ -326,8 +385,34 @@ int render_cornell(){
     
     float maxw = start + 10.0f * radius;
     
+    MeshData * meshData = LoadMesh("/home/felpz/Documents/Fluids/Objs/bunny.obj");
+    glm::mat4 translate(1.0f);
+    glm::mat4 scale(1.0f);
+    glm::mat4 rot(1.0f);
+    translate = glm::translate(translate, glm::vec3(p.x,-30.0f,p.z));
+    scale = glm::scale(scale, glm::vec3(1000.0f));
+    rot = glm::rotate(rot, glm::radians(180.0f),
+                      glm::vec3(0.0f,1.0f,0.0f));
+    
+    for(int i = 0; i < meshData->indices.size(); i += 3){
+        size_t i0 = meshData->indices[i + 0];
+        size_t i1 = meshData->indices[i + 1];
+        size_t i2 = meshData->indices[i + 2];
+        glm::vec3 vv0 = meshData->vertices[i0];
+        glm::vec3 vv1 = meshData->vertices[i1];
+        glm::vec3 vv2 = meshData->vertices[i2];
+        
+        glm::vec3 av0 = point_matrix(vv0, translate, scale, rot);
+        glm::vec3 av1 = point_matrix(vv1, translate, scale, rot);
+        glm::vec3 av2 = point_matrix(vv2, translate, scale, rot);
+        scene_add_triangle(scene, av0, av1, av2, glass);
+    }
+    
+    delete meshData;
+    
     int nb = -5;
     int ne = 5;
+    
     float ss = 0.25 *radius;
     std::vector<glm::vec3> container;
     for(int i = nb; i < ne; i += 1){
@@ -368,7 +453,7 @@ int render_cornell(){
                     is_iso = 1;
                 }
                 
-                if(obj < 0.5f){
+                if(obj < 0.35f){
                     //Sphere
                     float rr = ss * 0.5f;
                     if(!is_iso){
@@ -398,16 +483,10 @@ int render_cornell(){
     
     container.clear();
     
-    //scene_add_box(scene, glm::vec3(start, h, end),
-    //glm::vec3(6*radius, 2.0f*h, 3*radius),
-    //glm::vec3(0.0f), gray);
-    
-    //scene_add_sphere(scene, glm::vec3(277.0, 120.5, 277.0), -70.0f, glass);
-    
     Timed("Building BVH", scene_build_done(scene));
     
     float aspect = (float)image->width / (float)image->height;
-    glm::vec3 origin = glm::vec3(60, 50, -100);
+    glm::vec3 origin = glm::vec3(115, 50, -100);
     glm::vec3 target = glm::vec3(220.0f, 60.0f, 500.0f);
     glm::vec3 up = glm::vec3(0.f,1.0f,0.0f);
     
@@ -455,9 +534,6 @@ int render_cornell2(){
     scene_add_rectangle_xz(scene, 0, 555, 0, 555, 0, gray);
     scene_add_rectangle_xy(scene, 0, 555, 0, 555, 555, gray, 1);
     
-    //scene_add_box(scene, glm::vec3(192.5, 82.5, 147.5), glm::vec3(165,165,165),
-    //glm::vec3(0.0f, -18.0f,0.0f), gray);
-    
     scene_add_sphere(scene, glm::vec3(190, 90, 190), 90, glass);
     scene_add_box(scene, glm::vec3(357.5, 165.0, 377.5), glm::vec3(165,330,165),
                   glm::vec3(0.0f,15.0f,0.0f), gray);
@@ -485,7 +561,7 @@ int render_cornell2(){
 }
 
 
-int render_scene(){
+int render_peter_scene(){
     Object ball, air;
     Image *image = image_new(1366, 720);
     Scene *scene = scene_new();
@@ -586,11 +662,103 @@ int render_scene(){
     return 0;
 }
 
+int render_cornell_base(){
+    ///////////////////////////////////////////////////////////////////////////////
+    Image *image = image_new(800, 600);
+    Scene *scene = scene_new();
+    scene->perlin = nullptr;
+    
+    perlin_initialize(&scene->perlin, 256);
+    texture_handle solidRed = scene_add_texture_solid(scene, glm::vec3(0.65, 0.05, 0.05));
+    texture_handle solidGray = scene_add_texture_solid(scene,glm::vec3(0.73, 0.73, 0.73));
+    texture_handle solidGreen = scene_add_texture_solid(scene,glm::vec3(0.12, 0.45, 0.15));
+    texture_handle solidWhite = scene_add_texture_solid(scene,glm::vec3(10.0f));
+    
+    texture_handle imageTex = scene_add_texture_image(scene, "/home/felpz/Downloads/desert.png");
+    
+    material_handle red = scene_add_material_diffuse(scene, solidRed);
+    material_handle green = scene_add_material_diffuse(scene, solidGreen);
+    material_handle emit = scene_add_material_emitter(scene, solidWhite);
+    material_handle gray = scene_add_material_diffuse(scene, solidGray);
+    material_handle glass = scene_add_material_diffuse(scene, solidRed);
+    material_handle imageMat = scene_add_material_diffuse(scene, imageTex);
+    
+    scene_add_rectangle_yz(scene, 0, 555, 0, 555, 555, green, 1);
+    scene_add_rectangle_yz(scene, 0, 555, 0, 555, 0, red);
+    scene_add_rectangle_xz(scene, 213, 343, 227, 332, 554, emit, 1);
+    scene_add_rectangle_xz(scene, 0, 555, 0, 555, 555, gray, 1);
+    scene_add_rectangle_xz(scene, 0, 555, 0, 555, 0, gray);
+    scene_add_rectangle_xy(scene, 0, 555, 0, 555, 555, gray, 1);
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    float x = 150.0f;
+    float z = 450.0f;
+    
+    glm::vec3 v0(x, 50.0f, z);
+    glm::vec3 v1(x - 50.0f, 450.0f, z);
+    glm::vec3 v2(x + 250.0f, 200.0f, z);
+    
+    /*
+    scene_add_triangle(scene, v0, v1, v2, imageMat);
+    
+    scene_add_sphere(scene, v0, 20.0f, gray);
+    scene_add_sphere(scene, v1, 20.0f, gray);
+    scene_add_sphere(scene, v2, 20.0f, green);
+    */
+    
+    MeshData * data = LoadMesh("/home/felpz/Documents/Fluids/Objs/bunny.obj");
+    glm::mat4 translate(1.0f);
+    glm::mat4 scale(1.0f);
+    glm::mat4 rot(1.0f);
+    translate = glm::translate(translate, v0);
+    scale = glm::scale(scale, glm::vec3(1000.0f));
+    rot = glm::rotate(rot, glm::radians(180.0f),
+                      glm::vec3(0.0f,1.0f,0.0f));
+    
+    for(int i = 0; i < data->indices.size(); i += 3){
+        size_t i0 = data->indices[i + 0];
+        size_t i1 = data->indices[i + 1];
+        size_t i2 = data->indices[i + 2];
+        glm::vec3 vv0 = data->vertices[i0];
+        glm::vec3 vv1 = data->vertices[i1];
+        glm::vec3 vv2 = data->vertices[i2];
+        
+        glm::vec3 v0 = point_matrix(vv0, translate, scale, rot);
+        glm::vec3 v1 = point_matrix(vv1, translate, scale, rot);
+        glm::vec3 v2 = point_matrix(vv2, translate, scale, rot);
+        scene_add_triangle(scene, v0, v1, v2, green);
+    }
+    
+    delete data;
+    scene_add_sphere(scene, glm::vec3(x + 250.0f, 200.0f, 100.0f),
+                     30.0f, emit);
+    
+    Timed("Building BVH", scene_build_done(scene));
+    
+    float aspect = (float)image->width / (float)image->height;
+    glm::vec3 origin = glm::vec3(278, 278, -300);
+    glm::vec3 target = glm::vec3(278,278,0);
+    glm::vec3 up = glm::vec3(0.f,1.0f,0.0f);
+    
+    float focus_dist = glm::length(origin - target);
+    (void)focus_dist;
+    
+    //scene->camera = camera_new(origin, target, up, 45, aspect, 2.0f, focus_dist);
+    scene->camera = camera_new(origin, target, up, 43, aspect);
+    int samples = 1000;
+    int samplesPerBatch = 100;
+    
+    render_scene(scene, image, samples, samplesPerBatch);
+    
+    image_write(image, OUT_FILE);
+    image_free(image);
+    return 0;
+}
 
 int main(int argc, char **argv){
     (void)cudaInit();
-    
-    //return render_scene();
+    srand(time(0));
+    //return render_cornell_base();
     //return render_cornell2();
     return render_cornell();
     //return render_fluid_scene("/home/felpz/OUT_PART_SimplexSphere2_60.txt");

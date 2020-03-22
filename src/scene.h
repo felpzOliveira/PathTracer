@@ -234,6 +234,25 @@ inline __host__ void _scene_internal_copy_mediums(Scene *scene){
     }
 }
 
+
+inline __host__ void _scene_internal_copy_triangles(Scene *scene){
+    int size = scene->hostHelper->triangles.size();
+    scene->triangles_it = 0;
+    if(size > 0){
+        size_t memory = sizeof(Triangle) * size;
+        scene->triangles = (Triangle *)cudaAllocOrFail(memory);
+        scene->n_triangles = size;
+        for(int i = 0; i < size; i += 1){
+            Triangle tri = scene->hostHelper->triangles[i];
+            memcpy(&scene->triangles[scene->triangles_it], &tri, sizeof(Triangle));
+            scene->triangles_it += 1;
+        }
+        
+        scene->hostHelper->triangles.clear();
+    }
+}
+
+
 inline __host__ void _scene_internal_copy_spheres(Scene *scene){
     int size = scene->hostHelper->spheres.size();
     scene->sphere_it = 0;
@@ -312,17 +331,18 @@ inline __host__ void scene_build_done(Scene *scene){
     _scene_internal_copy_spheres(scene);
     _scene_internal_copy_rectangles(scene);
     _scene_internal_copy_boxes(scene);
+    _scene_internal_copy_triangles(scene);
     _scene_internal_copy_mediums(scene);
     //build bvh
-    int total = scene->sphere_it +
-        scene->rectangle_it +
-        scene->box_it +
-        scene->mediums_it;
+    int total = scene->sphere_it + scene->rectangle_it +
+        scene->box_it + scene->mediums_it +
+        scene->triangles_it;
     
     int sph_start    = 0;
     int rect_start   = scene->sphere_it;
     int box_start    = rect_start + scene->rectangle_it;
-    int medium_start = box_start + scene->box_it;
+    int tri_start    = box_start + scene->box_it;
+    int medium_start = tri_start + scene->triangles_it;
     
     Object *handles = new Object[total];
     
@@ -354,6 +374,15 @@ inline __host__ void scene_build_done(Scene *scene){
         it ++;
     }
     
+    for(int i = 0; i < scene->triangles_it; i += 1){
+        Triangle *tri = &scene->triangles[i];
+        handles[it].object_type = OBJECT_TRIANGLE;
+        handles[it].object_handle = tri->handle;
+        handles[it].isvalid = 1;
+        handles[it].isbinded = 0;
+        it ++;
+    }
+    
     for(int i = 0; i < scene->mediums_it; i += 1){
         Object bind;
         Medium *medium = &scene->mediums[i];
@@ -378,8 +407,11 @@ inline __host__ void scene_build_done(Scene *scene){
             case OBJECT_MEDIUM:
             handles[medium_start + bind.object_handle].isbinded = 1; break;
             
+            case OBJECT_TRIANGLE:
+            handles[tri_start + bind.object_handle].isbinded = 1; break;
+            
             default:{
-                std::cout << "BUG!" << std::endl;
+                std::cout << "BUG! Unkown object type" << std::endl;
                 exit(0);
             }
         }
@@ -391,9 +423,27 @@ inline __host__ void scene_build_done(Scene *scene){
     scene->bvh = build_bvh(scene, handles, total, 0, BVH_MAX_DEPTH);
     delete[] handles;
     
-    std::cout << "Size: " << get_bvh_node_count(scene->bvh) << std::endl;
+    std::cout << "BVH Node count: " << get_bvh_node_count(scene->bvh) << std::endl;
 }
 
+inline __host__ Object scene_add_triangle(Scene *scene, glm::vec3 v0, glm::vec3 v1,
+                                          glm::vec3 v2, material_handle mat_handle)
+{
+    Triangle tri;
+    Object rv;
+    int n = scene->hostHelper->triangles.size();
+    tri.v0 = v0;
+    tri.v1 = v1;
+    tri.v2 = v2;
+    tri.mat_handle = mat_handle;
+    tri.handle = n;
+    scene->hostHelper->triangles.push_back(tri);
+    rv.isvalid = 1;
+    rv.isbinded = 0;
+    rv.object_handle = n;
+    rv.object_type = OBJECT_TRIANGLE;
+    return rv;
+}
 
 inline __host__ Object scene_add_rectangle_xy(Scene *scene, float x0, float x1,
                                               float y0, float y1, float k,

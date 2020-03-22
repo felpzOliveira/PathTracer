@@ -88,6 +88,7 @@ typedef enum{
     OBJECT_XZ_RECTANGLE,
     OBJECT_YZ_RECTANGLE,
     OBJECT_BOX,
+    OBJECT_TRIANGLE,
     OBJECT_MEDIUM,
     OBJECT_AABB,
 }ObjectType;
@@ -116,6 +117,12 @@ typedef struct Sphere_t{
     material_handle mat_handle;
     object_handle handle;
 }Sphere;
+
+typedef struct Triangle_t{
+    glm::vec3 v0,v1,v2;
+    material_handle mat_handle;
+    object_handle handle;
+}Triangle;
 
 typedef struct Rectangle_t{
     float x0, x1;
@@ -177,6 +184,7 @@ typedef struct SceneHostHelper_t{
     std::vector<Sphere> spheres;
     std::vector<Rectangle> rectangles;
     std::vector<Box> boxes;
+    std::vector<Triangle> triangles;
     std::vector<Medium> mediums;
     std::vector<Material> materials;
     std::vector<Texture> textures;
@@ -195,6 +203,10 @@ typedef struct Scene_t{
     Box *boxes;
     int box_it;
     int n_boxes;
+    
+    Triangle *triangles;
+    int triangles_it;
+    int n_triangles;
     
     Medium *mediums;
     int mediums_it;
@@ -230,6 +242,20 @@ typedef struct Image_t{
 /* Few utilities */
 inline __host__ __device__ float ffmax(float a, float b) { return a > b ? a : b; }
 inline __host__ __device__ float ffmin(float a, float b) { return a < b ? a : b; }
+
+inline __host__ __device__ glm::vec3 point_matrix(glm::vec3 p, glm::mat4 model){
+    glm::vec4 x(p.x,p.y,p.z,1.0f);
+    x = model * x;
+    return glm::vec3(x.x,x.y,x.z);
+}
+
+inline __host__ __device__ glm::vec3 point_matrix(glm::vec3 p, glm::mat4 m0,
+                                                  glm::mat4 m1, glm::mat4 m2)
+{
+    glm::vec4 x(p.x,p.y,p.z,1.0f);
+    x = m0 * m1 * m2 * x;
+    return glm::vec3(x.x,x.y,x.z);
+}
 
 inline __host__ __device__ glm::vec3 toWorld(glm::vec3 local, Transforms transform){
     glm::vec4 p = transform.toWorld * glm::vec4(local, 1.0f);
