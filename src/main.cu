@@ -78,9 +78,7 @@ __device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state,
     for(int depth = 0; depth < max_bounces; depth += 1){
         hit_record record;
         /* Watch out for self intersection (0.001f) */
-        if(!hit_scene(scene, r, 0.001f, FLT_MAX, 
-                      &record, state))
-        {
+        if(!hit_scene(scene, r, 0.001f, FLT_MAX, &record, state)){
             pixel += mask * get_sky(r);
             break;
         }
@@ -228,51 +226,197 @@ int render_fluid_scene(const char *path){
     return 0;
 }
 
+int can_add_box(std::vector<glm::vec3> *p, glm::vec3 s, float l){
+    for(glm::vec3 &d : *p){
+        float f = glm::distance(d, s);
+        if(f < l*1.5f) return 0;
+    }
+    
+    return 1;
+}
+
 int render_cornell(){
-    Image *image = image_new(800, 600);
+    Image *image = image_new(1366, 720);
     Scene *scene = scene_new();
     scene->perlin = nullptr;
     perlin_initialize(&scene->perlin, 256);
+    
+    texture_handle solidBlue = scene_add_texture_solid(scene, glm::vec3(0.05, 0.05, 0.75));
+    texture_handle solidYellow = scene_add_texture_solid(scene, glm::vec3(0.85, 0.65, 0.05));
     texture_handle solidRed = scene_add_texture_solid(scene, glm::vec3(0.65, 0.05, 0.05));
     texture_handle solidGray = scene_add_texture_solid(scene,glm::vec3(0.73, 0.73, 0.73));
-    texture_handle solidGreen = scene_add_texture_solid(scene,glm::vec3(0.12, 0.45, 0.15));
-    texture_handle solidWhite = scene_add_texture_solid(scene,glm::vec3(10.0f));
+    texture_handle solidGreen = scene_add_texture_solid(scene,glm::vec3(0.12, 0.75, 0.15));
     
-    texture_handle imageTex = scene_add_texture_image(scene, "forest.png");
-    texture_handle gridTex = scene_add_texture_image(scene, "forest_grid.png");
+    texture_handle solidWhite = scene_add_texture_solid(scene,glm::vec3(30.0f));
+    
+    texture_handle imageTex = scene_add_texture_image(scene, "/home/felpz/Downloads/desert.png");
+    texture_handle gridTex = scene_add_texture_image(scene, "/home/felpz/Downloads/desert_grid.png");
+    texture_handle floor = scene_add_texture_image(scene, "/home/felpz/Downloads/wood.png");
+    
+    
     texture_handle white = scene_add_texture_solid(scene, glm::vec3(1.0f));
-    material_handle red = scene_add_material_diffuse(scene, solidRed);
+    
+    material_handle floorBox = scene_add_material_diffuse(scene, floor);
     material_handle green = scene_add_material_diffuse(scene, solidGreen);
     material_handle emit = scene_add_material_emitter(scene, solidWhite);
     material_handle gray = scene_add_material_diffuse(scene, solidGray);
     
     material_handle imageMat = scene_add_material_diffuse(scene, imageTex);
     material_handle gridMat = scene_add_material_diffuse(scene, gridTex);
-    material_handle glass = scene_add_material_dieletric(scene, white, 1.07f);
+    material_handle glass = scene_add_material_dieletric(scene, white, 1.5f);
     
-    scene_add_rectangle_yz(scene, 0, 555, 0, 555, 555, gridMat, 1);
+    material_handle glassSphere = scene_add_material_dieletric(scene, solidBlue, 1.5f);
+    
+    material_handle glassSphereRed = scene_add_material_dieletric(scene, solidRed, 1.5f);
+    
+    material_handle glassSphereYellow = scene_add_material_dieletric(scene, solidYellow, 1.5f);
+    
+    material_handle glassSphereGreen = scene_add_material_dieletric(scene, solidGreen, 1.5f);
+    
+    material_handle glassBox = scene_add_material_dieletric(scene, white, 1.5f);
+    material_handle mwhite = scene_add_material_diffuse(scene, scene->white_texture);
+    material_handle iso2 = scene_add_material_isotropic(scene, glm::vec3(0.9,0.4,
+                                                                         0.1));
+    
+    material_handle iso = scene_add_material_isotropic(scene, glm::vec3(0.82,0.8,
+                                                                        0.9));
+    
+    scene_add_rectangle_yz(scene, 0, 555, 0, 555, 1000.0f/*555*/, gridMat, 1);
     scene_add_rectangle_yz(scene, 0, 555, 0, 555, 0, gridMat);
     
-    scene_add_rectangle_xz(scene, 213, 343, 227, 332, 554, emit);
-    scene_add_rectangle_xz(scene, 0, 555, 0, 555, 555, gray, 1);
-    scene_add_rectangle_xz(scene, 0, 555, 0, 555, 0, gray);
-    scene_add_rectangle_xy(scene, 0, 555, 0, 555, 555, imageMat, 1);
+    scene_add_rectangle_xz(scene, 157.5, 397.5, 157.5, 397.5, 554, emit, 1);
+    scene_add_rectangle_xz(scene, 0, 1000.0f, -555, 555, 555, gray, 1);
+    scene_add_rectangle_xz(scene, 0, 1000.0f, -555, 555, 0, gray);
+    scene_add_rectangle_xy(scene, 0, 1000.0f, 0, 555, 555, imageMat, 1);
     
-    scene_add_sphere(scene, glm::vec3(277.0, 120.5, 277.0), -70.0f, glass);
+    
+    Object data, air;
+    float radius = 40.0f;
+    //glm::vec3 boxp = glm::vec3(5.0f*radius, radius+1.0f, 555.0f - 1.5f*radius);
+    
+    glm::vec3 glassBoxP = glm::vec3(7.0f*radius, radius+1.0f, 555.0f-5.0f*radius);
+    glm::vec3 sphPos = glassBoxP + glm::vec3(2.0f*radius+1.0f,0.0f,0.0f);
+    
+    scene_add_sphere(scene, sphPos, radius, glass);
+    data = scene_add_sphere(scene, sphPos, radius, glass);
+    scene_add_medium(scene, data, 0.2f, iso2);
+    
+    scene_add_box(scene, glassBoxP,
+                  glm::vec3(2.0f*radius), glm::vec3(0.0f,5.0f,0.0f), glassBox);
+    
+    glm::vec3 p = glm::vec3(1.5*radius, radius/10.0f, 555.0f - 5.5f*radius);
+    glm::vec3 s = glm::vec3(5.0f*radius,radius/10.0f,5.0f*radius);
+    scene_add_box(scene, p, s, glm::vec3(0.0f), floorBox);
+    
+    float rad = radius;
+    data = scene_add_sphere(scene, glm::vec3(rad,rad+1.0f,555.0f - 1.5f*radius),
+                            rad, glassSphereYellow);
+    
+    scene_add_sphere(scene, glm::vec3(rad,rad+1.0f,555.0f - 1.5f*radius),
+                     rad, glassSphereYellow);
+    scene_add_medium(scene, data, 0.2f, iso);
+    
+    air = scene_add_sphere(scene, glm::vec3(0.0f), 5000.0f, glass);
+    scene_add_medium(scene, air, 0.0001f, iso);
+    
+    
+    float start = 3.1f*radius;
+    float end = 555.0f - 11.5f*radius;
+    float h = 0.25f*radius;
+    
+    float maxw = start + 10.0f * radius;
+    
+    int nb = -5;
+    int ne = 5;
+    float ss = 0.25 *radius;
+    std::vector<glm::vec3> container;
+    for(int i = nb; i < ne; i += 1){
+        for(int j = nb; j < ne; j += 1){
+            float x = ss + random_float() * maxw;
+            float y = 0.5f * h;
+            float z = end - 1.5f*radius + random_float() * 3.0f*radius;
+            if(x > sphPos.x + radius){
+                z = random_float() * 10.0f*radius;
+            }else if(x > p.x + 0.5f*s.x){
+                z = end + random_float() * 3.0f * radius;
+            }
+            
+            float ry = random_float() * 180.0f;
+            if(can_add_box(&container, glm::vec3(x,y,z), ss)){
+                container.push_back(glm::vec3(x,y,z));
+                float obj = random_float();
+                float type = random_float();
+                texture_handle th;
+                material_handle mh;
+                float r = random_float();
+                float g = random_float();
+                float b = random_float();
+                int is_iso = 0;
+                
+                if(type < 0.25f){ //solid 
+                    th = scene_add_texture_solid(scene, glm::vec3(r,g,b));
+                    mh = scene_add_material_diffuse(scene, th);
+                }else if(type < 0.5f){ //metal
+                    th = scene_add_texture_solid(scene, glm::vec3(r,g,b));
+                    mh = scene_add_material_metal(scene, th, 1.0f);
+                }else if(type < 0.75f){ //glass
+                    th = scene_add_texture_solid(scene, glm::vec3(r,g,b));
+                    float nt = random_float() + 0.99f;
+                    mh = scene_add_material_dieletric(scene, th, nt);
+                }else{ // solid (isotropic)
+                    mh = scene_add_material_isotropic(scene, glm::vec3(r,g,b));
+                    is_iso = 1;
+                }
+                
+                if(obj < 0.5f){
+                    //Sphere
+                    float rr = ss * 0.5f;
+                    if(!is_iso){
+                        scene_add_sphere(scene, glm::vec3(x,y,z), rr, mh);
+                    }else{
+                        Object o = scene_add_sphere(scene, glm::vec3(x,y,z), rr, glass);
+                        scene_add_sphere(scene, glm::vec3(x,y,z), rr, glass);
+                        scene_add_medium(scene, o, 0.2f, mh);
+                    }
+                }else{
+                    //Box
+                    if(!is_iso){
+                        scene_add_box(scene, glm::vec3(x,y,z), glm::vec3(ss),
+                                      glm::vec3(0.0f,ry,0.0f), mh);
+                    }else{
+                        Object o = scene_add_box(scene, glm::vec3(x,y,z), glm::vec3(ss),
+                                                 glm::vec3(0.0f,ry,0.0f), glass);
+                        
+                        scene_add_box(scene, glm::vec3(x,y,z), glm::vec3(ss),
+                                      glm::vec3(0.0f,ry,0.0f), glass);
+                        scene_add_medium(scene, o, 0.2f, mh);
+                    }
+                }
+            }
+        }
+    }
+    
+    container.clear();
+    
+    //scene_add_box(scene, glm::vec3(start, h, end),
+    //glm::vec3(6*radius, 2.0f*h, 3*radius),
+    //glm::vec3(0.0f), gray);
+    
+    //scene_add_sphere(scene, glm::vec3(277.0, 120.5, 277.0), -70.0f, glass);
     
     Timed("Building BVH", scene_build_done(scene));
     
     float aspect = (float)image->width / (float)image->height;
-    glm::vec3 origin = glm::vec3(278, 278, -500);
-    glm::vec3 target = glm::vec3(278,278,0);
+    glm::vec3 origin = glm::vec3(60, 50, -100);
+    glm::vec3 target = glm::vec3(220.0f, 60.0f, 500.0f);
     glm::vec3 up = glm::vec3(0.f,1.0f,0.0f);
     
     float focus_dist = glm::length(origin - target);
     (void)focus_dist;
     
     //scene->camera = camera_new(origin, target, up, 45, aspect, 2.0f, focus_dist);
-    scene->camera = camera_new(origin, target, up, 43, aspect);
-    int samples = 1000;
+    scene->camera = camera_new(origin, target, up, 45, aspect);
+    int samples = 30000;
     int samplesPerBatch = 100;
     
     render_scene(scene, image, samples, samplesPerBatch);
@@ -447,7 +591,8 @@ int main(int argc, char **argv){
     (void)cudaInit();
     
     //return render_scene();
-    return render_cornell2();
+    //return render_cornell2();
+    return render_cornell();
     //return render_fluid_scene("/home/felpz/OUT_PART_SimplexSphere2_60.txt");
     //return render_fluid_scene("/home/felpz/OUT_PART_3DRun_10.txt");
     
