@@ -1,4 +1,4 @@
-# Path Tracer
+# Toy Tracer
 
 This is my toy Path Tracer, it is not very efficient but it gets the job done.
 It does not perform any smart sampling it brute forces rays to get the final image
