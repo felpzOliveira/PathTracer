@@ -89,6 +89,7 @@ typedef enum{
     OBJECT_YZ_RECTANGLE,
     OBJECT_BOX,
     OBJECT_TRIANGLE,
+    OBJECT_MESH,
     OBJECT_MEDIUM,
     OBJECT_AABB,
 }ObjectType;
@@ -120,8 +121,10 @@ typedef struct Sphere_t{
 
 typedef struct Triangle_t{
     glm::vec3 v0,v1,v2;
+    glm::vec2 uv0, uv1, uv2;
     material_handle mat_handle;
     object_handle handle;
+    bool has_uvs;
 }Triangle;
 
 typedef struct Rectangle_t{
@@ -143,6 +146,11 @@ typedef struct Box_t{
     Transforms transforms;
 }Box;
 
+
+//TODO: We might need to some refactoring. It would be nice
+//      if we could pass a more complex object (Mesh) or a BVH
+//      to the Medium object so that we can fill complex objects
+//      that cannot be described by a simple object handler.
 typedef struct Medium_t{
     Object geometry;
     object_handle handle;
@@ -172,6 +180,23 @@ typedef struct BVHNode_t{
     int is_leaf;
 }BVHNode;
 
+//TODO: Mesh instancing will require a list of Transformations
+//      that are performed on rays and than test with the original
+//      bounding box
+typedef struct Mesh_t{
+    AABB aabb;
+    Triangle *triangles;
+    int triangles_it;
+    BVHNode *bvh;
+    
+    object_handle handle;
+    material_handle mat_handle;
+    
+    Transforms *instances;
+    int instances_it;
+}Mesh;
+
+
 typedef BVHNode * BVHNodePtr;
 
 /* Properties of a scatter */
@@ -185,6 +210,7 @@ typedef struct SceneHostHelper_t{
     std::vector<Rectangle> rectangles;
     std::vector<Box> boxes;
     std::vector<Triangle> triangles;
+    std::vector<Mesh *> meshes;
     std::vector<Medium> mediums;
     std::vector<Material> materials;
     std::vector<Texture> textures;
@@ -207,6 +233,10 @@ typedef struct Scene_t{
     Triangle *triangles;
     int triangles_it;
     int n_triangles;
+    
+    Mesh **meshes;
+    int meshes_it;
+    int n_meshes;
     
     Medium *mediums;
     int mediums_it;
@@ -242,6 +272,17 @@ typedef struct Image_t{
 /* Few utilities */
 inline __host__ __device__ float ffmax(float a, float b) { return a > b ? a : b; }
 inline __host__ __device__ float ffmin(float a, float b) { return a < b ? a : b; }
+
+inline __host__ __device__ void transform_from_matrixes(Transforms *transform,
+                                                        glm::mat4 translate,
+                                                        glm::mat4 scale,
+                                                        glm::mat4 rotate)
+{
+    transform->toWorld = translate * scale * rotate;
+    transform->toLocal = glm::inverse(rotate) * glm::inverse(scale) * 
+        glm::inverse(translate);
+    transform->normalMatrix = glm::transpose(glm::inverse(transform->toWorld));
+}
 
 inline __host__ __device__ glm::vec3 point_matrix(glm::vec3 p, glm::mat4 model){
     glm::vec4 x(p.x,p.y,p.z,1.0f);
@@ -281,7 +322,18 @@ inline __host__ __device__ glm::vec3 toLocalDir(glm::vec3 world,
     return glm::vec3(p.x, p.y, p.z);
 }
 
-inline __host__ __device__ Ray ray_to_local_space(Ray ray, Transforms transform){
+inline __host__ __device__ Ray ray_to_local_space_normalized(Ray ray,
+                                                             Transforms transform)
+{
+    Ray r = ray;
+    r.origin = toLocal(ray.origin, transform);
+    r.direction = toLocalDir(ray.direction, transform);
+    r.direction = glm::normalize(r.direction);
+    return r;
+}
+
+inline __host__ __device__ Ray ray_to_local_space(Ray ray, Transforms transform)
+{
     Ray r = ray;
     r.origin = toLocal(ray.origin, transform);
     r.direction = toLocalDir(ray.direction, transform);

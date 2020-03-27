@@ -125,7 +125,21 @@ inline __host__ void _get_aabb(Scene *scene, Object obj, AABB *aabb){
     }else if(obj.object_type == OBJECT_TRIANGLE){
         Triangle *tri = &scene->triangles[obj.object_handle];
         triangle_bounding_box(tri, aabb);
+    }else if(obj.object_type == OBJECT_MESH){
+        Mesh *mesh = scene->meshes[obj.object_handle];
+        aabb_init(aabb, mesh->aabb._min, mesh->aabb._max, OBJECT_MESH);
     }
+}
+
+//NOTE: For meshes this must be a triangle
+inline __host__ void get_aabb(Mesh *mesh, Object obj, AABB *aabb){
+    if(obj.object_type != OBJECT_TRIANGLE){
+        std::cout << "Mesh invocation with type != OBJECT_TRIANGLE"<< std::endl;
+        exit(0);
+    }
+    
+    Triangle *tri = &mesh->triangles[obj.object_handle];
+    triangle_bounding_box(tri, aabb);
 }
 
 inline __host__ void get_aabb(Scene *scene, Object obj, AABB *aabb){

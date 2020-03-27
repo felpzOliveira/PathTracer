@@ -4,6 +4,11 @@
 #include <math.h>
 #include <limits>
 
+
+inline __device__ bool hit_mesh(Mesh *mesh, Ray ray, float t_min,
+                                float t_max, hit_record *record,
+                                curandState *state);
+
 inline __host__ __device__ Ray camera_get_ray(Camera *camera, float u, float v){
     Ray r;
     r.origin = camera->origin;
@@ -163,6 +168,18 @@ inline __host__ __device__ bool hit_yz_rect(Rectangle *rect, Ray r, float t_min,
     return true;
 }
 
+//naive first
+inline __host__ __device__ glm::vec2 uv_interpolate(glm::vec3 v0, glm::vec2 uv0,
+                                                    glm::vec3 v1, glm::vec2 uv1,
+                                                    glm::vec3 v2, glm::vec2 uv2,
+                                                    glm::vec3 p)
+{
+    float d0 = 1.0f/glm::distance(p, v0);
+    float d1 = 1.0f/glm::distance(p, v1);
+    float d2 = 1.0f/glm::distance(p, v2);
+    float inv = 1.0f/(d0 + d1 + d2);
+    return (d0 * uv0 + d1 * uv1 + d2 * uv2) * inv;
+}
 
 inline __host__ __device__ bool hit_triangle(Triangle *tri, Ray ray, float t_min,
                                              float t_max, hit_record *record)
@@ -191,12 +208,21 @@ inline __host__ __device__ bool hit_triangle(Triangle *tri, Ray ray, float t_min
     
     if(t < t_min || t > t_max) return false;
     
-    record->u = u;
-    record->v = v;
     record->t = t;
     record->normal = N;
     record->p = ray.origin + t * ray.direction;
     record->mat_handle = tri->mat_handle;
+    
+    if(tri->has_uvs){
+        glm::vec2 s = uv_interpolate(tri->v0, tri->uv0, tri->v1,
+                                     tri->uv1, tri->v2, tri->uv2,
+                                     record->p);
+        record->u = s.x;
+        record->v = s.y;
+    }else{
+        record->u = u;
+        record->v = v;
+    }
     
     return true;
 }
@@ -260,9 +286,9 @@ inline __host__ __device__ bool hit_aabb(AABB *aabb, Ray r, float tmin, float tm
 }
 
 //NOTE: Update when adding new primitives
-inline __host__ __device__ bool _hit_object(Scene *scene, Ray ray, Object object,
-                                            float tmin, float tmax,
-                                            hit_record *record)
+inline __device__ bool _hit_object(Scene *scene, Ray ray, Object object,
+                                   float tmin, float tmax,
+                                   hit_record *record, curandState *state)
 {
     bool hit_anything = false;
     object_handle id = object.object_handle;
@@ -291,6 +317,10 @@ inline __host__ __device__ bool _hit_object(Scene *scene, Ray ray, Object object
             Triangle *tri = &scene->triangles[id];
             hit_anything = hit_triangle(tri, ray, tmin, tmax, record);
         } break;
+        case OBJECT_MESH: {
+            Mesh *mesh = scene->meshes[id];
+            hit_anything = hit_mesh(mesh, ray, tmin, tmax, record, state);
+        } break;
         
         default: return false;
     }
@@ -304,10 +334,10 @@ inline __device__ bool hit_medium(Scene *scene, Ray ray, Medium *medium,
 {
     hit_record rec1, rec2;
     bool hit_geometry = _hit_object(scene, ray, medium->geometry, 
-                                    -FLT_MAX, FLT_MAX, &rec1);
+                                    -FLT_MAX, FLT_MAX, &rec1, state);
     if(hit_geometry){
         bool hit_outer = _hit_object(scene, ray, medium->geometry,
-                                     rec1.t+0.001f, FLT_MAX, &rec2);
+                                     rec1.t+0.001f, FLT_MAX, &rec2, state);
         if(hit_outer){
             if(rec1.t < tmin) rec1.t = tmin;
             if(rec2.t > tmax) rec2.t = tmax;
@@ -343,7 +373,7 @@ inline __device__ bool hit_object(Scene *scene, Ray ray, Object object,
     if(!object.isbinded){
         //prevent Medium recursion
         if(object.object_type != OBJECT_MEDIUM){
-            return _hit_object(scene, ray, object, tmin, tmax, record);
+            return _hit_object(scene, ray, object, tmin, tmax, record, state);
         }else{
             Medium *medium = &scene->mediums[object.object_handle];
             return hit_medium(scene, ray, medium, tmin, tmax, record, state);
@@ -352,6 +382,31 @@ inline __device__ bool hit_object(Scene *scene, Ray ray, Object object,
     }
     
     return false;
+}
+
+inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,
+                                           Mesh *mesh, float tmin,
+                                           float tmax, hit_record *record,
+                                           curandState *state)
+{
+    bool hit_anything = false;
+    float closest = tmax;
+    hit_record temp;
+    for(int i = 0; i < node->n_handles; i += 1){
+        Object handle = node->handles[i];
+        if(handle.object_type == OBJECT_TRIANGLE){
+            Triangle *tri = &mesh->triangles[handle.object_handle];
+            if(hit_triangle(tri, ray, tmin, closest, &temp)){
+                hit_anything = true;
+                closest = temp.t;
+            }
+        }
+    }
+    
+    if(hit_anything){
+        *record = temp;
+    }
+    return hit_anything;
 }
 
 inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,
@@ -378,7 +433,8 @@ inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,
     return hit_anything;
 }
 
-inline __device__ bool hit_bvh(Scene *scene, Ray ray, BVHNode *root, float tmin, 
+template<typename Q>
+inline __device__ bool hit_bvh(Q *locator, Ray ray, BVHNode *root, float tmin, 
                                float tmax, hit_record *record, curandState *state)
 {
     BVHNodePtr stack[BVH_MAX_DEPTH];
@@ -391,7 +447,7 @@ inline __device__ bool hit_bvh(Scene *scene, Ray ray, BVHNode *root, float tmin,
     bool hit_anything = false;
     bool hitbox = hit_aabb(&node->box, ray, tmin, tmax);
     if(hitbox && root->is_leaf){
-        return hit_bvhnode_objects(node, ray, scene, tmin, 
+        return hit_bvhnode_objects(node, ray, locator, tmin, 
                                    closest, record, state);
     }
     
@@ -407,7 +463,7 @@ inline __device__ bool hit_bvh(Scene *scene, Ray ray, BVHNode *root, float tmin,
             }
             
             if(hitl && childL->is_leaf){
-                if(hit_bvhnode_objects(childL, ray, scene, tmin, 
+                if(hit_bvhnode_objects(childL, ray, locator, tmin, 
                                        closest, &temp, state))
                 {
                     hit_anything = true;
@@ -416,7 +472,7 @@ inline __device__ bool hit_bvh(Scene *scene, Ray ray, BVHNode *root, float tmin,
             }
             
             if(hitr && childR->is_leaf){
-                if(hit_bvhnode_objects(childR, ray, scene, tmin, 
+                if(hit_bvhnode_objects(childR, ray, locator, tmin, 
                                        closest, &temp, state))
                 {
                     hit_anything = true;
@@ -449,11 +505,32 @@ inline __device__ bool hit_bvh(Scene *scene, Ray ray, BVHNode *root, float tmin,
     return hit_anything;
 }
 
+//TODO:Instances
+inline __device__ bool hit_mesh(Mesh *mesh, Ray ray, float t_min,
+                                float t_max, hit_record *record,
+                                curandState *state)
+{
+    //Ray r = ray_to_local_space_normalized(ray, mesh->instances[0]);
+    Ray r = ray;
+    bool hit_anything = false;
+    hit_record temp;
+    if(hit_bvh<Mesh>(mesh, r, mesh->bvh, t_min, t_max, &temp, state)){
+        if(temp.t > t_min && temp.t < t_max){
+            hit_anything = true;
+            //hit_record_remap_to_world(&temp, mesh->instances[0], ray);
+            *record = temp;
+        }
+    }
+    
+    return hit_anything;
+}
+
+
 inline __device__ bool hit_scene(Scene *scene, Ray r, float t_min,
                                  float t_max, hit_record *record,
                                  curandState *state)
 {
-    return hit_bvh(scene, r, scene->bvh, t_min, t_max, record, state);
+    return hit_bvh<Scene>(scene, r, scene->bvh, t_min, t_max, record, state);
 }
 
 #endif
