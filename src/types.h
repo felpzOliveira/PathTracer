@@ -37,9 +37,19 @@ typedef enum{
 }TextureType;
 
 typedef enum{
+    TEXTURE_WRAP_CLAMP,
+    TEXTURE_WRAP_REPEAT,
+}TextureWrapMode;
+
+typedef enum{
     NOISE_SIMPLE,
     NOISE_TRILINEAR,
 }NoiseType;
+
+typedef struct TextureProps_t{
+    TextureWrapMode wrap_mode; //wrap mode (clamp to border, repeat ...)
+    float scale; //scale for repeating
+}TextureProps;
 
 typedef unsigned int texture_handle;
 
@@ -49,7 +59,8 @@ typedef struct Texture_t{
     NoiseType noise_type; //noise texture have multiple options
     unsigned char *image; //pixels in case this is a image
     int image_x, image_y; //dimensions of the image
-    TextureType type;
+    TextureType type; //type of texture (image, color, ...)
+    TextureProps props; //properties
 }Texture;
 
 /* In here we go with the idea that a albedo is a solid texture */

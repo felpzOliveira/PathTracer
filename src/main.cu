@@ -7,6 +7,7 @@
 #include <mesh.h>
 #include <pdf.h>
 
+#include "fluid_cut.h"
 
 #define OUT_FILE "result.png"
 #define BUNNY "/home/felpz/Documents/Bunny-LowPoly.stl"
@@ -68,7 +69,7 @@ __global__ void init_random_states(Image *image){
 }
 
 __host__ __device__ glm::vec3 get_sky(Ray r){
-    return glm::vec3(0.0f);
+    //return glm::vec3(0.0f);
     glm::vec3 dir = glm::normalize(r.direction);
     float t = 0.5f * (dir.y + 1.0f);
     return (1.0f - t) * glm::vec3(1.0f) + t*glm::vec3(0.5f, 0.7f, 1.0f);
@@ -85,119 +86,6 @@ __host__ __device__ bool is_sampler(Scene *scene, Object object){
     }
     
     return false;
-}
-
-typedef struct{
-    Ray ray;
-    glm::vec3 color;
-    int remainingBounces;
-}PathSegment;
-
-#define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
-__host__ __device__ glm::vec3 compute_random_dir_hemisphere(glm::vec3 normal,
-                                                            glm::vec2 sample)
-{
-    float up = glm::sqrt(sample.x);
-    float over = glm::sqrt(1.0f - up * up);
-    float around = sample.y - 2.0f * M_PI;
-    
-    glm::vec3 directionNormal;
-    if(glm::abs(normal.x) < SQRT_OF_ONE_THIRD){
-        directionNormal = glm::vec3(1, 0, 0);
-    }else if(glm::abs(normal.y) < SQRT_OF_ONE_THIRD){
-        directionNormal = glm::vec3(0, 1, 0);
-    }else{
-        directionNormal = glm::vec3(0, 0, 1);
-    }
-    
-    glm::vec3 perp1 = glm::normalize(glm::cross(normal, directionNormal));
-    glm::vec3 perp2 = glm::normalize(glm::cross(normal, perp1));
-    
-    return up * normal + glm::cos(around) * over  * perp1
-        + glm::sin(around) * over * perp2;
-}
-
-__host__ __device__ float BxDF_Diffuse(hit_record *record, glm::vec4 sample,
-                                       glm::vec3 &wi, float &pdf)
-{
-    wi = compute_random_dir_hemisphere(record->normal, glm::vec2(sample.x, 
-                                                                 sample.y));
-    float cosine = glm::abs(glm::dot(record->normal, wi));
-    pdf = cosine / glm::pi<float>();
-    return cosine * glm::one_over_pi<float>();
-}
-
-__device__ void path_segment(PathSegment *segment, Scene *scene, curandState *state){
-    hit_record record;
-    LightEval eval;
-    Material *material;
-    
-    Ray ray = segment->ray;
-    glm::vec3 resultColor = segment->color;
-    int remainingBounces = segment->remainingBounces;
-    
-    segment->color = glm::vec3(0.0f);
-    segment->remainingBounces = 0;
-    
-    if(hit_scene(scene, ray, 0.001f, FLT_MAX, &record, state)){
-        material = &scene->material_table[record.mat_handle];
-        
-        glm::vec4 sample(random_float(state),
-                         random_float(state),
-                         random_float(state),
-                         random_float(state));
-        
-        ray_sample_material(ray, scene, material, &record, &eval, state);
-        
-        float ex = eval.emitted.x;
-        float ey = eval.emitted.y;
-        float ez = eval.emitted.z;
-        if(ex > 0.0f || ey > 0.0f || ez > 0.0f){
-            segment->color = resultColor * (eval.attenuation * eval.emitted);
-            segment->remainingBounces = 0;
-        }else if(remainingBounces > 1){
-            glm::vec3 wo = -1.0f * ray.direction;
-            glm::vec3 wi;
-            float pdf;
-            float BRDF;
-            glm::vec3 bxdf = eval.attenuation;
-            
-            
-            //diffuse
-            BRDF = BxDF_Diffuse(&record, sample, wi, pdf);
-            
-            bxdf *= BRDF;
-            
-            if(pdf < 0.0001f){
-                pdf = 1.0f;
-            }
-            
-            resultColor *= bxdf / pdf;
-            Ray outRay;
-            outRay.origin = record.p + wi * 0.001f;
-            outRay.direction = wi;
-            segment->ray = outRay;
-            segment->color = glm::max(resultColor, glm::vec3(0.0f));
-            segment->remainingBounces = remainingBounces - 1;
-        }
-    }
-}
-
-__device__ glm::vec3 _get_color(Ray source, Scene *scene, curandState *state, 
-                                int max_bounces)
-{
-    PathSegment segment;
-    segment.color = glm::vec3(1.0f);
-    segment.remainingBounces = max_bounces;
-    segment.ray = source;
-    
-    int safe_it = 0;
-    while(segment.remainingBounces && safe_it < max_bounces){
-        path_segment(&segment, scene, state);
-        safe_it += 1;
-    }
-    
-    return segment.color;
 }
 
 __device__ glm::vec3 get_color_sampling(Ray source, Scene *scene, 
@@ -379,13 +267,10 @@ __device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state,
     return pixel;
 }
 
-__host__ __device__ glm::vec3 de_nan(glm::vec3 v){
-    glm::vec3 temp = v;
-    if(!(temp[0] == temp[0])) temp[0] = 0.0f;
-    if(!(temp[1] == temp[1])) temp[1] = 0.0f;
-    if(!(temp[2] == temp[2])) temp[2] = 0.0f;
-    
-    return temp;
+__host__ __device__ glm::vec3 palette(float t, glm::vec3 a, glm::vec3 b, 
+                                      glm::vec3 c, glm::vec3 d)
+{
+    return a + b * glm::cos(6.28318f * (c * t + d));
 }
 
 __global__ void RenderBatch(Image *image, Scene *scene, 
@@ -427,7 +312,7 @@ void _render_scene(Scene *scene, Image *image, int &samples, int samplesPerBatch
     init_random_states<<<blocks, threads>>>(image);
     cudaSynchronize();
     
-    std::cout << "Path tracing..." << std::endl;
+    std::cout << "Path tracing... 0%" << std::flush;
     
     int runs = samples / samplesPerBatch;
     int total = 0;
@@ -437,7 +322,7 @@ void _render_scene(Scene *scene, Image *image, int &samples, int samplesPerBatch
         cudaSynchronize();
         float pct = 100.0f*(float(i + 1)/float(runs));
         std::cout.precision(4);
-        std::cout << "\r" << pct << "%    " << std::flush;
+        std::cout << "\rPath tracing... " << pct << "%    " << std::flush;
         total += samplesPerBatch;
     }
     
@@ -450,66 +335,116 @@ void render_scene(Scene *scene, Image *image, int samples, int samplesPerBatch){
 }
 
 int render_fluid_scene(const char *path){
-    Image *image = image_new(600, 400);
+    Image *image = image_new(1366, 720);
     Scene *scene = scene_new();
     Parser_v2 *parser = Parser_v2_new("vs");
     Timed("Reading particles", Parser_v2_load_single_file(parser, path));
     float radius = 0.012f;
     size_t n = 0;
     size_t bo = 0;
+    glm::vec3 origin = fOrigin;
+    glm::vec3 target = fTarget;
+    float fov = 45.0f;
+    float maxb = -FLT_MAX;
     
+    float minD = FLT_MAX;
+    float maxD = -FLT_MAX;
     glm::vec3 *particles = Parser_v2_get_raw_vector_ptr(parser, 0, 0, &n);
     float *boundary = Parser_v2_get_raw_scalar_ptr(parser, 0, 0, &n);
-    
     for(size_t k = 0; k < n; k += 1){
+        glm::vec3 pi = particles[k];
+        float d = glm::distance(pi, origin);
+        if(d > maxD){
+            maxD = d;
+        }
+        
+        if(d < minD){
+            minD = d;
+        }
+        
+        if(boundary[k] > maxb){
+            maxb = boundary[k];
+        }
+        
         bo += boundary[k] ? 1 : 0;
     }
     
-    std::cout << "Boundary " << bo << std::endl;
+    std::cout << "Min " << minD << " Max " << maxD << std::endl;
+    
+    std::cout << "Boundary " << bo << " [ " << maxb << " ]" << std::endl;
     scene->perlin = nullptr;
     perlin_initialize(&scene->perlin, 256);
     
     /* Build texture, all colors only */
-    texture_handle tex_part = scene_add_texture_solid(scene, 
-                                                      glm::vec3(0.98, 0.1, 0.2));
-    texture_handle ground_tex = scene_add_texture_solid(scene,
-                                                        glm::vec3(0.68));
+    texture_handle texL1 = scene_add_texture_solid(scene, glm::vec3(0.97,0.00,0.10));
+    texture_handle texL2 = scene_add_texture_solid(scene, glm::vec3(0.90,0.44,0.10));
+    texture_handle texL3 = scene_add_texture_solid(scene, glm::vec3(0.95,0.76,0.30));
+    texture_handle texL4 = scene_add_texture_solid(scene, glm::vec3(0.45,0.70,0.84));
+    texture_handle texL5 = scene_add_texture_solid(scene, glm::vec3(0.15,0.40,0.74));
+    texture_handle texLn = scene_add_texture_solid(scene, glm::vec3(0.78,0.78,0.74));
+    
+    TextureProps props;
+    props.scale = 200.0f;
+    props.wrap_mode = TEXTURE_WRAP_REPEAT;
+    texture_handle gTex = scene_add_texture_image(scene, "/home/felpz/Documents/ground.jpg", props);
+    
+    texture_handle ground_tex = scene_add_texture_solid(scene,glm::vec3(0.68));
     texture_handle glass_tex = scene_add_texture_solid(scene, glm::vec3(1.0f));
     
     /* Build materials */
-    material_handle mat_part = scene_add_material_diffuse(scene, tex_part);
     material_handle mat_ground = scene_add_material_diffuse(scene, ground_tex);
-    material_handle mat_glass = scene_add_material_dieletric(scene, 
-                                                             glass_tex, 1.07f);
     
-    //ground is giant sphere
-    scene_add_sphere(scene, glm::vec3(0.0f, -1000.5f, -1.0f), 1000.0f, mat_ground);
+    material_handle mat_L1 = scene_add_material_diffuse(scene, texL1);
+    material_handle mat_L2 = scene_add_material_diffuse(scene, texL2);
+    material_handle mat_L3 = scene_add_material_diffuse(scene, texL3);
+    material_handle mat_L4 = scene_add_material_diffuse(scene, texL4);
+    material_handle mat_L5 = scene_add_material_diffuse(scene, texL5);
+    material_handle mat_Ln = scene_add_material_diffuse(scene, texLn);
+    
+    material_handle mat_glass = scene_add_material_dieletric(scene, 
+                                                             glass_tex, 1.0f);
+    
+    //ground is a giant rectangle
+    float len = 800.0f;
+    scene_add_rectangle_xz(scene, -len, len, -len, len, 
+                           fPlaneHeight, mat_ground);
     
     //add all particles
     for(size_t i = 0; i < n; i += 1){
-        scene_add_sphere(scene, particles[i], radius, mat_part);
+        material_handle mhandle;
+        int bo = (int)(boundary[i]);
+        switch(bo){
+            case 1: mhandle = mat_L1; break;
+            case 2: mhandle = mat_L2; break;
+            case 3: mhandle = mat_L3; break;
+            case 4: mhandle = mat_L4; break;
+            case 5: mhandle = mat_L5; break;
+            default: mhandle = mat_Ln;
+        }
+        
+        if(!cut_fluid_particle(particles[i])){
+            scene_add_sphere(scene, particles[i], radius, mhandle);
+        }
     }
     
     //container
-    //scene_add_sphere(scene, glm::vec3(1.0f), 1.0f+2.0f*radius, mat_glass);
+    //scene_add_sphere(scene, glm::vec3(1.0f), -(1.0f+2.0f*radius), mat_glass);
     Timed("Building BVH", scene_build_done(scene));
     
     //set camera stuff
     float aspect = (float)image->width / (float)image->height;
-    glm::vec3 origin = glm::vec3(1.0f, 3.0f, 3.5f);
-    glm::vec3 target = glm::vec3(1.0f);
     glm::vec3 up = glm::vec3(0.f,1.0f,0.0f);
     
     //in case you want focus, I don't use it
     float focus_dist = glm::length(origin - target);
     (void)focus_dist;
     
-    //scene->camera = camera_new(origin, target, up, 45, aspect, 2.0f, focus_dist);
-    scene->camera = camera_new(origin, target, up, 45, aspect);
+    //scene->camera = camera_new(origin, target, up, fov, aspect, 0.05f, focus_dist);
+    scene->camera = camera_new(origin, target, up, fov, aspect);
     
     //define samples to run per pixel and per pixel per run
-    int samples = 100;
-    int samplesPerBatch = 10;
+    int samples = 1000;
+    int samplesPerBatch = 100;
     
     //start path tracer
     render_scene(scene, image, samples, samplesPerBatch);
@@ -1385,13 +1320,13 @@ int render_cornell_base2(){
 int main(int argc, char **argv){
     srand(time(0));
     (void)cudaInit();
-    return render_cornell_cubes_dark();
+    //return render_cornell_cubes_dark();
     //return render_cornell_base2();
     //return render_cornell_box();
     //return render_cornell_cubes();
     //return render_cornell2();
     //return render_fluid_scene("/home/felpz/OUT_PART_SimplexSphere2_60.txt");
-    //return render_fluid_scene("/home/felpz/OUT_PART_3DRun_10.txt");
+    return render_fluid_scene("/home/felpz/OUT_PART_3DClass_48.txt");
     
     
     Image *image = image_new(800, 600);

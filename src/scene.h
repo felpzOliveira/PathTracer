@@ -81,8 +81,12 @@ inline __host__ texture_handle scene_add_texture_solid(Scene *scene,
                                                        glm::vec3 albedo)
 {
     Texture texture;
+    TextureProps props;
+    props.scale = 1.0f;
+    props.wrap_mode = TEXTURE_WRAP_CLAMP;
     texture.color = albedo;
     texture.type = TEXTURE_CONST;
+    texture.props = props;
     scene->hostHelper->textures.push_back(texture);
     return (texture_handle)(scene->hostHelper->textures.size() - 1 + 2);
 }
@@ -92,15 +96,22 @@ inline __host__ texture_handle scene_add_texture_noise(Scene *scene,
                                                        glm::vec3 albedo)
 {
     Texture texture;
+    TextureProps props;
+    props.scale = 1.0f;
+    props.wrap_mode = TEXTURE_WRAP_CLAMP;
     texture.color = albedo;
     texture.type = TEXTURE_NOISE;
     texture.noise_type = ntype;
+    texture.props = props;
     scene->hostHelper->textures.push_back(texture);
     return (texture_handle)(scene->hostHelper->textures.size() - 1 + 2);
 }
 
-inline __host__ texture_handle scene_add_texture_image(Scene *scene,
-                                                       const char *path)
+
+
+inline __host__ texture_handle _scene_add_texture_image(Scene *scene,
+                                                        const char *path,
+                                                        TextureProps props)
 {
     int nx = 0, ny = 0, nn = 0;
     unsigned char *data = stbi_load(path, &nx, &ny, &nn, 0);
@@ -111,6 +122,7 @@ inline __host__ texture_handle scene_add_texture_image(Scene *scene,
         texture.image = new unsigned char[nx * ny * 3];
         texture.image_x = nx;
         texture.image_y = ny;
+        texture.props = props;
         memcpy(texture.image, data, nx*ny*3);
         scene->hostHelper->textures.push_back(texture);
         rv = scene->hostHelper->textures.size() - 1 + 2;
@@ -118,14 +130,35 @@ inline __host__ texture_handle scene_add_texture_image(Scene *scene,
     return (texture_handle)rv;
 }
 
+inline __host__ texture_handle scene_add_texture_image(Scene *scene,
+                                                       const char *path)
+{
+    TextureProps props;
+    props.scale = 1.0f;
+    props.wrap_mode = TEXTURE_WRAP_CLAMP;
+    return _scene_add_texture_image(scene, path, props);
+}
+
+inline __host__ texture_handle scene_add_texture_image(Scene *scene,
+                                                       const char *path,
+                                                       TextureProps props)
+{
+    return _scene_add_texture_image(scene, path, props);
+}
+
+
 inline __host__ texture_handle scene_add_texture_checker(Scene *scene,
                                                          texture_handle odd,
                                                          texture_handle even)
 {
     Texture texture;
+    TextureProps props;
+    props.scale = 1.0f;
+    props.wrap_mode = TEXTURE_WRAP_CLAMP;
     texture.type = TEXTURE_CHECKER;
     texture.odd = odd;
     texture.even = even;
+    texture.props = props;
     scene->hostHelper->textures.push_back(texture);
     return (texture_handle)(scene->hostHelper->textures.size() - 1 + 2);
 }

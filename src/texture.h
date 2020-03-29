@@ -55,11 +55,33 @@ inline __host__ __device__ glm::vec3 texture_value_noise(Texture *texture,
     }
 }
 
+inline __host__ __device__ glm::vec2 texture_apply_distribution(Scene *scene,
+                                                                float u, float v,
+                                                                Texture *texture)
+{
+    TextureWrapMode wrap_mode = texture->props.wrap_mode;
+    if(wrap_mode == TEXTURE_WRAP_CLAMP){
+        u = (u > 0.999f) ? 0.999f : u;
+        u = (u < 0.001f) ? 0.001f : u;
+        v = (v > 0.999f) ? 0.999f : v;
+        v = (v < 0.001f) ? 0.001f : v;
+    }else if(wrap_mode == TEXTURE_WRAP_REPEAT){
+        u = glm::mod(u * texture->props.scale, 1.0f);
+        v = glm::mod(v * texture->props.scale, 1.0f);
+    }
+    
+    return glm::vec2(u, v);
+}
+
 inline __host__ __device__ glm::vec3 texture_value_image(Texture *texture,
                                                          float u, float v,
                                                          glm::vec3 &p,
                                                          Scene *scene)
 {
+    glm::vec2 uv = texture_apply_distribution(scene, u, v, texture);
+    u = uv.x;
+    v = uv.y;
+    
     int i = u * texture->image_x;
     int j = (1.0f - v)*texture->image_y-0.001f;
     if(i < 0) i = 0;
