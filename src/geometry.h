@@ -370,18 +370,22 @@ inline __device__ bool hit_object(Scene *scene, Ray ray, Object object,
                                   curandState *state)
 {
     //prevent binded objects
+    bool hit = false;
     if(!object.isbinded){
         //prevent Medium recursion
         if(object.object_type != OBJECT_MEDIUM){
-            return _hit_object(scene, ray, object, tmin, tmax, record, state);
+            hit = _hit_object(scene, ray, object, tmin, tmax, record, state);
         }else{
             Medium *medium = &scene->mediums[object.object_handle];
-            return hit_medium(scene, ray, medium, tmin, tmax, record, state);
-            //return _hit_object(scene, ray, medium->geometry, tmin, tmax, record);
+            hit = hit_medium(scene, ray, medium, tmin, tmax, record, state);
         }
     }
     
-    return false;
+    if(hit){
+        record->hitted = object;
+    }
+    
+    return hit;
 }
 
 inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,

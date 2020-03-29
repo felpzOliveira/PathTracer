@@ -70,15 +70,6 @@ typedef struct Material_t{
 
 typedef unsigned int material_handle;
 
-/* Hit information */
-typedef struct hit_record_t{
-    float t; //distance
-    glm::vec3 p; //hit point
-    glm::vec3 normal; //normal at p
-    material_handle mat_handle; //handle of the material of hitted surface
-    float u,v; //texture coordinates of hit point
-}hit_record;
-
 typedef int aabb_handle;
 typedef unsigned int object_handle;
 
@@ -110,6 +101,29 @@ typedef struct Object_t{
     object_handle object_handle;
     ObjectType object_type;
 }Object;
+
+typedef enum{
+    PDF_COSINE,
+    PDF_OBJECT
+}PdfType;
+
+typedef struct Pdf_t{
+    PdfType type;
+    Onb uvw;
+    Object object;
+    float pdf;
+}Pdf;
+
+/* Hit information */
+typedef struct hit_record_t{
+    float t; //distance
+    glm::vec3 p; //hit point
+    glm::vec3 normal; //normal at p
+    material_handle mat_handle; //handle of the material of hitted surface
+    float u,v; //texture coordinates of hit point
+    Object hitted;
+    int is_specular;
+}hit_record;
 
 /* Sphere definition */
 typedef struct Sphere_t{
@@ -214,6 +228,7 @@ typedef struct SceneHostHelper_t{
     std::vector<Medium> mediums;
     std::vector<Material> materials;
     std::vector<Texture> textures;
+    std::vector<Object> samplers;
 }SceneHostHelper;
 
 /* Scene defintion, collection of geometry */
@@ -245,6 +260,9 @@ typedef struct Scene_t{
     Material *material_table;
     int material_it;
     int n_materials;
+    
+    Object *samplers;
+    int samplers_it;
     
     Texture *texture_table;
     texture_handle black_texture;
@@ -356,6 +374,26 @@ inline __host__ float random_float() {
 
 inline __device__ float random_float(curandState *state){
     return glm::max(0.0f, curand_uniform(state)-0.001f);
+}
+
+
+inline __device__ glm::vec3 random_to_sphere(float radius, float d2,
+                                             curandState *state)
+{
+    float r1 = random_float(state);
+    float r2 = random_float(state);
+    float z = 1 + r2*(sqrt(1-radius*radius/d2) - 1);
+    
+    float phi = 2*M_PI*r1;
+    float x = cos(phi)*sqrt(1-z*z);
+    float y = sin(phi)*sqrt(1-z*z);
+    
+    return glm::vec3(x, y, z);
+}
+
+
+inline __host__ __device__ float length2(glm::vec3 p){
+    return (p.x * p.x + p.y * p.y + p.z * p.z);
 }
 
 inline __device__ glm::vec3 random_cosine_direction(curandState *state){

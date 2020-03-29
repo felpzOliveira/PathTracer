@@ -6,43 +6,24 @@
 #include <iostream>
 #include <stdio.h>
 
-/*
-for(int x = 0; x < image->width; x += 1){
-    for(int y = 0; y < image->height; y += 1){
-        int offset = x + y * image->width;
-        float fx = (float)x / (float)image->width;
-        float fy = (float)y / (float)image->height;
-        image->pixels[offset] = glm::vec3(fx, fy, 0.0);
-    }
-}
-*/
+__host__ __device__ float clamp(float x){ return x<0?0:(x>0.999f?0.999f:x); }
 
-__host__ __device__ float clamp(float x){ return x < 0 ? 0 : x > 1 ? 1 : x; }
-
-inline __host__ __device__ glm::vec3 color_remap_to_01(glm::vec3 col){
-    float x = col.x;
-    float y = col.y;
-    float z = col.z;
+inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol, int samples){
+    if(ccol[0] != ccol[0]) ccol[0] = 0.0;
+    if(ccol[1] != ccol[1]) ccol[1] = 0.0;
+    if(ccol[2] != ccol[2]) ccol[2] = 0.0;
     
-    if(x > 1.0f || y > 1.0f || z > 1.0f){
-        float mv = glm::max(glm::max(x, y), z);
-        x /= mv;
-        y /= mv;
-        z /= mv;
-    }
+    //float invSamp = 1.0f / (float)(samples);
+    //glm::vec3 col = ccol * invSamp;
+    glm::vec3 col = ccol;
     
-    return glm::vec3(x,y,z);
-}
-
-inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol){
-    glm::vec3 col = color_remap_to_01(ccol);
-    glm::vec3 value(sqrt(clamp(col.x)), 
-                    sqrt(clamp(col.y)), 
-                    sqrt(clamp(col.z)));
+    col = glm::vec3(glm::sqrt(col.x),
+                    glm::sqrt(col.y),
+                    glm::sqrt(col.z));
     
-    return glm::ivec3(int(255.99 * value.x),
-                      int(255.99 * value.y),
-                      int(255.99 * value.z));
+    return glm::ivec3(int(256.0f * clamp(col.x)),
+                      int(256.0f * clamp(col.y)),
+                      int(256.0f * clamp(col.z)));
 }
 
 inline __host__ Image * image_new(int width, int height){
@@ -78,7 +59,7 @@ inline __host__ void image_free(Image *img){
     }
 }
 
-inline __host__ void image_write(Image *image, const char *path){
+inline __host__ void image_write(Image *image, const char *path, int samples){
     int size = image->pixels_count * 3;
     unsigned char *data = new unsigned char[size];
     size_t png_data_size = 0;
@@ -86,7 +67,7 @@ inline __host__ void image_write(Image *image, const char *path){
     int it = 0;
     
     for(int i = 0; i < image->pixels_count; i += 1){
-        glm::ivec3 v = rgb_to_unsigned(image->pixels[i]);
+        glm::ivec3 v = rgb_to_unsigned(image->pixels[i], samples);
         data[it++] = v.x;
         data[it++] = v.y;
         data[it++] = v.z;

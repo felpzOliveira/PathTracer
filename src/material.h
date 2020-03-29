@@ -37,6 +37,14 @@ inline __device__ bool scatter_lambertian(Ray ray, hit_record *record, Scene *sc
     scattered->direction = glm::normalize(direction);
     return true;
 }
+
+inline __device__ float material_brdf_lambertian(Ray ray, hit_record *record,
+                                                 Ray scattered)
+{
+    //return 1.0f / M_PI;
+    float cosine = glm::dot(record->normal, scattered.direction);
+    return cosine < 0 ? 0 : cosine / M_PI;
+}
 /////////////////////////////////////////////////////////////////////////////////////
 //                                    M E T A L                                    //
 /////////////////////////////////////////////////////////////////////////////////////
@@ -127,11 +135,13 @@ inline __device__ bool scatter(Ray ray, hit_record *record, Scene *scene,
                                Material *material, curandState *state)
 {
     bool rv = false;
+    record->is_specular = true;
     if(material){
         switch(material->mattype){
             case LAMBERTIAN: {
                 rv = scatter_lambertian(ray, record, scene, scattered, 
                                         material, state); 
+                record->is_specular = false;
             } break;
             
             case METAL: {
@@ -158,6 +168,20 @@ inline __device__ bool scatter(Ray ray, hit_record *record, Scene *scene,
     }
     
     return rv;
+}
+
+inline __device__ float material_brdf(Ray ray, hit_record *record, Ray scattered,
+                                      Material *material)
+{
+    float r = 1.0f;
+    switch(material->mattype){
+        case LAMBERTIAN: {
+            r = material_brdf_lambertian(ray, record, scattered);
+        } break;
+        
+        default: r = 1.0f;
+    }
+    return r;
 }
 
 inline __device__ void ray_sample_material(Ray ray, Scene *scene, Material *material,

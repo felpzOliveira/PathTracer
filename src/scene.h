@@ -148,10 +148,19 @@ inline __host__ material_handle scene_add_material(Scene *scene, MaterialType ma
 }
 
 inline __host__ material_handle scene_add_material_emitter(Scene *scene,
-                                                           texture_handle albedo,
+                                                           texture_handle emitter,
                                                            float intensity=1.0f)
 {
-    return scene_add_material(scene, EMITTER, albedo, albedo, 0.0f, 1.0f, intensity);
+    return scene_add_material(scene, EMITTER, scene->white_texture,
+                              emitter, 0.0f, 1.0f, intensity);
+}
+
+inline __host__ material_handle scene_add_material_emitterA(Scene *scene,
+                                                            texture_handle albedo,
+                                                            texture_handle emitter,
+                                                            float intensity=1.0f)
+{
+    return scene_add_material(scene, EMITTER, albedo,emitter, 0.0f, 1.0f, intensity);
 }
 
 inline __host__ material_handle scene_add_material_diffuse(Scene *scene,
@@ -163,7 +172,7 @@ inline __host__ material_handle scene_add_material_diffuse(Scene *scene,
 
 inline __host__ material_handle scene_add_material_metal(Scene *scene,
                                                          texture_handle albedo,
-                                                         float fuzz)
+                                                         float fuzz = 0.0f)
 {
     return scene_add_material(scene, METAL, albedo,
                               scene->black_texture, fuzz, 1.0f);
@@ -454,6 +463,14 @@ inline __host__ void scene_build_done(Scene *scene){
     scene->bvh = build_bvh<Scene>(scene, handles, total, 0, BVH_MAX_DEPTH);
     delete[] handles;
     
+    scene->samplers_it = 0;
+    int size = scene->hostHelper->samplers.size();
+    if(size > 0){
+        scene->samplers = (Object *)cudaAllocOrFail(size * sizeof(Object));
+        memcpy(scene->samplers, scene->hostHelper->samplers.data(), sizeof(Object)*size);
+        scene->samplers_it = size;
+    }
+    
     std::cout << "BVH Node count: " << get_bvh_node_count(scene->bvh) << std::endl;
 }
 
@@ -525,7 +542,8 @@ inline __host__ Object scene_add_triangle(Scene *scene, glm::vec3 v0, glm::vec3 
 inline __host__ Object scene_add_rectangle_xy(Scene *scene, float x0, float x1,
                                               float y0, float y1, float k,
                                               material_handle mat_handle,
-                                              int flip_normals=0)
+                                              int flip_normals=0,
+                                              int sample = 0)
 {
     Rectangle rect;
     Object rv;
@@ -536,13 +554,19 @@ inline __host__ Object scene_add_rectangle_xy(Scene *scene, float x0, float x1,
     rv.isbinded = 0;
     rv.object_handle = n;
     rv.object_type = OBJECT_XY_RECTANGLE;
+    
+    if(sample){
+        scene->hostHelper->samplers.push_back(rv);
+    }
+    
     return rv;
 }
 
 inline __host__ Object scene_add_rectangle_xz(Scene *scene, float x0, float x1,
                                               float z0, float z1, float k,
                                               material_handle mat_handle,
-                                              int flip_normals=0)
+                                              int flip_normals=0,
+                                              int sample = 0)
 {
     Rectangle rect;
     Object rv;
@@ -553,13 +577,19 @@ inline __host__ Object scene_add_rectangle_xz(Scene *scene, float x0, float x1,
     rv.isbinded = 0;
     rv.object_handle = n;
     rv.object_type = OBJECT_XZ_RECTANGLE;
+    
+    if(sample){
+        scene->hostHelper->samplers.push_back(rv);
+    }
+    
     return rv;
 }
 
 inline __host__ Object scene_add_rectangle_yz(Scene *scene, float y0, float y1,
                                               float z0, float z1, float k,
                                               material_handle mat_handle,
-                                              int flip_normals=0)
+                                              int flip_normals=0,
+                                              int sample = 0)
 {
     Rectangle rect;
     Object rv;
@@ -570,6 +600,31 @@ inline __host__ Object scene_add_rectangle_yz(Scene *scene, float y0, float y1,
     rv.isbinded = 0;
     rv.object_handle = n;
     rv.object_type = OBJECT_YZ_RECTANGLE;
+    
+    if(sample){
+        scene->hostHelper->samplers.push_back(rv);
+    }
+    return rv;
+}
+
+inline __host__ Object scene_add_sphere(Scene *scene, glm::vec3 center, float radius,
+                                        material_handle mat_handle, int sample = 0)
+{
+    Sphere sphere;
+    Object rv;
+    sphere.center = center;
+    sphere.radius = radius;
+    sphere.handle = scene->hostHelper->spheres.size();
+    sphere.mat_handle = mat_handle;
+    scene->hostHelper->spheres.push_back(sphere);
+    rv.isvalid = 1;
+    rv.isbinded = 0;
+    rv.object_handle = sphere.handle;
+    rv.object_type = OBJECT_SPHERE;
+    
+    if(sample){
+        scene->hostHelper->samplers.push_back(rv);
+    }
     return rv;
 }
 
@@ -624,23 +679,6 @@ inline __host__ Object scene_add_medium(Scene *scene, Object geometry,
     rv.isbinded = 0;
     rv.object_handle = n;
     rv.object_type = OBJECT_MEDIUM;
-    return rv;
-}
-
-inline __host__ Object scene_add_sphere(Scene *scene, glm::vec3 center, float radius,
-                                        material_handle mat_handle)
-{
-    Sphere sphere;
-    Object rv;
-    sphere.center = center;
-    sphere.radius = radius;
-    sphere.handle = scene->hostHelper->spheres.size();
-    sphere.mat_handle = mat_handle;
-    scene->hostHelper->spheres.push_back(sphere);
-    rv.isvalid = 1;
-    rv.isbinded = 0;
-    rv.object_handle = sphere.handle;
-    rv.object_type = OBJECT_SPHERE;
     return rv;
 }
 

@@ -127,7 +127,6 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
     glm::vec3 max(-FLT_MAX);
     glm::vec3 arr[3];
     for(size_t i = 0; i < indices_size; i += 3){
-        mesh->triangles[i].has_uvs = false;
         unsigned int i0 = data.indices[i + 0];
         unsigned int i1 = data.indices[i + 1];
         unsigned int i2 = data.indices[i + 2];
@@ -158,6 +157,7 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
         mesh->triangles[it].v1 = arr[1];
         mesh->triangles[it].v2 = arr[2];
         mesh->triangles[it].mat_handle = mat_handle;
+        mesh->triangles[it].has_uvs = false;
         mesh->triangles[it].handle = it;
         
         handles[it].object_type = OBJECT_TRIANGLE;
@@ -197,8 +197,7 @@ inline __host__ void _internal_load_obj(const char *path, MeshData *data){
         exit(0);
     }
     
-    std::cout << "Found " << attrib.vertices.size() <<
-        " " << attrib.normals.size() << std::endl;
+    std::cout << path << " => " << attrib.vertices.size() << " vertices" << std::endl;
     
     for(size_t idx = 0; idx < attrib.vertices.size()/3; ++idx){
         tinyobj::real_t vx = attrib.vertices[3 * idx + 0];

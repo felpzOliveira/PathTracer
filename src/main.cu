@@ -5,9 +5,14 @@
 #include <material.h>
 #include <parser_v2.h>
 #include <mesh.h>
+#include <pdf.h>
+
 
 #define OUT_FILE "result.png"
 #define BUNNY "/home/felpz/Documents/Bunny-LowPoly.stl"
+
+#define MAX2(a, b) (a) > (b) ? (a) : (b)
+#define MAX3(a, b, c) MAX2(MAX2((a), (b)), (c))
 
 inline void perlin_generate(glm::vec3 *p, int size){
     for(int i = 0; i < size; i += 1){
@@ -69,8 +74,134 @@ __host__ __device__ glm::vec3 get_sky(Ray r){
     return (1.0f - t) * glm::vec3(1.0f) + t*glm::vec3(0.5f, 0.7f, 1.0f);
 }
 
-__device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state, 
-                               int max_bounces)
+__host__ __device__ bool is_sampler(Scene *scene, Object object){
+    for(int i = 0; i < scene->samplers_it; i += 1){
+        Object o = scene->samplers[i];
+        if(o.object_type == object.object_type &&
+           o.object_handle == object.object_handle)
+        {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+typedef struct{
+    Ray ray;
+    glm::vec3 color;
+    int remainingBounces;
+}PathSegment;
+
+#define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
+__host__ __device__ glm::vec3 compute_random_dir_hemisphere(glm::vec3 normal,
+                                                            glm::vec2 sample)
+{
+    float up = glm::sqrt(sample.x);
+    float over = glm::sqrt(1.0f - up * up);
+    float around = sample.y - 2.0f * M_PI;
+    
+    glm::vec3 directionNormal;
+    if(glm::abs(normal.x) < SQRT_OF_ONE_THIRD){
+        directionNormal = glm::vec3(1, 0, 0);
+    }else if(glm::abs(normal.y) < SQRT_OF_ONE_THIRD){
+        directionNormal = glm::vec3(0, 1, 0);
+    }else{
+        directionNormal = glm::vec3(0, 0, 1);
+    }
+    
+    glm::vec3 perp1 = glm::normalize(glm::cross(normal, directionNormal));
+    glm::vec3 perp2 = glm::normalize(glm::cross(normal, perp1));
+    
+    return up * normal + glm::cos(around) * over  * perp1
+        + glm::sin(around) * over * perp2;
+}
+
+__host__ __device__ float BxDF_Diffuse(hit_record *record, glm::vec4 sample,
+                                       glm::vec3 &wi, float &pdf)
+{
+    wi = compute_random_dir_hemisphere(record->normal, glm::vec2(sample.x, 
+                                                                 sample.y));
+    float cosine = glm::abs(glm::dot(record->normal, wi));
+    pdf = cosine / glm::pi<float>();
+    return cosine * glm::one_over_pi<float>();
+}
+
+__device__ void path_segment(PathSegment *segment, Scene *scene, curandState *state){
+    hit_record record;
+    LightEval eval;
+    Material *material;
+    
+    Ray ray = segment->ray;
+    glm::vec3 resultColor = segment->color;
+    int remainingBounces = segment->remainingBounces;
+    
+    segment->color = glm::vec3(0.0f);
+    segment->remainingBounces = 0;
+    
+    if(hit_scene(scene, ray, 0.001f, FLT_MAX, &record, state)){
+        material = &scene->material_table[record.mat_handle];
+        
+        glm::vec4 sample(random_float(state),
+                         random_float(state),
+                         random_float(state),
+                         random_float(state));
+        
+        ray_sample_material(ray, scene, material, &record, &eval, state);
+        
+        float ex = eval.emitted.x;
+        float ey = eval.emitted.y;
+        float ez = eval.emitted.z;
+        if(ex > 0.0f || ey > 0.0f || ez > 0.0f){
+            segment->color = resultColor * (eval.attenuation * eval.emitted);
+            segment->remainingBounces = 0;
+        }else if(remainingBounces > 1){
+            glm::vec3 wo = -1.0f * ray.direction;
+            glm::vec3 wi;
+            float pdf;
+            float BRDF;
+            glm::vec3 bxdf = eval.attenuation;
+            
+            
+            //diffuse
+            BRDF = BxDF_Diffuse(&record, sample, wi, pdf);
+            
+            bxdf *= BRDF;
+            
+            if(pdf < 0.0001f){
+                pdf = 1.0f;
+            }
+            
+            resultColor *= bxdf / pdf;
+            Ray outRay;
+            outRay.origin = record.p + wi * 0.001f;
+            outRay.direction = wi;
+            segment->ray = outRay;
+            segment->color = glm::max(resultColor, glm::vec3(0.0f));
+            segment->remainingBounces = remainingBounces - 1;
+        }
+    }
+}
+
+__device__ glm::vec3 _get_color(Ray source, Scene *scene, curandState *state, 
+                                int max_bounces)
+{
+    PathSegment segment;
+    segment.color = glm::vec3(1.0f);
+    segment.remainingBounces = max_bounces;
+    segment.ray = source;
+    
+    int safe_it = 0;
+    while(segment.remainingBounces && safe_it < max_bounces){
+        path_segment(&segment, scene, state);
+        safe_it += 1;
+    }
+    
+    return segment.color;
+}
+
+__device__ glm::vec3 get_color_sampling(Ray source, Scene *scene, 
+                                        curandState *state, int max_bounces)
 {
     glm::vec3 pixel(0.0f, 0.0f, 0.0f);
     glm::vec3 mask(1.0f, 1.0f, 1.0f);
@@ -78,7 +209,12 @@ __device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state,
     Ray scattered;
     LightEval eval;
     Material *material = 0;
-    for(int depth = 0; depth < max_bounces; depth += 1){
+    
+    Pdf cosine_pdf;
+    cosine_pdf_init(&cosine_pdf);
+    int depth = 0;
+    int E = 1;
+    for(depth = 0; depth < max_bounces; depth += 1){
         hit_record record;
         /* Watch out for self intersection (0.001f) */
         if(!hit_scene(scene, r, 0.001f, FLT_MAX, &record, state)){
@@ -91,15 +227,165 @@ __device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state,
         
         bool st = scatter(r, &record, scene, &eval, &scattered, material, state);
         
-        pixel += mask * eval.emitted;
+        float f = 1.0f;
+        if(material->mattype == LAMBERTIAN){
+            glm::vec3 e(0.0f);
+            Pdf pdf;
+            hit_record rec;
+            Ray sampler;
+            LightEval seval;
+            float n = 0.0f;
+            for(int i = 0; i < scene->samplers_it; i += 1){
+                Object o = scene->samplers[i];
+                object_pdf_init(&pdf, scene, scene->samplers[i]);
+                glm::vec3 dir = pdf_generate(&pdf, scene, &record, state);
+                float fpdf = pdf_value(&pdf, scene, &record, dir);
+                
+                sampler.origin = record.p;
+                sampler.direction = glm::normalize(dir);
+                if(hit_scene(scene, sampler, 0.001f, FLT_MAX, &rec, state)){
+                    if(rec.hitted.object_type == o.object_type &&
+                       rec.hitted.object_handle == o.object_handle)
+                    {
+                        Material *m = &scene->material_table[rec.mat_handle];
+                        ray_sample_material(sampler, scene, m, &rec, &seval, state);
+                        
+                        float sdot = glm::max(0.0f, glm::dot(sampler.direction, rec.normal));
+                        float l = 1.0f/(fpdf * M_PI);
+                        e += eval.attenuation * sdot * l * seval.emitted;
+                        n += 1.0f;
+                    }
+                }
+            }
+            
+            if(n > 0.0f)
+                pixel += e * (1.0f/n);
+        }
+        mask *= eval.attenuation * f;
         
-        mask *= eval.attenuation;
+        if(material->mattype == LAMBERTIAN){
+            E = 0;
+            pixel += mask * eval.emitted * (float)(E);
+        }else{
+            pixel += mask * eval.emitted;
+            E = 1;
+        }
         
         if(!st){ break; }
         
         r = scattered;
     }
+    
+    if(depth == max_bounces - 1) return glm::vec3(0.0f);
     return pixel;
+}
+
+__device__ glm::vec3 get_color(Ray source, Scene *scene, curandState *state, 
+                               int max_bounces)
+{
+    glm::vec3 pixel(0.0f, 0.0f, 0.0f);
+    glm::vec3 mask(1.0f, 1.0f, 1.0f);
+    Ray r = source;
+    Ray scattered;
+    LightEval eval;
+    Material *material = 0;
+    
+    Pdf cosine_pdf;
+    cosine_pdf_init(&cosine_pdf);
+    int depth = 0;
+    for(depth = 0; depth < max_bounces; depth += 1){
+        hit_record record;
+        /* Watch out for self intersection (0.001f) */
+        if(!hit_scene(scene, r, 0.001f, FLT_MAX, &record, state)){
+            pixel += mask * get_sky(r);
+            break;
+        }
+        
+        material = &scene->material_table[record.mat_handle];
+        ray_sample_material(r, scene, material, &record, &eval, state);
+        
+        bool st = scatter(r, &record, scene, &eval, &scattered, material, state);
+        
+        float f = 1.0f;
+#if 0
+        if(st && !is_sampler(scene, record.hitted)){
+            float BRDF = 1.0f;
+            float fpdf = 1.0f;
+            float s = 0.0f;
+            glm::vec3 dir = scattered.direction;
+            if(!record.is_specular){
+                /* Generate a direction to the light/object */
+                //dir = pdf_generate(&cosine_pdf, scene, &record, state);
+                dir = pdf_generate_mixture(scene->samplers, scene->samplers_it,
+                                           &cosine_pdf, scene, &record, state);
+                
+                /* Compute PDF of this direction */
+                //s = pdf_value(&cosine_pdf, scene, &record, dir);
+                s = pdf_value_mixture(scene->samplers, scene->samplers_it,
+                                      &cosine_pdf, scene, &record, dir);
+                
+                /* If it is actually possible, i.e.: PDF != 0 */
+                float fdot = glm::dot(glm::normalize(dir), record.normal);
+                if(!(s < 0.0001f) && fdot > 0.0f){
+                    /* Sample the function at this direction */
+                    Ray tmp;
+                    tmp.origin =  scattered.origin;
+                    tmp.direction = glm::normalize(dir);
+                    
+                    BRDF = material_brdf(r, &record, tmp, material);
+                    fpdf = s;
+                    s = BRDF * fdot / fpdf;
+                    /* 
+                    * NOTE:
+* I'm having a bug where s > 1.0f will cause 
+* strong artifacts in the final render for scenes
+* where rays bounce higher than 7. I think this 
+* somehow is tied to doing light sampling, I understand
+* lights will result in higher intensity and therefore
+* the estimation will be higher but I just don't know 
+* how to fix. So if we sample something and the result is 
+* *too* strong we will discard and sample the cosine distribution
+* instead. This way we can still have better results for having
+* light sampling but don't break the image.
+*/
+                    if(s > 1.0f){
+                        dir = pdf_generate(&cosine_pdf, scene, &record, state);
+                        s = pdf_value(&cosine_pdf, scene, &record, dir);
+                        
+                        float fdot = glm::dot(glm::normalize(dir), record.normal);
+                        if(!(s < 0.0001f) && fdot > 0.0f){
+                            scattered.direction = glm::normalize(dir);
+                            BRDF = material_brdf(r, &record, scattered, material);
+                            fpdf = s;
+                            f = BRDF * fdot / fpdf;
+                        }
+                    }else{
+                        scattered.direction = glm::normalize(dir);
+                        f = s;
+                    }
+                }
+            }
+        }
+#endif
+        mask *= eval.attenuation * f;
+        pixel += mask * eval.emitted;
+        
+        if(!st){ break; }
+        
+        r = scattered;
+    }
+    
+    if(depth == max_bounces - 1) return glm::vec3(0.0f);
+    return pixel;
+}
+
+__host__ __device__ glm::vec3 de_nan(glm::vec3 v){
+    glm::vec3 temp = v;
+    if(!(temp[0] == temp[0])) temp[0] = 0.0f;
+    if(!(temp[1] == temp[1])) temp[1] = 0.0f;
+    if(!(temp[2] == temp[2])) temp[2] = 0.0f;
+    
+    return temp;
 }
 
 __global__ void RenderBatch(Image *image, Scene *scene, 
@@ -115,7 +401,7 @@ __global__ void RenderBatch(Image *image, Scene *scene,
         curandState *state = &image->states[tid];
         
         int max_bounces = 5;
-        
+        float invSamp = 1.0f / ((float)total_samples);
         for(int i = 0; i < samples; i += 1){
             float u1 = 2.0f * curand_uniform(state);
             float u2 = 2.0f * curand_uniform(state);
@@ -125,14 +411,15 @@ __global__ void RenderBatch(Image *image, Scene *scene,
             float u = ((float)x + dx) / (float)image->width;
             float v = ((float)y + dy) / (float)image->height;
             Ray r = camera_get_ray(camera, u, v, state);
-            color += get_color(r, scene, state, max_bounces) / (float)total_samples;
+            glm::vec3 col = get_color(r, scene, state, max_bounces) * invSamp;
+            color += col;
         }
         
         image->pixels[tid] = color;
     }
 }
 
-void _render_scene(Scene *scene, Image *image, int samples, int samplesPerBatch){
+void _render_scene(Scene *scene, Image *image, int &samples, int samplesPerBatch){
     size_t threads = 64;
     size_t blocks = (image->pixels_count + threads - 1)/threads;
     
@@ -143,6 +430,7 @@ void _render_scene(Scene *scene, Image *image, int samples, int samplesPerBatch)
     std::cout << "Path tracing..." << std::endl;
     
     int runs = samples / samplesPerBatch;
+    int total = 0;
     for(int i = 0; i < runs; i += 1){
         RenderBatch<<<blocks, threads>>>(image, scene, samplesPerBatch,
                                          samples);
@@ -150,9 +438,11 @@ void _render_scene(Scene *scene, Image *image, int samples, int samplesPerBatch)
         float pct = 100.0f*(float(i + 1)/float(runs));
         std::cout.precision(4);
         std::cout << "\r" << pct << "%    " << std::flush;
+        total += samplesPerBatch;
     }
     
     std::cout << std::endl;
+    samples = total;
 }
 
 void render_scene(Scene *scene, Image *image, int samples, int samplesPerBatch){
@@ -224,7 +514,7 @@ int render_fluid_scene(const char *path){
     //start path tracer
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -284,8 +574,8 @@ int render_cornell_cubes_dark(){
     material_handle iso2 = scene_add_material_isotropic(scene, glm::vec3(0.9,0.4,
                                                                          0.1));
     
-    material_handle iso3 = scene_add_material_isotropic(scene, glm::vec3(0.25,0.53,
-                                                                         0.87));
+    material_handle iso3 = scene_add_material_isotropic(scene, glm::vec3(0.98,0.63,
+                                                                         0.82));
     
     material_handle iso = scene_add_material_isotropic(scene, glm::vec3(0.82,0.8,
                                                                         0.9));
@@ -321,15 +611,16 @@ int render_cornell_cubes_dark(){
     float h = 0.25f*radius;
     
     float maxw = start + 10.0f * radius;
+    
     glm::mat4 translate(1.0f);
     glm::mat4 scale(1.0f);
     glm::mat4 rot(1.0f);
-    translate = glm::translate(translate, glm::vec3(p.x+60.0f,0.0f,p.z));
-    scale = glm::scale(scale, glm::vec3(1.25f));
+    translate = glm::translate(translate, glm::vec3(p.x+140.0f,0.0f,p.z-10.0f));
+    scale = glm::scale(scale, glm::vec3(6.0f));
     rot = glm::rotate(rot, glm::radians(180.0f),
                       glm::vec3(0.0f,1.0f,0.0f));
     
-    rot = glm::rotate(rot, glm::radians(-90.0f),
+    rot = glm::rotate(rot, glm::radians(270.0f),
                       glm::vec3(1.0f,0.0f,0.0f));
     
     glm::mat4 test(1.0f);
@@ -339,16 +630,35 @@ int render_cornell_cubes_dark(){
     Transforms transform;
     transform.toWorld = test;
     
-    Mesh *mesh = load_mesh_stl(BUNNY, glass, transform);
+    Mesh *mesh = load_mesh_obj("/home/felpz/Documents/soldier.obj", 
+                               green, transform);
     
     transform.toWorld = glm::mat4(1.0f);
+    
     Object obj = scene_add_mesh(scene, mesh, transform);
-    scene_add_mesh(scene, mesh, transform);
-    scene_add_medium(scene, obj, 0.09f, iso3);
+    //scene_add_mesh(scene, mesh, transform);
+    //scene_add_medium(scene, obj, 0.09f, iso3);
     
     
-    int nb = 0;
-    int ne = 0;
+    translate = glm::translate(glm::mat4(1.0f), glm::vec3(p.x+10.0f,-5.0f,p.z));
+    scale = glm::scale(glm::mat4(1.0f), glm::vec3(200.0f));
+    rot = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f),
+                      glm::vec3(0.0f,1.0f,0.0f));
+    
+    //rot = glm::rotate(rot, glm::radians(-90.0f),
+    //glm::vec3(1.0f,0.0f,0.0f));
+    
+    test = translate * scale * rot;
+    
+    transform.toWorld = test;
+    
+    Mesh *budda = load_mesh_obj("/home/felpz/Documents/budda.obj", gray, transform);
+    
+    transform.toWorld = glm::mat4(1.0f);
+    scene_add_mesh(scene, budda, transform);
+    
+    int nb = -5;
+    int ne = 5;
     
     float ss = 0.25 *radius;
     std::vector<glm::vec3> container;
@@ -432,12 +742,12 @@ int render_cornell_cubes_dark(){
     
     //scene->camera = camera_new(origin, target, up, 45, aspect, 2.0f, focus_dist);
     scene->camera = camera_new(origin, target, up, 45, aspect);
-    int samples = 100;
-    int samplesPerBatch = 10;
+    int samples = 20000;
+    int samplesPerBatch = 100;
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -529,14 +839,14 @@ int render_cornell_cubes(){
     /*
     glm::vec3 vc = glm::vec3(rad,2.0f*rad,555.0f - 1.5f*radius);
     scene_add_box(scene, vc, glm::vec3(2.0f*rad,4.0f*rad,rad), 
-                  glm::vec3(0.0f,-18.0f,0.0f), vasemat);
-                  
-                  
+    glm::vec3(0.0f,-18.0f,0.0f), vasemat);
+    
+    
     data = scene_add_sphere(scene, vc + glm::vec3(0.0f,2.0f*rad+rad,0.0f),
-                            rad, glassSphereYellow);
-                            
+    rad, glassSphereYellow);
+    
     scene_add_sphere(scene, vc + glm::vec3(0.0f,2.0f*rad+rad,0.0f),
-                     rad, glassSphereYellow);
+    rad, glassSphereYellow);
     scene_add_medium(scene, data, 0.2f, iso);
     */
     
@@ -664,7 +974,7 @@ int render_cornell_cubes(){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -688,7 +998,6 @@ int render_cornell2(){
     
     texture_handle solidMet = scene_add_texture_solid(scene, 
                                                       glm::vec3(0.8, 0.6, 0.2));
-    material_handle metal1 = scene_add_material_metal(scene, solidMet, 1.0f);
     material_handle glass = scene_add_material_dieletric(scene, white, 1.5f);
     
     scene_add_rectangle_yz(scene, 0, 555, 0, 555, 555, green, 1);
@@ -719,7 +1028,7 @@ int render_cornell2(){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -821,7 +1130,7 @@ int render_peter_scene(){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -887,7 +1196,7 @@ int render_cornell_base(){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -901,7 +1210,7 @@ int render_cornell_box(){
     texture_handle solidRed = scene_add_texture_solid(scene, glm::vec3(0.65, 0.05, 0.05));
     texture_handle solidGray = scene_add_texture_solid(scene,glm::vec3(0.73, 0.73, 0.73));
     texture_handle solidGreen = scene_add_texture_solid(scene,glm::vec3(0.12, 0.45, 0.15));
-    texture_handle solidWhite = scene_add_texture_solid(scene,glm::vec3(10.0f));
+    texture_handle solidWhite = scene_add_texture_solid(scene,glm::vec3(20.0f));
     texture_handle white = scene_add_texture_solid(scene, glm::vec3(1.0f));
     
     material_handle red = scene_add_material_diffuse(scene, solidRed);
@@ -910,21 +1219,33 @@ int render_cornell_box(){
     material_handle gray = scene_add_material_diffuse(scene, solidGray);
     
     texture_handle solidMet = scene_add_texture_solid(scene, 
-                                                      glm::vec3(0.8, 0.6, 0.2));
-    material_handle metal1 = scene_add_material_metal(scene, solidMet, 1.0f);
+                                                      glm::vec3(0.8f, 0.85f, 0.88f));
+    material_handle metal1 = scene_add_material_metal(scene, solidMet);
     material_handle glass = scene_add_material_dieletric(scene, white, 1.5f);
     
+    material_handle iso2 = scene_add_material_isotropic(scene, glm::vec3(0.25,0.53,
+                                                                         0.87));
+    
+    scene_add_rectangle_xz(scene, 213, 343, 227, 332, 554, emit, 1, 1);
+    //scene_add_rectangle_yz(scene, 213, 343, 167, 272, 0.1f, emit, 0, 1);
     scene_add_rectangle_yz(scene, 0, 555, 0, 555, 555, green, 1);
     scene_add_rectangle_yz(scene, 0, 555, 0, 555, 0, red);
-    scene_add_rectangle_xz(scene, 213, 343, 227, 332, 554, emit, 1);
     scene_add_rectangle_xz(scene, 0, 555, 0, 555, 555, gray, 1);
     scene_add_rectangle_xz(scene, 0, 555, 0, 555, 0, gray);
     scene_add_rectangle_xy(scene, 0, 555, 0, 555, 555, gray, 1);
     
-    scene_add_box(scene, glm::vec3(190,90,190), glm::vec3(180),
-                  glm::vec3(0.0f,-18.0f,0.0f), gray);
+    scene_add_sphere(scene, glm::vec3(190, 90, 190), 90, glass);
+    
+    //scene_add_box(scene, glm::vec3(190,90,190), glm::vec3(180),
+    //glm::vec3(0.0f,-18.0f,0.0f), gray);
+    
     scene_add_box(scene, glm::vec3(357.5, 165.0, 377.5), glm::vec3(165,330,165),
-                  glm::vec3(0.0f,15.0f,0.0f), gray);
+                  glm::vec3(0.0f,15.0f,0.0f), gray);//, metal1);
+    //transform.toWorld = glm::mat4(1.0f);
+    
+    //Object obj = scene_add_mesh(scene, mesh, transform);
+    //scene_add_mesh(scene, mesh, transform);
+    //scene_add_medium(scene, obj, 0.09f, iso2);
     
     Timed("Building BVH", scene_build_done(scene));
     
@@ -936,14 +1257,14 @@ int render_cornell_box(){
     float focus_dist = glm::length(origin - target);
     (void)focus_dist;
     
-    //scene->camera = camera_new(origin, target, up, 45, aspect, 2.0f, focus_dist);
+    //scene->camera = camera_new(origin, target, up, 45, aspect, 20.0f, focus_dist);
     scene->camera = camera_new(origin, target, up, 43, aspect);
     int samples = 100;
     int samplesPerBatch = 10;
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
@@ -1022,17 +1343,17 @@ int render_cornell_base2(){
     MeshData * data = LoadMesh("/home/felpz/Documents/Fluids/Objs/bunny.obj");
     
     for(int i = 0; i < data->indices.size(); i += 3){
-        size_t i0 = data->indices[i + 0];
-        size_t i1 = data->indices[i + 1];
-        size_t i2 = data->indices[i + 2];
-        glm::vec3 vv0 = data->vertices[i0];
-        glm::vec3 vv1 = data->vertices[i1];
-        glm::vec3 vv2 = data->vertices[i2];
-        
-        glm::vec3 v0 = point_matrix(vv0, test);
-        glm::vec3 v1 = point_matrix(vv1, test);
-        glm::vec3 v2 = point_matrix(vv2, test);
-        scene_add_triangle(scene, v0, v1, v2, green);
+    size_t i0 = data->indices[i + 0];
+    size_t i1 = data->indices[i + 1];
+    size_t i2 = data->indices[i + 2];
+    glm::vec3 vv0 = data->vertices[i0];
+    glm::vec3 vv1 = data->vertices[i1];
+    glm::vec3 vv2 = data->vertices[i2];
+    
+    glm::vec3 v0 = point_matrix(vv0, test);
+    glm::vec3 v1 = point_matrix(vv1, test);
+    glm::vec3 v2 = point_matrix(vv2, test);
+    scene_add_triangle(scene, v0, v1, v2, green);
     }
     
     delete data;*/
@@ -1056,18 +1377,17 @@ int render_cornell_base2(){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
 
 int main(int argc, char **argv){
-    
-    (void)cudaInit();
     srand(time(0));
-    //return render_cornell_cubes_dark();
+    (void)cudaInit();
+    return render_cornell_cubes_dark();
     //return render_cornell_base2();
-    return render_cornell_box();
+    //return render_cornell_box();
     //return render_cornell_cubes();
     //return render_cornell2();
     //return render_fluid_scene("/home/felpz/OUT_PART_SimplexSphere2_60.txt");
@@ -1151,7 +1471,7 @@ int main(int argc, char **argv){
     
     render_scene(scene, image, samples, samplesPerBatch);
     
-    image_write(image, OUT_FILE);
+    image_write(image, OUT_FILE, samples);
     image_free(image);
     return 0;
 }
