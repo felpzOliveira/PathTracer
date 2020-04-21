@@ -23,13 +23,19 @@ void _check( cudaError_t r, int line ){
 	}
 }
 
-void cudaSynchronize( void ){
+int cudaSynchronize( void ){
 	cudaError_t errSync = cudaGetLastError();
 	cudaError_t errAsync = cudaDeviceSynchronize();
-	if(errSync != cudaSuccess)
+    int rv = 0;
+	if(errSync != cudaSuccess){
 		printf("\nSync kernel error: %s. \n", cudaGetErrorString(errSync));
-	if(errAsync != cudaSuccess)
+        rv = 1;
+    }
+	if(errAsync != cudaSuccess){
 		printf("\nAsync kernel error: %s. \n", cudaGetErrorString(errAsync));
+        rv = 1;
+    }
+    return rv;
 }
 
 int cudaInit( void ){

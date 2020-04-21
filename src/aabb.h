@@ -2,6 +2,13 @@
 #define AABB_H
 #include <types.h>
 
+inline __host__ __device__ void aabb_init(AABB *aabb, glm::vec3 a, glm::vec3 b){
+    if(aabb){
+        aabb->_min = a;
+        aabb->_max = b;
+    }
+}
+
 inline __host__ __device__ void aabb_init(AABB *aabb, glm::vec3 a, glm::vec3 b, 
                                           ObjectType type)
 {
@@ -9,6 +16,19 @@ inline __host__ __device__ void aabb_init(AABB *aabb, glm::vec3 a, glm::vec3 b,
         aabb->_min = a;
         aabb->_max = b;
     }
+}
+
+__host__ __device__  inline AABB surrounding_box(AABB b, glm::vec3 p){
+    glm::vec3 pmin(b._min.x > p.x ? p.x : b._min.x,
+                   b._min.y > p.y ? p.y : b._min.y,
+                   b._min.z > p.z ? p.z : b._min.z);
+    
+    glm::vec3 pmax(b._max.x > p.x ? b._max.x : p.x,
+                   b._max.y > p.y ? b._max.y : p.y,
+                   b._max.z > p.z ? b._max.z : p.z);
+    AABB aabb;
+    aabb_init(&aabb, pmin, pmax);
+    return aabb;
 }
 
 inline __host__ __device__ void surrounding_box(AABB *output, 
@@ -108,25 +128,25 @@ inline __host__ __device__ bool box_bounding_box(Box *box, AABB *aabb){
 //NOTE: Update when adding new primitives
 inline __host__ void _get_aabb(Scene *scene, Object obj, AABB *aabb){
     if(obj.object_type == OBJECT_SPHERE){
-        Sphere *sphere = &scene->spheres[obj.object_handle];
+        Sphere *sphere = &scene->spheres[obj.handle];
         sphere_bounding_box(sphere, aabb);
     }else if(obj.object_type == OBJECT_XY_RECTANGLE){
-        Rectangle *rect = &scene->rectangles[obj.object_handle];
+        Rectangle *rect = &scene->rectangles[obj.handle];
         xy_rect_bounding_box(rect, aabb);
     }else if(obj.object_type == OBJECT_XZ_RECTANGLE){
-        Rectangle *rect = &scene->rectangles[obj.object_handle];
+        Rectangle *rect = &scene->rectangles[obj.handle];
         xz_rect_bounding_box(rect, aabb);
     }else if(obj.object_type == OBJECT_YZ_RECTANGLE){
-        Rectangle *rect = &scene->rectangles[obj.object_handle];
+        Rectangle *rect = &scene->rectangles[obj.handle];
         yz_rect_bounding_box(rect, aabb);
     }else if(obj.object_type == OBJECT_BOX){
-        Box *box = &scene->boxes[obj.object_handle];
+        Box *box = &scene->boxes[obj.handle];
         box_bounding_box(box, aabb);
     }else if(obj.object_type == OBJECT_TRIANGLE){
-        Triangle *tri = &scene->triangles[obj.object_handle];
+        Triangle *tri = &scene->triangles[obj.handle];
         triangle_bounding_box(tri, aabb);
     }else if(obj.object_type == OBJECT_MESH){
-        Mesh *mesh = scene->meshes[obj.object_handle];
+        Mesh *mesh = scene->meshes[obj.handle];
         aabb_init(aabb, mesh->aabb._min, mesh->aabb._max, OBJECT_MESH);
     }
 }
@@ -138,7 +158,7 @@ inline __host__ void get_aabb(Mesh *mesh, Object obj, AABB *aabb){
         exit(0);
     }
     
-    Triangle *tri = &mesh->triangles[obj.object_handle];
+    Triangle *tri = &mesh->triangles[obj.handle];
     triangle_bounding_box(tri, aabb);
 }
 
@@ -146,7 +166,7 @@ inline __host__ void get_aabb(Scene *scene, Object obj, AABB *aabb){
     if(obj.object_type != OBJECT_MEDIUM){
         _get_aabb(scene, obj, aabb);
     }else{
-        Medium *med = &scene->mediums[obj.object_handle];
+        Medium *med = &scene->mediums[obj.handle];
         _get_aabb(scene, med->geometry, aabb);
     }
 }

@@ -3,6 +3,12 @@
 
 #include <types.h>
 
+
+inline __host__ __device__ glm::vec3 onb_u(Onb *onb){ return onb->axis[0]; }
+inline __host__ __device__ glm::vec3 onb_v(Onb *onb){ return onb->axis[1]; }
+inline __host__ __device__ glm::vec3 onb_w(Onb *onb){ return onb->axis[2]; }
+
+
 inline __host__ __device__ void onb_from_w(Onb *onb, glm::vec3 n){
     onb->axis[2] = glm::normalize(n);
     glm::vec3 a;
@@ -23,8 +29,24 @@ inline __host__ __device__ glm::vec3 onb_local(Onb *onb, glm::vec3 a){
     return a.x * u + a.y * v + a.z * w;
 }
 
-inline __host__ __device__ glm::vec3 onb_u(Onb *onb){ return onb->axis[0]; }
-inline __host__ __device__ glm::vec3 onb_v(Onb *onb){ return onb->axis[1]; }
-inline __host__ __device__ glm::vec3 onb_w(Onb *onb){ return onb->axis[2]; }
+
+__host__ __device__ inline glm::vec3 onb_local_to_world(Onb *uvw, glm::vec3 v){
+    glm::vec3 ns = onb_w(uvw);
+    glm::vec3 ss = onb_u(uvw);
+    glm::vec3 ts = onb_v(uvw);
+    return glm::vec3(ss.x * v.x + ts.x * v.y + ns.x * v.z,
+                     ss.y * v.x + ts.y * v.y + ns.y * v.z,
+                     ss.z * v.x + ts.z * v.y + ns.z * v.z);
+}
+
+__host__ __device__ inline glm::vec3 onb_world_to_local(Onb *uvw, glm::vec3 v){
+    glm::vec3 ns = onb_w(uvw);
+    glm::vec3 ss = onb_u(uvw);
+    glm::vec3 ts = onb_v(uvw);
+    return glm::vec3(glm::dot(v, ss), 
+                     glm::dot(v, ts),
+                     glm::dot(v, ns));
+}
+
 
 #endif

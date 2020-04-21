@@ -7,6 +7,7 @@
 #include <fstream>
 #include <types.h>
 #include <cuda_util.cuh>
+#include <transform.h>
 
 
 struct MeshData{
@@ -71,7 +72,7 @@ inline __host__ Mesh * load_mesh_stl(const char *path, material_handle mat_handl
         mesh->triangles[it].handle = it;
         
         handles[it].object_type = OBJECT_TRIANGLE;
-        handles[it].object_handle = it;
+        handles[it].handle = it;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         
@@ -161,7 +162,7 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
         mesh->triangles[it].handle = it;
         
         handles[it].object_type = OBJECT_TRIANGLE;
-        handles[it].object_handle = it;
+        handles[it].handle = it;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         
@@ -172,7 +173,10 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
     aabb_init(&mesh->aabb, min, max, OBJECT_MESH);
     mesh->instances_it = ninstances;
     mesh->instances[0] = transforms;
+    
+    std::cout << "Finished mesh generation, building BVH" << std::endl;
     mesh->bvh = build_bvh<Mesh>(mesh, handles, it, 0, BVH_MAX_DEPTH);
+    std::cout << "Finished mesh BVH" << std::endl;
     
     delete[] handles;
     

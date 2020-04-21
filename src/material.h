@@ -131,8 +131,8 @@ inline __device__ bool scatter_isotropic(Ray ray, hit_record *record, Scene *sce
 }
 
 inline __device__ bool scatter(Ray ray, hit_record *record, Scene *scene,
-                               LightEval *eval, Ray *scattered,
-                               Material *material, curandState *state)
+                               Ray *scattered, Material *material,
+                               curandState *state)
 {
     bool rv = false;
     record->is_specular = true;
@@ -190,7 +190,13 @@ inline __device__ void ray_sample_material(Ray ray, Scene *scene, Material *mate
 {
     eval->emitted = glm::vec3(0.0f);
     eval->attenuation = glm::vec3(0.0f);
+    eval->has_emission = false;
     sample_material(ray, scene, material, record, eval, state);
+    
+    float er = glm::abs(eval->emitted.x);
+    float eg = glm::abs(eval->emitted.y);
+    float eb = glm::abs(eval->emitted.z);
+    eval->has_emission = !(er < 0.0001 && eg < 0.0001 && eb < 0.0001);
 }
 
 #endif

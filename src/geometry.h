@@ -291,7 +291,7 @@ inline __device__ bool _hit_object(Scene *scene, Ray ray, Object object,
                                    hit_record *record, curandState *state)
 {
     bool hit_anything = false;
-    object_handle id = object.object_handle;
+    object_handle id = object.handle;
     switch(object.object_type){
         case OBJECT_BOX: {
             Box *box = &scene->boxes[id];
@@ -376,7 +376,7 @@ inline __device__ bool hit_object(Scene *scene, Ray ray, Object object,
         if(object.object_type != OBJECT_MEDIUM){
             hit = _hit_object(scene, ray, object, tmin, tmax, record, state);
         }else{
-            Medium *medium = &scene->mediums[object.object_handle];
+            Medium *medium = &scene->mediums[object.handle];
             hit = hit_medium(scene, ray, medium, tmin, tmax, record, state);
         }
     }
@@ -399,7 +399,7 @@ inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,
     for(int i = 0; i < node->n_handles; i += 1){
         Object handle = node->handles[i];
         if(handle.object_type == OBJECT_TRIANGLE){
-            Triangle *tri = &mesh->triangles[handle.object_handle];
+            Triangle *tri = &mesh->triangles[handle.handle];
             if(hit_triangle(tri, ray, tmin, closest, &temp)){
                 hit_anything = true;
                 closest = temp.t;
@@ -407,8 +407,9 @@ inline __device__ bool hit_bvhnode_objects(BVHNodePtr node, Ray ray,
         }
     }
     
+    //TODO: record.hitted for mesh
     if(hit_anything){
-        *record = temp;
+        *record = temp;;
     }
     return hit_anything;
 }
@@ -441,13 +442,15 @@ template<typename Q>
 inline __device__ bool hit_bvh(Q *locator, Ray ray, BVHNode *root, float tmin, 
                                float tmax, hit_record *record, curandState *state)
 {
-    BVHNodePtr stack[BVH_MAX_DEPTH];
+    BVHNodePtr stack[BVH_MAX_STACK];
     BVHNodePtr *stackPtr = stack;
     *stackPtr++ = NULL;
     
     BVHNodePtr node = root;
     float closest = tmax;
     hit_record temp;
+    int curr_depth = 1;
+    int max_stack_size = BVH_MAX_STACK;
     bool hit_anything = false;
     bool hitbox = hit_aabb(&node->box, ray, tmin, tmax);
     if(hitbox && root->is_leaf){
@@ -488,14 +491,21 @@ inline __device__ bool hit_bvh(Q *locator, Ray ray, BVHNode *root, float tmin,
             bool transverseR = (hitr && !childR->is_leaf);
             if(!transverseR && !transverseL){
                 node = *--stackPtr;
+                curr_depth -= 1;
             }else{
                 node = (transverseL) ? childL : childR;
                 if(transverseL && transverseR){
                     *stackPtr++ = childR;
+                    curr_depth += 1;
                 }
             }
         }else{
             node = *--stackPtr;
+            curr_depth -= 1;
+        }
+        
+        if(curr_depth > max_stack_size-2){//cannot solve ray
+            return false;
         }
         
         if(node)

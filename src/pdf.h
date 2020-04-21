@@ -66,7 +66,7 @@ inline __device__ float _rectangle_pdf_value(float dim0, float dim1, glm::vec3 v
 inline __device__ float xz_rect_pdf_value(Pdf *pdf, Scene *scene, hit_record *record,
                                           glm::vec3 o, glm::vec3 v)
 {
-    Rectangle *rect = &scene->rectangles[pdf->object.object_handle];
+    Rectangle *rect = &scene->rectangles[pdf->object.handle];
     hit_record rec;
     Ray r;
     r.origin = o;
@@ -83,7 +83,7 @@ inline __device__ float xz_rect_pdf_value(Pdf *pdf, Scene *scene, hit_record *re
 inline __device__ float yz_rect_pdf_value(Pdf *pdf, Scene *scene, hit_record *record,
                                           glm::vec3 o, glm::vec3 v)
 {
-    Rectangle *rect = &scene->rectangles[pdf->object.object_handle];
+    Rectangle *rect = &scene->rectangles[pdf->object.handle];
     hit_record rec;
     Ray r;
     r.origin = o;
@@ -100,7 +100,7 @@ inline __device__ float yz_rect_pdf_value(Pdf *pdf, Scene *scene, hit_record *re
 inline __device__ glm::vec3 xz_rect_pdf_generate(Pdf *pdf, Scene *scene,
                                                  glm::vec3 o, curandState *state)
 {
-    Rectangle *rect = &scene->rectangles[pdf->object.object_handle];
+    Rectangle *rect = &scene->rectangles[pdf->object.handle];
     float x = rect->x0 + random_float(state) * (rect->x1 - rect->x0);
     float z = rect->z0 + random_float(state) * (rect->z1 - rect->z0);
     float y = rect->k;
@@ -110,7 +110,7 @@ inline __device__ glm::vec3 xz_rect_pdf_generate(Pdf *pdf, Scene *scene,
 inline __device__ glm::vec3 yz_rect_pdf_generate(Pdf *pdf, Scene *scene,
                                                  glm::vec3 o, curandState *state)
 {
-    Rectangle *rect = &scene->rectangles[pdf->object.object_handle];
+    Rectangle *rect = &scene->rectangles[pdf->object.handle];
     float y = rect->y0 + random_float(state) * (rect->y1 - rect->y0);
     float z = rect->z0 + random_float(state) * (rect->z1 - rect->z0);
     float x = rect->k;
@@ -120,7 +120,7 @@ inline __device__ glm::vec3 yz_rect_pdf_generate(Pdf *pdf, Scene *scene,
 inline __device__ float sphere_pdf_value(Pdf *pdf, Scene *scene, hit_record *record,
                                          glm::vec3 o, glm::vec3 v)
 {
-    Sphere *sphere = &scene->spheres[pdf->object.object_handle];
+    Sphere *sphere = &scene->spheres[pdf->object.handle];
     hit_record rec;
     Ray r;
     r.origin = o;
@@ -140,7 +140,7 @@ inline __device__ float sphere_pdf_value(Pdf *pdf, Scene *scene, hit_record *rec
 inline __device__ glm::vec3 sphere_pdf_generate(Pdf *pdf, Scene *scene, 
                                                 glm::vec3 o, curandState *state)
 {
-    Sphere *sphere = &scene->spheres[pdf->object.object_handle];
+    Sphere *sphere = &scene->spheres[pdf->object.handle];
     glm::vec3 dir = sphere->center - o;
     float distance2 = dir.x*dir.x + dir.y*dir.y + dir.z*dir.z;
     Onb uvw;
@@ -192,12 +192,14 @@ inline __device__ float pdf_value(Pdf *pdf, Scene *scene, hit_record *record,
     }
 }
 
+
+#define L_PROB 0.05f
 inline __device__ glm::vec3 pdf_generate_mixture(Pdf *pdf0, Pdf *pdf1, 
                                                  Scene *scene, hit_record *record,
                                                  curandState *state)
 {
     float rng = random_float(state);
-    if(rng < 0.5f){
+    if(rng < L_PROB){
         return pdf_generate(pdf0, scene, record, state);
     }else{
         return pdf_generate(pdf1, scene, record, state);
@@ -209,7 +211,7 @@ inline __device__ float pdf_value_mixture(Pdf *pdf0, Pdf *pdf1, Scene *scene,
 {
     float f0 = pdf_value(pdf0, scene, record, dir);
     float f1 = pdf_value(pdf1, scene, record, dir);
-    return 0.5f * f0 + 0.5f * f1;
+    return L_PROB * f0 + (1.0f - L_PROB) * f1;
 }
 
 inline __device__ glm::vec3 pdf_generate_mixture(Object *objects, int n, Pdf *pdf,

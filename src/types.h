@@ -5,6 +5,8 @@
 #include <cuda.h>
 #include <curand_kernel.h>
 #include <vector>
+#include <spectrum.h>
+#include <fresnel.h>
 
 #define BVH_MAX_DEPTH 12
 #define BVH_MAX_STACK 1024 //2^(h+1)-1
@@ -16,6 +18,44 @@ typedef struct Ray_t{
     glm::vec3 origin;
     glm::vec3 direction;
 }Ray;
+
+
+enum BxDFType {
+    BSDF_REFLECTION = 1 << 0,
+    BSDF_TRANSMISSION = 1 << 1,
+    BSDF_DIFFUSE = 1 << 2,
+    BSDF_GLOSSY = 1 << 3,
+    BSDF_SPECULAR = 1 << 4,
+    BSDF_ALL = BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR | BSDF_REFLECTION |
+        BSDF_TRANSMISSION,
+};
+
+enum BxDFImpl{
+    SpecularReflectionBxDF,
+    SpecularTransmissionBxDF,
+    FresnelSpecularBxDF,
+    LambertianReflectionBxDF,
+    LambertianTransmissionBxDF,
+    OrenNayarBxDF,
+};
+
+typedef struct{
+    BxDFType type;
+    BxDFImpl impl;
+    int id;
+}BxDF_handle;
+
+typedef struct{
+    BxDF_handle self; //identifier
+    Spectrum R; //Reflection spectrum
+    Spectrum T; //Transmission spectrum
+    float etaA, etaB; //Fresnel stuff
+    
+    float A, B; //Oren-Nayar BxDF
+    
+    Fresnel fresnel; //Fresnel stuff
+}BxDF;
+
 
 /* Camera definition by image plane */
 typedef struct Camera_t{
@@ -67,7 +107,7 @@ typedef struct Texture_t{
 typedef enum{
     LAMBERTIAN, METAL, 
     DIELETRIC, EMITTER,
-    ISOTROPIC,
+    ISOTROPIC, BSDF
 }MaterialType;
 
 typedef struct Material_t{
@@ -77,6 +117,8 @@ typedef struct Material_t{
     float intensity;
     float fuzz;
     float ref_idx;
+    
+    BxDF bxdf;
 }Material;
 
 typedef unsigned int material_handle;
@@ -109,7 +151,7 @@ typedef struct Obn_t{
 typedef struct Object_t{
     int isvalid;
     int isbinded;
-    object_handle object_handle;
+    object_handle handle;
     ObjectType object_type;
 }Object;
 
@@ -228,6 +270,7 @@ typedef BVHNode * BVHNodePtr;
 typedef struct LightEval_t{
     glm::vec3 attenuation;
     glm::vec3 emitted;
+    bool has_emission;
 }LightEval;
 
 typedef struct SceneHostHelper_t{
@@ -459,5 +502,52 @@ inline __host__ __device__ bool refract(glm::vec3 v, glm::vec3 n,
     }
     return false;
 }
+
+////////////////////////////////////////////////////////////////////////////////////
+
+__host__ __device__ inline float clamp(float a, float b, float x){
+    if(x < a) return a;
+    if(x > b) return b;
+    return x;
+}
+
+__host__ __device__ inline float CosTheta(glm::vec3 w){ return w.z; }
+__host__ __device__ inline float Cos2Theta(glm::vec3 w){ return w.z * w.z; }
+__host__ __device__ inline float AbsCosTheta(glm::vec3 w){ return glm::abs(w.z); }
+__host__ __device__ inline float Sin2Theta(glm::vec3 w){ return glm::max(0.0f, 1.0f - Cos2Theta(w)); }
+__host__ __device__ inline float SinTheta(glm::vec3 w){ return glm::sqrt(Sin2Theta(w)); }
+__host__ __device__ inline float TanTheta(glm::vec3 w){ return SinTheta(w) / CosTheta(w); }
+__host__ __device__ inline float Tan2Theta(glm::vec3 w){ return Sin2Theta(w) / Cos2Theta(w); }
+
+__host__ __device__ inline float CosPhi(glm::vec3 w){ 
+    float s = SinTheta(w);
+    return (glm::abs(s) < 0.0001f) ? 0.0f : clamp(-1.0f, 1.0f, w.x/s);
+}
+
+__host__ __device__ inline float SinPhi(glm::vec3 w){ 
+    float s = SinTheta(w);
+    return (glm::abs(s) < 0.0001f) ? 0.0f : clamp(-1.0f, 1.0f, w.y/s);
+}
+
+__host__ __device__ inline float Cos2Phi(glm::vec3 w){ return CosPhi(w) * CosPhi(w); }
+__host__ __device__ inline float Sin2Phi(glm::vec3 w){ return SinPhi(w) * SinPhi(w); }
+__host__ __device__ inline float CosDPhi(glm::vec3 wa, glm::vec3 wb) {
+    return clamp(-1.0f, 1.0f, 
+                 (wa.x * wb.x + wa.y * wb.y) /
+                 glm::sqrt((wa.x * wa.x + wa.y * wa.y) *
+                           (wb.x * wb.x + wb.y * wb.y)));
+}
+
+__host__ __device__ inline bool SameHemisphere(const glm::vec3 &w, const glm::vec3 &wp) {
+    return w.z * wp.z > 0;
+}
+
+
+__host__ __device__ inline glm::vec3 Faceforward(const glm::vec3 &n,
+                                                 const glm::vec3 &v) 
+{
+    return (glm::dot(n, v) < 0.f) ? -n : n;
+}
+
 
 #endif

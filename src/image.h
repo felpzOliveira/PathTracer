@@ -6,24 +6,38 @@
 #include <iostream>
 #include <stdio.h>
 
-__host__ __device__ float clamp(float x){ return x<0?0:(x>0.999f?0.999f:x); }
+__host__ __device__ float clamp01(float x){ return x<0?0:(x>0.999f?0.999f:x); }
 
 inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol, int samples){
-    if(ccol[0] != ccol[0]) ccol[0] = 0.0;
-    if(ccol[1] != ccol[1]) ccol[1] = 0.0;
-    if(ccol[2] != ccol[2]) ccol[2] = 0.0;
+    int has_nan = 0;
+    if(ccol[0] != ccol[0]) {
+        has_nan = 1;
+        ccol[0] = 0.0;
+    }
     
-    //float invSamp = 1.0f / (float)(samples);
-    //glm::vec3 col = ccol * invSamp;
+    if(ccol[1] != ccol[1]) {
+        has_nan = 1;
+        ccol[1] = 0.0;
+    }
+    
+    if(ccol[2] != ccol[2]) {
+        has_nan = 1;
+        ccol[2] = 0.0;
+    }
+    
+    if(has_nan){
+        printf("NaN\n");
+    }
+    
     glm::vec3 col = ccol;
     
     col = glm::vec3(glm::sqrt(col.x),
                     glm::sqrt(col.y),
                     glm::sqrt(col.z));
     
-    return glm::ivec3(int(256.0f * clamp(col.x)),
-                      int(256.0f * clamp(col.y)),
-                      int(256.0f * clamp(col.z)));
+    return glm::ivec3(int(256.0f * clamp01(col.x)),
+                      int(256.0f * clamp01(col.y)),
+                      int(256.0f * clamp01(col.z)));
 }
 
 inline __host__ Image * image_new(int width, int height){
@@ -86,6 +100,9 @@ inline __host__ void image_write(Image *image, const char *path, int samples){
         fwrite(png_data, 1, png_data_size, fp);
         fclose(fp);
         std::cout << "Saved PNG " << path << std::endl;
+        std::string cmd("display ");
+        cmd += path;
+        system(cmd.c_str());
     }
     
     delete[] data;

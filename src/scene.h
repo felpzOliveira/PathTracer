@@ -180,6 +180,14 @@ inline __host__ material_handle scene_add_material(Scene *scene, MaterialType ma
     return (material_handle)(scene->hostHelper->materials.size() - 1);
 }
 
+inline __host__ material_handle scene_add_material_bsdf(Scene *scene, BxDF bxdf){
+    Material material;
+    material.mattype = BSDF;
+    material.bxdf = bxdf;
+    scene->hostHelper->materials.push_back(material);
+    return (material_handle)(scene->hostHelper->materials.size() - 1);
+}
+
 inline __host__ material_handle scene_add_material_emitter(Scene *scene,
                                                            texture_handle emitter,
                                                            float intensity=1.0f)
@@ -411,7 +419,7 @@ inline __host__ void scene_build_done(Scene *scene){
     for(int i = 0; i < scene->sphere_it; i += 1){
         Sphere *sphere = &scene->spheres[i];
         handles[it].object_type = OBJECT_SPHERE;
-        handles[it].object_handle = sphere->handle;
+        handles[it].handle = sphere->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         it ++;
@@ -420,7 +428,7 @@ inline __host__ void scene_build_done(Scene *scene){
     for(int i = 0; i < scene->rectangle_it; i += 1){
         Rectangle *rect = &scene->rectangles[i];
         handles[it].object_type = rect->rect_type;
-        handles[it].object_handle = rect->handle;
+        handles[it].handle = rect->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         it ++;
@@ -429,7 +437,7 @@ inline __host__ void scene_build_done(Scene *scene){
     for(int i = 0; i < scene->box_it; i += 1){
         Box *box = &scene->boxes[i];
         handles[it].object_type = OBJECT_BOX;
-        handles[it].object_handle = box->handle;
+        handles[it].handle = box->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         it ++;
@@ -438,7 +446,7 @@ inline __host__ void scene_build_done(Scene *scene){
     for(int i = 0; i < scene->triangles_it; i += 1){
         Triangle *tri = &scene->triangles[i];
         handles[it].object_type = OBJECT_TRIANGLE;
-        handles[it].object_handle = tri->handle;
+        handles[it].handle = tri->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         it ++;
@@ -447,7 +455,7 @@ inline __host__ void scene_build_done(Scene *scene){
     for(int i = 0; i < scene->meshes_it; i += 1){
         Mesh *mesh = scene->meshes[i];
         handles[it].object_type = OBJECT_MESH;
-        handles[it].object_handle = mesh->handle;
+        handles[it].handle = mesh->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         it ++;
@@ -457,31 +465,31 @@ inline __host__ void scene_build_done(Scene *scene){
         Object bind;
         Medium *medium = &scene->mediums[i];
         handles[it].object_type = OBJECT_MEDIUM;
-        handles[it].object_handle = medium->handle;
+        handles[it].handle = medium->handle;
         handles[it].isvalid = 1;
         handles[it].isbinded = 0;
         
         bind = medium->geometry;
         switch(bind.object_type){
             case OBJECT_SPHERE:
-            handles[sph_start + bind.object_handle].isbinded = 1; break;
+            handles[sph_start + bind.handle].isbinded = 1; break;
             
             case OBJECT_XY_RECTANGLE:
             case OBJECT_XZ_RECTANGLE:
             case OBJECT_YZ_RECTANGLE:
-            handles[rect_start + bind.object_handle].isbinded = 1; break;
+            handles[rect_start + bind.handle].isbinded = 1; break;
             
             case OBJECT_BOX:
-            handles[box_start + bind.object_handle].isbinded = 1; break;
+            handles[box_start + bind.handle].isbinded = 1; break;
             
             case OBJECT_MEDIUM:
-            handles[medium_start + bind.object_handle].isbinded = 1; break;
+            handles[medium_start + bind.handle].isbinded = 1; break;
             
             case OBJECT_TRIANGLE:
-            handles[tri_start + bind.object_handle].isbinded = 1; break;
+            handles[tri_start + bind.handle].isbinded = 1; break;
             
             case OBJECT_MESH:
-            handles[mesh_start + bind.object_handle].isbinded = 1; break;
+            handles[mesh_start + bind.handle].isbinded = 1; break;
             
             default:{
                 std::cout << "BUG! Unkown object type" << std::endl;
@@ -520,7 +528,7 @@ inline __host__ Object scene_add_mesh(Scene *scene, Mesh *mesh, Transforms trans
     scene->hostHelper->meshes.push_back(mesh);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_MESH;
     return rv;
 }
@@ -543,7 +551,7 @@ inline __host__ Object scene_add_triangle(Scene *scene, glm::vec3 v0, glm::vec3 
     scene->hostHelper->triangles.push_back(tri);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_TRIANGLE;
     return rv;
 }
@@ -567,7 +575,7 @@ inline __host__ Object scene_add_triangle(Scene *scene, glm::vec3 v0, glm::vec3 
     scene->hostHelper->triangles.push_back(tri);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_TRIANGLE;
     return rv;
 }
@@ -585,7 +593,7 @@ inline __host__ Object scene_add_rectangle_xy(Scene *scene, float x0, float x1,
     scene->hostHelper->rectangles.push_back(rect);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_XY_RECTANGLE;
     
     if(sample){
@@ -608,7 +616,7 @@ inline __host__ Object scene_add_rectangle_xz(Scene *scene, float x0, float x1,
     scene->hostHelper->rectangles.push_back(rect);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_XZ_RECTANGLE;
     
     if(sample){
@@ -631,7 +639,7 @@ inline __host__ Object scene_add_rectangle_yz(Scene *scene, float y0, float y1,
     scene->hostHelper->rectangles.push_back(rect);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_YZ_RECTANGLE;
     
     if(sample){
@@ -652,7 +660,7 @@ inline __host__ Object scene_add_sphere(Scene *scene, glm::vec3 center, float ra
     scene->hostHelper->spheres.push_back(sphere);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = sphere.handle;
+    rv.handle = sphere.handle;
     rv.object_type = OBJECT_SPHERE;
     
     if(sample){
@@ -687,7 +695,7 @@ inline __host__ Object scene_add_box(Scene *scene, glm::vec3 p, glm::vec3 scale,
     scene->hostHelper->boxes.push_back(box);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_BOX;
     return rv;
 }
@@ -710,7 +718,7 @@ inline __host__ Object scene_add_medium(Scene *scene, Object geometry,
     scene->hostHelper->mediums.push_back(medium);
     rv.isvalid = 1;
     rv.isbinded = 0;
-    rv.object_handle = n;
+    rv.handle = n;
     rv.object_type = OBJECT_MEDIUM;
     return rv;
 }
