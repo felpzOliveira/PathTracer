@@ -3,11 +3,11 @@
 
 #include <types.h>
 #include <aabb.h>
-#include <cuda_util.cuh>
+#include <cutil.h>
 
 inline __host__ BVHNode * bvh_node_new(int n){
     size_t memory = sizeof(BVHNode);
-    BVHNode *node = (BVHNode *)cudaAllocOrFail(memory);
+    BVHNode *node = (BVHNode *)cudaAllocate(memory);
     node->n_handles = n;
     node->is_leaf = 0;
     node->handles = nullptr;
@@ -28,7 +28,7 @@ inline __host__ void bvh_node_mark_itens(BVHNode *node, int n){
 inline __host__ void bvh_node_set_itens(BVHNode *node, int n){
     if(node){
         if(n > 0){
-            node->handles = (Object *)cudaAllocOrFail(sizeof(Object)*n);
+            node->handles = (Object *)cudaAllocate(sizeof(Object)*n);
             node->n_handles = n;
         }
     }

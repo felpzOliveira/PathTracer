@@ -1,31 +1,16 @@
 #if !defined(IMAGE_H)
 #define IMAGE_H
 #include <types.h>
-#include <cuda_util.cuh>
+#include <cutil.h>
 #include <miniz.h>
 #include <iostream>
 #include <stdio.h>
+#include <utilities.h>
 
 __host__ __device__ float clamp01(float x){ return x<0?0:(x>0.999f?0.999f:x); }
 
 inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol, int samples){
-    int has_nan = 0;
-    if(ccol[0] != ccol[0]) {
-        has_nan = 1;
-        ccol[0] = 0.0;
-    }
-    
-    if(ccol[1] != ccol[1]) {
-        has_nan = 1;
-        ccol[1] = 0.0;
-    }
-    
-    if(ccol[2] != ccol[2]) {
-        has_nan = 1;
-        ccol[2] = 0.0;
-    }
-    
-    if(has_nan){
+    if(IsNaN<glm::vec3>(ccol)){
         printf("NaN\n");
     }
     
@@ -41,8 +26,7 @@ inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol, int sample
 }
 
 inline __host__ Image * image_new(int width, int height){
-    Image *img = nullptr;
-    CHECK(cudaMallocManaged(&img, sizeof(Image)));
+    Image *img = (Image *)cudaAllocate(sizeof(Image));
     
     img->pixels_count = width * height;
     img->width = width;
@@ -50,8 +34,8 @@ inline __host__ Image * image_new(int width, int height){
     size_t rgb_size = img->pixels_count * sizeof(glm::vec3);
     size_t rng_size = img->pixels_count * sizeof(curandState);
     //TODO: Pack this allocation
-    img->pixels = (glm::vec3 *)cudaAllocOrFail(rgb_size);
-    img->states = (curandState *)cudaAllocOrFail(rng_size);
+    img->pixels = (glm::vec3 *)cudaAllocate(rgb_size);
+    img->states = (curandState *)cudaAllocate(rng_size);
     
     for(int i = 0; i < img->pixels_count; i += 1){
         img->pixels[i] = glm::vec3(0.0f, 0.0f, 0.0f);

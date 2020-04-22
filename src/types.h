@@ -8,6 +8,11 @@
 #include <spectrum.h>
 #include <fresnel.h>
 
+#include <types/type_bsdf.h>
+#include <types/type_onb.h>
+#include <types/type_texture.h>
+#include <types/type_material.h>
+
 #define BVH_MAX_DEPTH 12
 #define BVH_MAX_STACK 1024 //2^(h+1)-1
 
@@ -20,42 +25,6 @@ typedef struct Ray_t{
 }Ray;
 
 
-enum BxDFType {
-    BSDF_REFLECTION = 1 << 0,
-    BSDF_TRANSMISSION = 1 << 1,
-    BSDF_DIFFUSE = 1 << 2,
-    BSDF_GLOSSY = 1 << 3,
-    BSDF_SPECULAR = 1 << 4,
-    BSDF_ALL = BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR | BSDF_REFLECTION |
-        BSDF_TRANSMISSION,
-};
-
-enum BxDFImpl{
-    SpecularReflectionBxDF,
-    SpecularTransmissionBxDF,
-    FresnelSpecularBxDF,
-    LambertianReflectionBxDF,
-    LambertianTransmissionBxDF,
-    OrenNayarBxDF,
-};
-
-typedef struct{
-    BxDFType type;
-    BxDFImpl impl;
-    int id;
-}BxDF_handle;
-
-typedef struct{
-    BxDF_handle self; //identifier
-    Spectrum R; //Reflection spectrum
-    Spectrum T; //Transmission spectrum
-    float etaA, etaB; //Fresnel stuff
-    
-    float A, B; //Oren-Nayar BxDF
-    
-    Fresnel fresnel; //Fresnel stuff
-}BxDF;
-
 
 /* Camera definition by image plane */
 typedef struct Camera_t{
@@ -67,61 +36,6 @@ typedef struct Camera_t{
     int with_focus;
     glm::vec3 u,v,w;
 }Camera;
-
-/* Texture Definition */
-typedef enum{
-    TEXTURE_CONST,
-    TEXTURE_CHECKER,
-    TEXTURE_NOISE,
-    TEXTURE_IMAGE,
-}TextureType;
-
-typedef enum{
-    TEXTURE_WRAP_CLAMP,
-    TEXTURE_WRAP_REPEAT,
-}TextureWrapMode;
-
-typedef enum{
-    NOISE_SIMPLE,
-    NOISE_TRILINEAR,
-}NoiseType;
-
-typedef struct TextureProps_t{
-    TextureWrapMode wrap_mode; //wrap mode (clamp to border, repeat ...)
-    float scale; //scale for repeating
-}TextureProps;
-
-typedef unsigned int texture_handle;
-
-typedef struct Texture_t{
-    glm::vec3 color; //for constant texture
-    texture_handle odd, even; //checker texture can sample other textures
-    NoiseType noise_type; //noise texture have multiple options
-    unsigned char *image; //pixels in case this is a image
-    int image_x, image_y; //dimensions of the image
-    TextureType type; //type of texture (image, color, ...)
-    TextureProps props; //properties
-}Texture;
-
-/* In here we go with the idea that a albedo is a solid texture */
-typedef enum{
-    LAMBERTIAN, METAL, 
-    DIELETRIC, EMITTER,
-    ISOTROPIC, BSDF
-}MaterialType;
-
-typedef struct Material_t{
-    MaterialType mattype;
-    texture_handle albedo;
-    texture_handle emitted;
-    float intensity;
-    float fuzz;
-    float ref_idx;
-    
-    BxDF bxdf;
-}Material;
-
-typedef unsigned int material_handle;
 
 typedef int aabb_handle;
 typedef unsigned int object_handle;
@@ -144,28 +58,12 @@ typedef struct Transforms_t{
     glm::mat4 normalMatrix;
 }Transforms;
 
-typedef struct Obn_t{
-    glm::vec3 axis[3];
-}Onb;
-
 typedef struct Object_t{
     int isvalid;
     int isbinded;
     object_handle handle;
     ObjectType object_type;
 }Object;
-
-typedef enum{
-    PDF_COSINE,
-    PDF_OBJECT
-}PdfType;
-
-typedef struct Pdf_t{
-    PdfType type;
-    Onb uvw;
-    Object object;
-    float pdf;
-}Pdf;
 
 /* Hit information */
 typedef struct hit_record_t{
@@ -319,8 +217,8 @@ typedef struct Scene_t{
     int samplers_it;
     
     Texture *texture_table;
-    texture_handle black_texture;
     texture_handle white_texture;
+    texture_handle black_texture;
     
     int texture_it;
     int n_textures;
@@ -422,10 +320,6 @@ inline __host__ __device__ void hit_record_remap_to_world(hit_record *record,
     record->normal = glm::normalize(record->normal);
 }
 
-inline __host__ float random_float() {
-    return rand() / (RAND_MAX + 1.0f);
-}
-
 inline __device__ float random_float(curandState *state){
     return glm::max(0.0f, curand_uniform(state)-0.001f);
 }
@@ -504,50 +398,4 @@ inline __host__ __device__ bool refract(glm::vec3 v, glm::vec3 n,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
-
-__host__ __device__ inline float clamp(float a, float b, float x){
-    if(x < a) return a;
-    if(x > b) return b;
-    return x;
-}
-
-__host__ __device__ inline float CosTheta(glm::vec3 w){ return w.z; }
-__host__ __device__ inline float Cos2Theta(glm::vec3 w){ return w.z * w.z; }
-__host__ __device__ inline float AbsCosTheta(glm::vec3 w){ return glm::abs(w.z); }
-__host__ __device__ inline float Sin2Theta(glm::vec3 w){ return glm::max(0.0f, 1.0f - Cos2Theta(w)); }
-__host__ __device__ inline float SinTheta(glm::vec3 w){ return glm::sqrt(Sin2Theta(w)); }
-__host__ __device__ inline float TanTheta(glm::vec3 w){ return SinTheta(w) / CosTheta(w); }
-__host__ __device__ inline float Tan2Theta(glm::vec3 w){ return Sin2Theta(w) / Cos2Theta(w); }
-
-__host__ __device__ inline float CosPhi(glm::vec3 w){ 
-    float s = SinTheta(w);
-    return (glm::abs(s) < 0.0001f) ? 0.0f : clamp(-1.0f, 1.0f, w.x/s);
-}
-
-__host__ __device__ inline float SinPhi(glm::vec3 w){ 
-    float s = SinTheta(w);
-    return (glm::abs(s) < 0.0001f) ? 0.0f : clamp(-1.0f, 1.0f, w.y/s);
-}
-
-__host__ __device__ inline float Cos2Phi(glm::vec3 w){ return CosPhi(w) * CosPhi(w); }
-__host__ __device__ inline float Sin2Phi(glm::vec3 w){ return SinPhi(w) * SinPhi(w); }
-__host__ __device__ inline float CosDPhi(glm::vec3 wa, glm::vec3 wb) {
-    return clamp(-1.0f, 1.0f, 
-                 (wa.x * wb.x + wa.y * wb.y) /
-                 glm::sqrt((wa.x * wa.x + wa.y * wa.y) *
-                           (wb.x * wb.x + wb.y * wb.y)));
-}
-
-__host__ __device__ inline bool SameHemisphere(const glm::vec3 &w, const glm::vec3 &wp) {
-    return w.z * wp.z > 0;
-}
-
-
-__host__ __device__ inline glm::vec3 Faceforward(const glm::vec3 &n,
-                                                 const glm::vec3 &v) 
-{
-    return (glm::dot(n, v) < 0.f) ? -n : n;
-}
-
-
 #endif

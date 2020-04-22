@@ -1,13 +1,7 @@
 #if !defined(TRANSFORM_H)
 #define TRANSFORM_H
 #include <types.h>
-
-
-#define ABS(x) ((x) > 0.0001 ? (x) : -(x))
-__host__ __device__ inline float gamma(int n){
-    float MachineEpsilon = 5.96046e-08f;
-    return (n * MachineEpsilon) / (1 - n * MachineEpsilon);
-}
+#include <utilities.h>
 
 struct Matrix4x4 {
     __host__ __device__ Matrix4x4() {

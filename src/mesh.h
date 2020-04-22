@@ -6,7 +6,6 @@
 #include <stl_loader.h>
 #include <fstream>
 #include <types.h>
-#include <cuda_util.cuh>
 #include <transform.h>
 
 
@@ -30,9 +29,9 @@ inline __host__ Mesh * load_mesh_stl(const char *path, material_handle mat_handl
         exit(0);
     }
     
-    mesh = (Mesh *)cudaAllocOrFail(sizeof(Mesh));
-    mesh->triangles = (Triangle *)cudaAllocOrFail(sizeof(Triangle)*tri_size);
-    mesh->instances = (Transforms *)cudaAllocOrFail(sizeof(Transforms)*ninstances);
+    mesh = (Mesh *)cudaAllocate(sizeof(Mesh));
+    mesh->triangles = (Triangle *)cudaAllocate(sizeof(Triangle)*tri_size);
+    mesh->instances = (Transforms *)cudaAllocate(sizeof(Transforms)*ninstances);
     mesh->instances_it = ninstances;
     
     Object *handles = new Object[tri_size];
@@ -116,9 +115,9 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
         exit(0);
     }
     
-    mesh = (Mesh *)cudaAllocOrFail(sizeof(Mesh));
-    mesh->triangles = (Triangle *)cudaAllocOrFail(sizeof(Triangle)*tri_size);
-    mesh->instances = (Transforms *)cudaAllocOrFail(sizeof(Transforms)*ninstances);
+    mesh = (Mesh *)cudaAllocate(sizeof(Mesh));
+    mesh->triangles = (Triangle *)cudaAllocate(sizeof(Triangle)*tri_size);
+    mesh->instances = (Transforms *)cudaAllocate(sizeof(Transforms)*ninstances);
     mesh->instances_it = ninstances;
     
     Object *handles = new Object[tri_size];
