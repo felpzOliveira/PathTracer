@@ -131,11 +131,29 @@ material_handle scene_add_matte_materialLe(Scene *scene, texture_handle kd,
 }
 
 inline __host__
+material_handle scene_add_glass_reflector_material(Scene *scene, texture_handle kt,
+                                                   texture_handle kr, float index)
+{
+    Material material;
+    material_glass_reflector_init(&material, kt, kr, index);
+    scene->hostHelper->materials.push_back(material);
+    return (material_handle)(scene->hostHelper->materials.size() - 1);    
+}
+
+inline __host__
 material_handle scene_add_plastic_material(Scene *scene, texture_handle kd, 
                                            texture_handle ks, float roughness)
 {
     Material material;
     material_plastic_init(&material, kd, ks, roughness);
+    scene->hostHelper->materials.push_back(material);
+    return (material_handle)(scene->hostHelper->materials.size() - 1);
+}
+
+inline __host__
+material_handle scene_add_mirror_material(Scene *scene, texture_handle kr){
+    Material material;
+    material_mirror_init(&material, kr);
     scene->hostHelper->materials.push_back(material);
     return (material_handle)(scene->hostHelper->materials.size() - 1);
 }

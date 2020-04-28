@@ -8,7 +8,9 @@ typedef unsigned int material_handle;
 
 enum MaterialType{
     Matte,
+    Mirror,
     Glass,
+    GlassReflector,
     Plastic,
     Emitter
 };
@@ -32,6 +34,10 @@ struct Material{
         }Matte;
         
         struct{
+            texture_handle Kr;
+        }Mirror;
+        
+        struct{
             texture_handle Kd, Ks;
             float roughness;
         }Plastic;
@@ -41,6 +47,12 @@ struct Material{
             float uroughness, vroughness;
             float index;
         }Glass;
+        
+        struct{
+            texture_handle Kt;
+            texture_handle Kr;
+            float index;
+        }GlassReflector;
     };
 };
 

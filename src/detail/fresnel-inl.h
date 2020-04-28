@@ -56,8 +56,6 @@ Spectrum FrConductor(float cosThetaI, const Spectrum &etai,
     return 0.5 * (Rp + Rs);
 }
 
-
-
 inline __bidevice__
 void fresnel_conductor_init(Fresnel *fresnel, Spectrum etaI, 
                             Spectrum etaT, Spectrum k)
@@ -84,6 +82,15 @@ void fresnel_dieletric_init(Fresnel *fresnel, float etaI, float etaT){
 }
 
 inline __bidevice__
+void fresnel_noop_init(Fresnel *fresnel){
+    if(fresnel){
+        fresnel->type = FresnelType::FresnelNoOp;
+    }else{
+        printf("Bad pointer for Fresnel::NoOp\n");
+    }
+}
+
+inline __bidevice__
 Spectrum fresnel_evalutate(Fresnel *fresnel, float cosThetaI){
     if(fresnel){
         switch(fresnel->type){
@@ -95,6 +102,10 @@ Spectrum fresnel_evalutate(Fresnel *fresnel, float cosThetaI){
                 return FrConductor(glm::abs(cosThetaI), fresnel->sEtaI,
                                    fresnel->sEtaT, fresnel->k);
             } break;
+            
+            case FresnelType::FresnelNoOp:{
+                return 1.f;
+            };
             
             default:{
                 printf("Unkown frenel format\n");

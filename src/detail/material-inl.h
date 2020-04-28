@@ -14,6 +14,12 @@ void material_matte_init(Material *material, texture_handle kd,
 }
 
 inline __bidevice__
+void material_mirror_init(Material *material, texture_handle kr){
+    material->type = MaterialType::Mirror;
+    material->Mirror.Kr = kr;
+}
+
+inline __bidevice__
 void material_plastic_init(Material *material, texture_handle kd, texture_handle ks,
                            float roughness)
 {
@@ -21,6 +27,16 @@ void material_plastic_init(Material *material, texture_handle kd, texture_handle
     material->Plastic.Kd = kd;
     material->Plastic.Ks = ks;
     material->Plastic.roughness = MicrofacetRoughnessToAlpha(roughness);
+}
+
+inline __bidevice__
+void material_glass_reflector_init(Material *material, texture_handle kt,
+                                   texture_handle kr, float index)
+{
+    material->type = MaterialType::GlassReflector;
+    material->GlassReflector.Kt = kt;
+    material->GlassReflector.Kr = kr;
+    material->GlassReflector.index = index;
 }
 
 inline __bidevice__
@@ -58,6 +74,23 @@ void material_sample_matte(Material *material, hit_record *record,
 }
 
 inline __bidevice__
+void material_sample_mirror(Material *material, hit_record *record, 
+                            BSDF *bsdf, Scene *scene)
+{
+    Texture *kr = &scene->texture_table[material->Mirror.Kr];
+    Spectrum r = texture_value(kr, record, scene).Clamp();
+    
+    if(!r.IsBlack()){
+        BxDF bxdf;
+        Fresnel fresnel;
+        fresnel_noop_init(&fresnel);
+        BxDF_SpecularReflection_init(&bxdf, r, &fresnel);
+        //BxDF_LambertianReflection_init(&bxdf, r);
+        BSDF_Insert(bsdf, &bxdf);
+    }
+}
+
+inline __bidevice__
 void material_sample_plastic(Material *material, hit_record *record, 
                              BSDF *bsdf, Scene *scene)
 {
@@ -86,6 +119,23 @@ void material_sample_plastic(Material *material, hit_record *record,
     }
 }
 
+
+inline __bidevice__
+void material_sample_glass_reflector(Material *material, hit_record *record, 
+                                     BSDF *bsdf, Scene *scene)
+{
+    Texture *kr = &scene->texture_table[material->GlassReflector.Kr];
+    Texture *kt = &scene->texture_table[material->GlassReflector.Kt];    
+    Spectrum R = texture_value(kr, record, scene).Clamp();
+    Spectrum T = texture_value(kt, record, scene).Clamp();
+    float eta = material->GlassReflector.index;
+    
+    if(!R.IsBlack() && !T.IsBlack()){
+        BxDF bxdf;
+        BxDF_FresnelSpecular_init(&bxdf, R, T, 1.f, eta);
+        BSDF_Insert(bsdf, &bxdf);
+    }
+}
 
 inline __bidevice__
 void material_sample_glass(Material *material, hit_record *record, 
@@ -153,6 +203,14 @@ void material_sample(Material *material, hit_record *record,
         
         case MaterialType::Glass:{
             material_sample_glass(material, record, bsdf, scene);
+        } break;
+        
+        case MaterialType::GlassReflector:{
+            material_sample_glass_reflector(material, record, bsdf, scene);
+        } break;
+        
+        case MaterialType::Mirror:{
+            material_sample_mirror(material, record, bsdf, scene);
         } break;
         
         default:{

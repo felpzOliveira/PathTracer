@@ -4,7 +4,8 @@
 
 typedef enum{
     FresnelDieletric,
-    FresnelConductor
+    FresnelConductor,
+    FresnelNoOp
 }FresnelType;
 
 struct Fresnel{
