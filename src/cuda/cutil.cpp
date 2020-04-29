@@ -13,14 +13,32 @@ void _check(cudaError_t err, int line, const char *filename){
 }
 
 int cudaInit(){
-    cudaDeviceProp prop;
-	int dev;
-	memset(&prop, 0, sizeof(cudaDeviceProp));
-	prop.major = 1; prop.minor = 0;
-	CUCHECK(cudaChooseDevice(&dev, &prop));
-	CUCHECK(cudaGetDeviceProperties(&prop, dev));
-    global_memory.allocated = 0;
-	std::cout << "Using device " << prop.name << "[ " <<  prop.major << "." << prop.minor << " ]" << std::endl; 
+    int nDevices;    
+    int dev;
+    cudaGetDeviceCount(&nDevices);
+    for (int i = 0; i < nDevices; i++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        printf("Device Number: %d\n", i);
+        printf(" > Device name: %s\n", prop.name);
+        printf(" > Memory Clock Rate (KHz): %d\n",
+               prop.memoryClockRate);
+        printf(" > Memory Bus Width (bits): %d\n",
+               prop.memoryBusWidth);
+        printf(" > Peak Memory Bandwidth (GB/s): %f\n",
+               2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
+    }
+    
+    if(nDevices > 0){
+        cudaDeviceProp prop;
+        memset(&prop, 0, sizeof(cudaDeviceProp));
+        prop.major = 1; prop.minor = 0;
+        CUCHECK(cudaChooseDevice(&dev, &prop));
+        CUCHECK(cudaGetDeviceProperties(&prop, dev));
+        global_memory.allocated = 0;
+        std::cout << "Using device " << prop.name << "[ " <<  prop.major << "." << prop.minor << " ]" << std::endl; 
+    }
+    
 	return dev;
 }
 

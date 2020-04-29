@@ -14,6 +14,9 @@ Ray camera_get_ray(Camera *camera, float u, float v, curandState *state);
 __bidevice__
 bool hit_aabb(AABB *aabb, Ray r, float tmin, float tmax);
 
+__bidevice__
+glm::vec3 sample_object(Scene *scene, Object object, float *pdf);
+
 //TODO:Instances
 __device__
 bool hit_mesh(Mesh *mesh, Ray ray, float t_min, float t_max, 

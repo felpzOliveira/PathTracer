@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <iostream>
 
+#define STL_ASSERT(x) if((x) == 0) { printf("Failed to read!\n"); exit(0); }
+
 template<typename T>
 static T * stl_load(const char *path, int *n_triangles){
     FILE *fp = fopen(path, "rb");
@@ -14,8 +16,8 @@ static T * stl_load(const char *path, int *n_triangles){
         unsigned int triangles = 0;
         memset(header, 0x00, sizeof(header));
         //read header
-        fread(header, sizeof(header), 1, fp);
-        fread(&triangles, sizeof(unsigned int), 1, fp);
+        STL_ASSERT(fread(header, sizeof(header), 1, fp));
+        STL_ASSERT(fread(&triangles, sizeof(unsigned int), 1, fp));
         
         std::cout << "Read " << triangles << " triangles" << std::endl;
         float p[3];
@@ -24,26 +26,26 @@ static T * stl_load(const char *path, int *n_triangles){
         
         int it = 0;
         for(unsigned int i = 0; i < triangles; i += 1){
-            fread(p, 3, sizeof(float), fp); //normals
-            fread(p, 3, sizeof(float), fp); //vertex
+            STL_ASSERT(fread(p, 3, sizeof(float), fp)); //normals
+            STL_ASSERT(fread(p, 3, sizeof(float), fp)); //vertex
             resp[it][0] = p[0];
             resp[it][1] = p[1];
             resp[it][2] = p[2];
             
             it += 1;
-            fread(p, 3, sizeof(float), fp); //vertex
+            STL_ASSERT(fread(p, 3, sizeof(float), fp)); //vertex
             resp[it][0] = p[0];
             resp[it][1] = p[1];
             resp[it][2] = p[2];
             
             it += 1;
-            fread(p, 3, sizeof(float), fp); //vertex
+            STL_ASSERT(fread(p, 3, sizeof(float), fp)); //vertex
             resp[it][0] = p[0];
             resp[it][1] = p[1];
             resp[it][2] = p[2];
             
             it += 1;
-            fread(dummy, 2, sizeof(char), fp);
+            STL_ASSERT(fread(dummy, 2, sizeof(char), fp));
         }
         
         *n_triangles = triangles;

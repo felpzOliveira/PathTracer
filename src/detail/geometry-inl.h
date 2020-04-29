@@ -4,6 +4,37 @@
 #include <types.h>
 
 inline __bidevice__
+glm::vec3 sample_xy_rectangle(Rectangle *rect, glm::vec2 u, float *pdf){
+    float dx = glm::abs(rect->x1 - rect->x0);
+    float dy = glm::abs(rect->y1 - rect->y0);
+    float rx = dx * u[0];
+    float ry = dy * u[1];
+    float area = dx * dy;
+    *pdf = 1.f / area;
+    return glm::vec3(rx + glm::min(rect->x1, rect->x0), 
+                     ry + glm::min(rect->y1, rect->y0),  rect->k);
+}
+
+inline __bidevice__
+glm::vec3 sample_object(Scene *scene, Object object, glm::vec2 u, float *pdf){
+    if(scene){
+        switch(object.object_type){
+            case OBJECT_XY_RECTANGLE:{
+                Rectangle *rect = &scene->rectangles[object.handle];
+                return sample_xy_rectangle(rect, u, pdf);
+            } break;
+            
+            default: {
+                printf("Not supported sampling this object!\n");
+            }
+        }
+    }
+    
+    *pdf = 0.f;
+    return glm::vec3(0.f);
+}
+
+inline __bidevice__
 void sphere_get_uv_of(Sphere *sphere, glm::vec3 p, float *u, float *v){
     float pi = 3.14169f;
     glm::vec3 op = glm::normalize(p - sphere->center);

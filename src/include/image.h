@@ -86,7 +86,9 @@ inline __host__ void image_write(Image *image, const char *path, int samples){
         std::cout << "Saved PNG " << path << std::endl;
         std::string cmd("display ");
         cmd += path;
-        system(cmd.c_str());
+        if(system(cmd.c_str()) < 0){
+            std::cout << "Failure in child process" << std::endl;
+        }
     }
     
     delete[] data;

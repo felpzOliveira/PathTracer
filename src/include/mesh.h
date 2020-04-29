@@ -179,9 +179,9 @@ inline __host__ Mesh * load_mesh_obj(const char *path, material_handle mat_handl
     std::cout << "Finished mesh generation, center point:" << pc.x << " " << pc.y << " " << pc.z << std::endl;
     std::cout << "Min " << min.x << " " << min.y << " " << min.z;
     std::cout << " Max " << max.x << " " << max.y << " " << max.z << std::endl;
-    std::cout << "Building BVH" << std::endl;
-    mesh->bvh = build_bvh<Mesh>(mesh, handles, it, 0, BVH_MAX_DEPTH);
-    std::cout << "Finished mesh BVH" << std::endl;
+    
+    Timed("Building Mesh BVH", 
+          mesh->bvh = build_bvh<Mesh>(mesh, handles, it, 0, BVH_MAX_DEPTH));
     
     delete[] handles;
     
