@@ -1,6 +1,4 @@
-#if !defined(BSDF_H)
-#error "Please include bsdf.h instead of this file"
-#else
+#include <bsdf.h>
 
 static __bidevice__ 
 glm::vec3 Reflect(const glm::vec3 &wo, const glm::vec3 &n) {
@@ -21,7 +19,7 @@ bool Refract(const glm::vec3 &wi, const glm::vec3 &n, float eta, glm::vec3 *wt) 
     return true;
 }
 
-static __bidevice__
+__bidevice__
 bool BxDF_Matches(BxDF *bxdf, BxDFType type){
     return (bxdf->self.type & type) == bxdf->self.type;
 }
@@ -29,7 +27,7 @@ bool BxDF_Matches(BxDF *bxdf, BxDFType type){
 /***************************************************************
  > Init functions.
 ****************************************************************/
-static __bidevice__
+__bidevice__
 void BxDF_LambertianReflection_init(BxDF *bxdf, Spectrum R){
     if(bxdf){
         bxdf->self.type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
@@ -40,7 +38,7 @@ void BxDF_LambertianReflection_init(BxDF *bxdf, Spectrum R){
     }
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_LambertianTransmission_init(BxDF *bxdf, Spectrum T){
     if(bxdf){
         bxdf->self.type = BxDFType(BSDF_TRANSMISSION | BSDF_DIFFUSE);
@@ -52,7 +50,7 @@ void BxDF_LambertianTransmission_init(BxDF *bxdf, Spectrum T){
 }
 
 
-static __bidevice__
+__bidevice__
 void BxDF_OrenNayar_init(BxDF *bxdf, Spectrum R, float sigma){
     if(bxdf){
         bxdf->self.type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
@@ -67,7 +65,7 @@ void BxDF_OrenNayar_init(BxDF *bxdf, Spectrum R, float sigma){
     }
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_SpecularReflection_init(BxDF *bxdf, Spectrum R, Fresnel *fresnel){
     if(bxdf && fresnel){
         bxdf->self.type = BxDFType(BSDF_REFLECTION | BSDF_SPECULAR);
@@ -79,7 +77,7 @@ void BxDF_SpecularReflection_init(BxDF *bxdf, Spectrum R, Fresnel *fresnel){
     }
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_SpecularTransmission_init(BxDF *bxdf, Spectrum T, float A, float B){
     if(bxdf){
         bxdf->self.type = BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR);
@@ -93,7 +91,7 @@ void BxDF_SpecularTransmission_init(BxDF *bxdf, Spectrum T, float A, float B){
     }
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_FresnelSpecular_init(BxDF *bxdf, Spectrum R, Spectrum T, 
                                float A, float B)
 {
@@ -105,7 +103,7 @@ void BxDF_FresnelSpecular_init(BxDF *bxdf, Spectrum R, Spectrum T,
     bxdf->Specular.etaB = B;
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_Microfacet_Reflection_init(BxDF *bxdf, Spectrum R,
                                      MicrofacetDistribution *dist,
                                      Fresnel *fresnel)
@@ -121,7 +119,7 @@ void BxDF_Microfacet_Reflection_init(BxDF *bxdf, Spectrum R,
     }
 }
 
-static __bidevice__
+__bidevice__
 void BxDF_Microfacet_Transmission_init(BxDF *bxdf, Spectrum T,
                                        MicrofacetDistribution *dist,
                                        float etaA, float etaB)
@@ -142,42 +140,42 @@ void BxDF_Microfacet_Transmission_init(BxDF *bxdf, Spectrum T,
 /***************************************************************
  > Compute pdf(wo, wi).
 ****************************************************************/
-static __bidevice__
+__bidevice__
 float BxDF_Gen_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return SameHemisphere(wo, wi) ? AbsCosTheta(wi) * InvPi : 0;
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_LambertianReflection_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return BxDF_Gen_Pdf(bxdf, wo, wi);
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_LambertianTransmission_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return !SameHemisphere(wo, wi) ? AbsCosTheta(wi) * InvPi : 0.0f;
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_OrenNayar_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return BxDF_Gen_Pdf(bxdf, wo, wi);
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_SpecularReflection_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return 0.f;
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_SpecularTransmission_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return 0.f;
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_FresnelSpecular_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return 0.0f;
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_MicrofacetReflection_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     if (!SameHemisphere(wo, wi)) return 0;
     glm::vec3 wh = glm::normalize(wo + wi);
@@ -185,7 +183,7 @@ float BxDF_MicrofacetReflection_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return pdf / (4.f * glm::dot(wo, wh));
 }
 
-static __bidevice__
+__bidevice__
 float BxDF_MicrofacetTransmission_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     if (SameHemisphere(wo, wi)) return 0;
     
@@ -202,7 +200,7 @@ float BxDF_MicrofacetTransmission_Pdf(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return pdf * dwh_dwi;
 }
 
-static __bidevice__ 
+__bidevice__ 
 float BxDF_Pdf(BxDF *bxdf, glm::vec3 &wo, glm::vec3 &wi){
     float pdf = 0.0f;
     if(bxdf){
@@ -249,17 +247,17 @@ float BxDF_Pdf(BxDF *bxdf, glm::vec3 &wo, glm::vec3 &wi){
 /***************************************************************
  > Compute f(wo, wi).
 ****************************************************************/
-static __bidevice__
+__bidevice__
 Spectrum BxDF_LambertianReflection_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return bxdf->S * InvPi;
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_LambertianTransmission_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return bxdf->S * InvPi;
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_OrenNayar_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     float sinThetaI = SinTheta(wi);
     float sinThetaO = SinTheta(wo);
@@ -285,22 +283,22 @@ Spectrum BxDF_OrenNayar_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return bxdf->S * InvPi * (A + B * maxCos * sinAlpha * tanBeta);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_SpecularReflection_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return Spectrum(0.f);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_SpecularTransmission_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return Spectrum(0.f);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_FresnelSpecular_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return Spectrum(0.f);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_MicrofacetReflection_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     float cosThetaO = AbsCosTheta(wo), cosThetaI = AbsCosTheta(wi);
     glm::vec3 wh = wi + wo;
@@ -317,7 +315,7 @@ Spectrum BxDF_MicrofacetReflection_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     return bxdf->S * Dwh * G * F / (4.f * cosThetaI * cosThetaO);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_MicrofacetTransmission_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
     if (SameHemisphere(wo, wi)) return 0;  // transmission only
     
@@ -345,7 +343,7 @@ Spectrum BxDF_MicrofacetTransmission_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 wi){
                  * factor * factor / (cosThetaI * cosThetaO * sqrtDenom * sqrtDenom));
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 &wi){
     Spectrum f(0.0f);
     if(bxdf){
@@ -392,7 +390,7 @@ Spectrum BxDF_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 &wi){
 /***************************************************************
  > Computes a output direction and pdf, Sample_f.
 ****************************************************************/
-static __bidevice__
+__bidevice__
 Spectrum BxDF_Gen_Sample_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 *wi,
                            glm::vec2 &u, float *pdf, BxDFType *sampledType)
 {
@@ -402,7 +400,7 @@ Spectrum BxDF_Gen_Sample_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 *wi,
     return BxDF_f(bxdf, wo, *wi);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_LambertianReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                             glm::vec2 u, float *pdf,
                                             BxDFType *sampled)
@@ -410,7 +408,7 @@ Spectrum BxDF_LambertianReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 
     return BxDF_Gen_Sample_f(bxdf, wo, wi, u, pdf, sampled);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_LambertianTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo,glm::vec3 *wi,
                                               glm::vec2 u, float *pdf,
                                               BxDFType *sampled)
@@ -421,14 +419,14 @@ Spectrum BxDF_LambertianTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo,glm::vec3
     return BxDF_LambertianTransmission_f(bxdf, wo, *wi);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_OrenNayar_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                  glm::vec2 u, float *pdf, BxDFType *sampled)
 {
     return BxDF_Gen_Sample_f(bxdf, wo, wi, u, pdf, sampled);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_SpecularReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                           glm::vec2 u, float *pdf, BxDFType *sampled)
 {
@@ -440,7 +438,7 @@ Spectrum BxDF_SpecularReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *w
     return e * bxdf->S / abscost;
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_SpecularTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                             glm::vec2 u, float *pdf,
                                             BxDFType *sampled)
@@ -459,7 +457,7 @@ Spectrum BxDF_SpecularTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 
     return ft / AbsCosTheta(*wi);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_FresnelSpecular_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                        glm::vec2 u, float *pdf,
                                        BxDFType *sampledType)
@@ -488,7 +486,7 @@ Spectrum BxDF_FresnelSpecular_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi,
     }
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_MicrofacetReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 *wi, 
                                             glm::vec2 u, float *pdf, BxDFType *sampled)
 {
@@ -504,7 +502,7 @@ Spectrum BxDF_MicrofacetReflection_Sample_f(BxDF *bxdf, glm::vec3 wo, glm::vec3 
     return BxDF_f(bxdf, wo, *wi);
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BxDF_MicrofacetTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo,
                                               glm::vec3 *wi, glm::vec2 u, float *pdf,
                                               BxDFType *sampled)
@@ -521,7 +519,7 @@ Spectrum BxDF_MicrofacetTransmission_Sample_f(BxDF *bxdf, glm::vec3 wo,
     return BxDF_f(bxdf, wo, *wi);
 }
 
-static __bidevice__ 
+__bidevice__ 
 Spectrum BxDF_Sample_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 *wi, glm::vec2 &u,
                        float *pdf,BxDFType *sampledType)
 {
@@ -575,7 +573,7 @@ Spectrum BxDF_Sample_f(BxDF *bxdf, glm::vec3 &wo, glm::vec3 *wi, glm::vec2 &u,
     return f;
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BSDF_f(BSDF *bsdf, glm::vec3 woW, glm::vec3 wiW, BxDFType flags){
     Spectrum f(0.f);
     if(bsdf){
@@ -603,7 +601,7 @@ Spectrum BSDF_f(BSDF *bsdf, glm::vec3 woW, glm::vec3 wiW, BxDFType flags){
     return f;
 }
 
-static __bidevice__
+__bidevice__
 float BSDF_Pdf(BSDF *bsdf, glm::vec3 woW, glm::vec3 wiW, BxDFType flags){
     float pdf = 0.f;
     if(bsdf){
@@ -632,7 +630,7 @@ float BSDF_Pdf(BSDF *bsdf, glm::vec3 woW, glm::vec3 wiW, BxDFType flags){
     return pdf;
 }
 
-static __bidevice__
+__bidevice__
 int BSDF_NumComponents(BSDF *bsdf, BxDFType type){
     int matches = 0;
     for(int i = 0; i < bsdf->nBxDFs; i++){
@@ -643,7 +641,7 @@ int BSDF_NumComponents(BSDF *bsdf, BxDFType type){
     return matches;
 }
 
-static __bidevice__
+__bidevice__
 Spectrum BSDF_Sample_f(BSDF *bsdf, glm::vec3 &woW, glm::vec3 *wiW, 
                        glm::vec2 &u, float *pdf, BxDFType type, BxDFType *sampled)
 {
@@ -697,5 +695,3 @@ Spectrum BSDF_Sample_f(BSDF *bsdf, glm::vec3 &woW, glm::vec3 *wiW,
     
     return f;
 }
-
-#endif

@@ -1,6 +1,7 @@
 #include <cutil.h>
 #include <stdio.h>
 #include <iostream>
+#include <ctime>
 
 Memory global_memory = {0};
 
@@ -12,6 +13,27 @@ void _check(cudaError_t err, int line, const char *filename){
     }
 }
 
+double to_cpu_time(clock_t start, clock_t end){
+    return ((double)(end - start)) / CLOCKS_PER_SEC;
+}
+
+std::string get_time_unit(double *inval){
+    std::string unit("s");
+    double val = *inval;
+    if(val > 60){
+        unit = "min";
+        val /= 60.0;
+    }
+    
+    if(val > 60){
+        unit = "h";
+        val /= 60;
+    }
+    
+    *inval = val;
+    return unit;
+}
+
 int cudaInit(){
     int nDevices;    
     int dev;
@@ -19,7 +41,6 @@ int cudaInit(){
     for (int i = 0; i < nDevices; i++) {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
-        printf("Device Number: %d\n", i);
         printf(" > Device name: %s\n", prop.name);
         printf(" > Memory Clock Rate (KHz): %d\n",
                prop.memoryClockRate);
@@ -36,7 +57,35 @@ int cudaInit(){
         CUCHECK(cudaChooseDevice(&dev, &prop));
         CUCHECK(cudaGetDeviceProperties(&prop, dev));
         global_memory.allocated = 0;
-        std::cout << "Using device " << prop.name << "[ " <<  prop.major << "." << prop.minor << " ]" << std::endl; 
+        std::cout << "Using device " << prop.name << " [ " <<  prop.major << "." << prop.minor << " ]" << std::endl; 
+        
+        void *ptr = NULL;
+        
+        clock_t start = clock();       
+        CUCHECK(cudaMalloc(&ptr, 1));
+        clock_t mid = clock();
+        
+        cudaDeviceReset();
+        clock_t end = clock();
+        
+        double cpu_time_mid = to_cpu_time(start, mid);
+        double cpu_time_reset = to_cpu_time(mid, end);
+        double cpu_time_end = to_cpu_time(start, end);
+        
+        std::string unitAlloc = get_time_unit(&cpu_time_mid);
+        std::string unitReset = get_time_unit(&cpu_time_reset);
+        std::string unitTotal = get_time_unit(&cpu_time_end);
+        
+        std::string state("[OK]");
+        if(cpu_time_end > 1.5){
+            state = "[SLOW]";
+        }
+        
+        std::cout << "GPU init stats " << state << "\n" <<  
+            " > Allocation: " << cpu_time_mid << " " << unitAlloc << std::endl;
+        std::cout << " > Reset: " << cpu_time_reset << " " << unitReset << std::endl;
+        std::cout << " > Global: " << cpu_time_end << " " << unitTotal << std::endl;
+        
     }
     
 	return dev;
@@ -103,6 +152,10 @@ int cudaHasMemory(size_t bytes){
     return ok;
 }
 
+void cudaSafeExit(){
+    cudaDeviceReset();
+}
+
 void *_cudaAllocate(size_t bytes, int line, const char *filename, bool abort){
     void *ptr = nullptr;
     if(cudaHasMemory(bytes)){
@@ -117,6 +170,7 @@ void *_cudaAllocate(size_t bytes, int line, const char *filename, bool abort){
     
     if(!ptr && abort){
         getchar();
+        cudaSafeExit();
         exit(0);
     }
     

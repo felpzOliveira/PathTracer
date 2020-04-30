@@ -8,20 +8,20 @@
 /*
  * Classical matte material
  */
-inline __bidevice__
+__bidevice__
 void material_matte_init(Material *material, texture_handle kd,
                          texture_handle sigma);
 
 /*
  * Classical mirro material, reflects in one direction with pdf = 1
  */
-inline __bidevice__
+__bidevice__
 void material_mirror_init(Material *material, texture_handle kr);
 
 /*
  * Combines lambertian  reflection BRDF with microfacet reflection, pdf varies.
  */
-inline __bidevice__
+__bidevice__
 void material_plastic_init(Material *material, texture_handle kd, 
                            texture_handle ks, float roughness);
 
@@ -30,7 +30,7 @@ void material_plastic_init(Material *material, texture_handle kd,
  * This is really good but it gets weird to compare with others because
  * the look is allways a little bit different.
  */
-inline __bidevice__
+__bidevice__
 void material_glass_init(Material *material, texture_handle kr, texture_handle kt,
                          float uroughness, float vroughness, float index);
 
@@ -38,7 +38,7 @@ void material_glass_init(Material *material, texture_handle kr, texture_handle k
  * This is the classical glass material made of perfect transmission/reflection.
  * It is not real, but it is good.
  */
-inline __bidevice__
+__bidevice__
 void material_glass_reflector_init(Material *material, texture_handle kt,
                                    texture_handle kr, float index);
 
@@ -46,10 +46,8 @@ void material_glass_reflector_init(Material *material, texture_handle kt,
  * Samples a material: computes all BRDFs that must be evaluated and inserts
  * them in a single BSDF instance.
  */
-inline __bidevice__
+__bidevice__
 void material_sample(Material *material, hit_record *record, 
                      BSDF *bsdf, Scene *scene);
-
-#include <detail/material-inl.h>
 
 #endif

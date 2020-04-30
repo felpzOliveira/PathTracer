@@ -467,7 +467,7 @@ inline __host__ void scene_build_done(Scene *scene){
         scene->samplers_it = size;
     }
     
-    std::cout << "BVH Node count: " << get_bvh_node_count(scene->bvh) << std::endl;
+    cudaPrintMemoryTaken();
 }
 
 inline __host__ 

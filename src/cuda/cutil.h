@@ -64,6 +64,8 @@ void *_cudaAllocate(size_t bytes, int line, const char *filename, bool abort);
 */
 void cudaPrintMemoryTaken(void);
 
+void cudaSafeExit(void);
+
 /*
 * A simple managed class for dynamic allocating stuff on the GPU
 * for people who still want to use OO in the GPU.

@@ -15,7 +15,7 @@ __bidevice__
 bool hit_aabb(AABB *aabb, Ray r, float tmin, float tmax);
 
 __bidevice__
-glm::vec3 sample_object(Scene *scene, Object object, float *pdf);
+glm::vec3 sample_object(Scene *scene, hit_record *record, Object object, float *pdf);
 
 //TODO:Instances
 __device__

@@ -1,10 +1,18 @@
-COMPILE_DEBUG= -g -O0
-COMPILE_FAST= -O3
+objects = src/main.o src/cuda/cutil.o src/third/miniz.o src/core/bsdf.o src/core/microfacet.o src/core/material.o
+compile_debug_opts=-g -G
+compile_fast_opts=-Xptxas -O3,-v
 
-.PHONY: all debug
+compile_opts=$(compile_fast_opts) -gencode arch=compute_75,code=sm_75
 
-all:
-	nvcc -x cu -gencode=arch=compute_75,code=compute_75 src/cuda/cutil.cpp src/main.cu src/miniz.cpp src/parser_v2.cpp $(COMPILE_FAST) -I./src -I./src/include -I./src/cuda -I/home/felpz/Documents/glm -o main
+includes = -I./src -I/home/felpz/Documents/glm -I./src/core -I./src/cuda -I./src/third -I./src/detail -I./src/include
 
-debug:
-	nvcc -x cu -gencode=arch=compute_75,code=compute_75 src/cuda/cutil.cpp src/main.cu src/miniz.cpp src/parser_v2.cpp $(COMPILE_DEBUG) -I./src -I./src/include -I./src/cuda -I/home/felpz/Documents/glm -o main
+all: $(objects)
+	nvcc $(compile_opts) $(objects) -o main
+
+%.o: %.cpp
+	nvcc -x cu $(compile_opts) $(includes) -dc $< -o $@
+
+clean:
+	rm -f src/*.o main src/cuda/*.o src/core/*.o src/third/*.o
+
+rebuild: clean all

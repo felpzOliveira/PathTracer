@@ -4,7 +4,7 @@
 #include <types.h>
 
 inline __bidevice__
-glm::vec3 sample_xy_rectangle(Rectangle *rect, glm::vec2 u, float *pdf){
+glm::vec3 sample_xy_rectangle(Rectangle *rect, hit_record *record, glm::vec2 u, float *pdf){
     float dx = glm::abs(rect->x1 - rect->x0);
     float dy = glm::abs(rect->y1 - rect->y0);
     float rx = dx * u[0];
@@ -16,12 +16,56 @@ glm::vec3 sample_xy_rectangle(Rectangle *rect, glm::vec2 u, float *pdf){
 }
 
 inline __bidevice__
-glm::vec3 sample_object(Scene *scene, Object object, glm::vec2 u, float *pdf){
+glm::vec3 sample_xz_rectangle(Rectangle *rect, hit_record *record, glm::vec2 u, float *pdf){
+    float dx = glm::abs(rect->x1 - rect->x0);
+    float dz = glm::abs(rect->z1 - rect->z0);
+    float rx = dx * u[0];
+    float rz = dz * u[1];
+    float area = dx * dz;
+    *pdf = 1.f / area;
+    return glm::vec3(rx + glm::min(rect->x1, rect->x0), rect->k,
+                     rz + glm::min(rect->z1, rect->z0));
+}
+
+inline __bidevice__
+glm::vec3 sample_yz_rectangle(Rectangle *rect, hit_record *record, glm::vec2 u, float *pdf){
+    float dy = glm::abs(rect->y1 - rect->y0);
+    float dz = glm::abs(rect->z1 - rect->z0);
+    float ry = dy * u[0];
+    float rz = dz * u[1];
+    float area = dy * dz;
+    *pdf = 1.f / area;
+    return glm::vec3(rect->k, ry + glm::min(rect->y1, rect->y0),
+                     rz + glm::min(rect->z1, rect->z0));
+}
+
+inline __bidevice__
+glm::vec3 sample_sphere(Sphere *sphere, hit_record *record, glm::vec2 u, float *pdf){
+    return glm::vec3(0.f);
+}
+
+inline __bidevice__
+glm::vec3 sample_object(Scene *scene, hit_record *record, Object object, glm::vec2 u, float *pdf){
     if(scene){
         switch(object.object_type){
             case OBJECT_XY_RECTANGLE:{
                 Rectangle *rect = &scene->rectangles[object.handle];
-                return sample_xy_rectangle(rect, u, pdf);
+                return sample_xy_rectangle(rect, record, u, pdf);
+            } break;
+            
+            case OBJECT_XZ_RECTANGLE:{
+                Rectangle *rect = &scene->rectangles[object.handle];
+                return sample_xz_rectangle(rect, record, u, pdf);
+            } break;
+            
+            case OBJECT_YZ_RECTANGLE:{
+                Rectangle *rect = &scene->rectangles[object.handle];
+                return sample_yz_rectangle(rect, record, u, pdf);
+            } break;
+            
+            case OBJECT_SPHERE:{
+                Sphere *sphere = &scene->spheres[object.handle];
+                return sample_sphere(sphere, record, u, pdf);
             } break;
             
             default: {
