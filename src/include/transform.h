@@ -1,41 +1,42 @@
 #if !defined(TRANSFORM_H)
 #define TRANSFORM_H
+#include <cutil.h>
 #include <types.h>
 #include <utilities.h>
 
 struct Matrix4x4 {
-    __host__ __device__ Matrix4x4() {
+    __bidevice__ Matrix4x4() {
         m[0][0] = m[1][1] = m[2][2] = m[3][3] = 1.f;
         m[0][1] = m[0][2] = m[0][3] = m[1][0] = m[1][2] = m[1][3] = m[2][0] =
             m[2][1] = m[2][3] = m[3][0] = m[3][1] = m[3][2] = 0.f;
     }
     
-    __host__ __device__ 
+    __bidevice__ 
         Matrix4x4(float mat[4][4]);
     
-    __host__ __device__ 
+    __bidevice__ 
         Matrix4x4(float t00, float t01, float t02, float t03, float t10, float t11,
                   float t12, float t13, float t20, float t21, float t22, float t23,
                   float t30, float t31, float t32, float t33);
     
-    __host__ __device__ bool operator==(const Matrix4x4 &m2) const {
+    __bidevice__ bool operator==(const Matrix4x4 &m2) const {
         for (int i = 0; i < 4; ++i)
             for (int j = 0; j < 4; ++j)
             if (m[i][j] != m2.m[i][j]) return false;
         return true;
     }
     
-    __host__ __device__ bool operator!=(const Matrix4x4 &m2) const {
+    __bidevice__ bool operator!=(const Matrix4x4 &m2) const {
         for (int i = 0; i < 4; ++i)
             for (int j = 0; j < 4; ++j)
             if (m[i][j] != m2.m[i][j]) return true;
         return false;
     }
     
-    __host__ __device__ friend  Matrix4x4 Transpose(const Matrix4x4 &);
+    __bidevice__ friend  Matrix4x4 Transpose(const Matrix4x4 &);
     
-    __host__ __device__  static  Matrix4x4 Mul(const Matrix4x4 &m1,
-                                               const Matrix4x4 &m2) 
+    __bidevice__  static  Matrix4x4 Mul(const Matrix4x4 &m1,
+                                        const Matrix4x4 &m2) 
     {
         Matrix4x4 r;
         for (int i = 0; i < 4; ++i)
@@ -45,12 +46,12 @@ struct Matrix4x4 {
         return r;
     }
     
-    __host__ __device__ friend  Matrix4x4 Inverse(const Matrix4x4 &);
+    __bidevice__ friend  Matrix4x4 Inverse(const Matrix4x4 &);
     
     float m[4][4];
 };
 
-__host__ __device__ 
+__bidevice__ 
 inline bool SolveLinearSystem2x2(const float A[2][2], const float B[2], float *x0,
                                  float *x1) {
     float det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
@@ -61,10 +62,10 @@ inline bool SolveLinearSystem2x2(const float A[2][2], const float B[2], float *x
     return true;
 }
 
-__host__ __device__ 
+__bidevice__ 
 inline Matrix4x4::Matrix4x4(float mat[4][4]) { memcpy(m, mat, 16 * sizeof(float)); }
 
-__host__ __device__ 
+__bidevice__ 
 inline Matrix4x4::Matrix4x4(float t00, float t01, float t02, float t03, float t10,
                             float t11, float t12, float t13, float t20, float t21,
                             float t22, float t23, float t30, float t31, float t32,
@@ -87,14 +88,14 @@ inline Matrix4x4::Matrix4x4(float t00, float t01, float t02, float t03, float t1
     m[3][3] = t33;
 }
 
-__host__ __device__ inline Matrix4x4 Transpose(const Matrix4x4 &m) {
+__bidevice__ inline Matrix4x4 Transpose(const Matrix4x4 &m) {
     return Matrix4x4(m.m[0][0], m.m[1][0], m.m[2][0], m.m[3][0], m.m[0][1],
                      m.m[1][1], m.m[2][1], m.m[3][1], m.m[0][2], m.m[1][2],
                      m.m[2][2], m.m[3][2], m.m[0][3], m.m[1][3], m.m[2][3],
                      m.m[3][3]);
 }
 
-__host__ __device__ inline Matrix4x4 Inverse(const Matrix4x4 &m) {
+__bidevice__ inline Matrix4x4 Inverse(const Matrix4x4 &m) {
     int indxc[4], indxr[4];
     int ipiv[4] = {0, 0, 0, 0};
     float minv[4][4];
@@ -158,40 +159,40 @@ __host__ __device__ inline Matrix4x4 Inverse(const Matrix4x4 &m) {
 class Transform{
     public:
     Matrix4x4 m, invM;
-    __host__ __device__ Transform(){}
-    __host__ __device__ Transform(const Transform &o){
+    __bidevice__ Transform(){}
+    __bidevice__ Transform(const Transform &o){
         m = o.m;
         invM = o.invM;
     }
     
-    __host__ __device__ Transform(Matrix4x4 _m){
+    __bidevice__ Transform(Matrix4x4 _m){
         m = _m;
         invM = Inverse(m);
     }
     
-    __host__ __device__ Transform(Matrix4x4 _m, Matrix4x4 _im){
+    __bidevice__ Transform(Matrix4x4 _m, Matrix4x4 _im){
         m = _m;
         invM = _im;
     }
     
-    __host__ __device__ friend Transform * Inverse(Transform *t){
+    __bidevice__ friend Transform * Inverse(Transform *t){
         return new Transform(t->invM, t->m);
     }
     
-    __host__ __device__ friend Transform Inverse(const Transform &t){
+    __bidevice__ friend Transform Inverse(const Transform &t){
         return Transform(t.invM, t.m);
     }
     
-    __host__ __device__ friend Transform Transpose(const Transform &t){
+    __bidevice__ friend Transform Transpose(const Transform &t){
         return Transform(Transpose(t.m), Transpose(t.invM));
     }
     
-    __host__ __device__ Transform operator*(const Transform &t2) const{
+    __bidevice__ Transform operator*(const Transform &t2) const{
         return Transform(Matrix4x4::Mul(m, t2.m),
                          Matrix4x4::Mul(t2.invM, invM));
     }
     
-    __host__ __device__ glm::vec3 point(glm::vec3 p){
+    __bidevice__ glm::vec3 point(glm::vec3 p){
         float x = p.x, y = p.y, z = p.z;
         float xp = m.m[0][0] * x + m.m[0][1] * y + m.m[0][2] * z + m.m[0][3];
         float yp = m.m[1][0] * x + m.m[1][1] * y + m.m[1][2] * z + m.m[1][3];
@@ -201,14 +202,14 @@ class Transform{
         return glm::vec3(xp * inv, yp * inv, zp * inv);
     }
     
-    __host__ __device__ bool SwapsHandeness(){
+    __bidevice__ bool SwapsHandeness(){
         float det = (m.m[0][0] * (m.m[1][1] * m.m[2][2] - m.m[1][2] * m.m[2][1]) -
                      m.m[0][1] * (m.m[1][0] * m.m[2][2] - m.m[1][2] * m.m[2][0]) +
                      m.m[0][2] * (m.m[1][0] * m.m[2][1] - m.m[1][1] * m.m[2][0]));
         return det < 0;
     }
     
-    __host__ __device__ glm::vec3 point(glm::vec3 p, glm::vec3 *pError){
+    __bidevice__ glm::vec3 point(glm::vec3 p, glm::vec3 *pError){
         float x = p.x, y = p.y, z = p.z;
         float xp = m.m[0][0] * x + m.m[0][1] * y + m.m[0][2] * z + m.m[0][3];
         float yp = m.m[1][0] * x + m.m[1][1] * y + m.m[1][2] * z + m.m[1][3];
@@ -226,8 +227,8 @@ class Transform{
         return glm::vec3(xp, yp, zp) / wp;
     }
     
-    __host__ __device__ glm::vec3 point(glm::vec3 pt, glm::vec3 ptError,
-                                        glm::vec3 *absError)
+    __bidevice__ glm::vec3 point(glm::vec3 pt, glm::vec3 ptError,
+                                 glm::vec3 *absError)
     {
         float x = pt.x, y = pt.y, z = pt.z;
         float xp = (m.m[0][0] * x + m.m[0][1] * y) + (m.m[0][2] * z + m.m[0][3]);
@@ -259,22 +260,7 @@ class Transform{
         
     }
     
-    __host__ __device__ AABB aabb(AABB b){
-        AABB ret;
-        glm::vec3 p = point(b._min);
-        aabb_init(&ret, p, p);
-        
-        ret = surrounding_box(ret, point(glm::vec3(b._max.x, b._min.y, b._min.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._min.x, b._max.y, b._min.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._min.x, b._min.y, b._max.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._min.x, b._max.y, b._max.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._max.x, b._max.y, b._min.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._max.x, b._min.y, b._max.z)));
-        ret = surrounding_box(ret, point(glm::vec3(b._max.x, b._max.y, b._max.z)));
-        return ret;
-    }
-    
-    __host__ __device__ glm::vec3 vector(glm::vec3 v){
+    __bidevice__ glm::vec3 vector(glm::vec3 v){
         float x = v.x, y = v.y, z = v.z;
         float xp = m.m[0][0] * x + m.m[0][1] * y + m.m[0][2] * z;
         float yp = m.m[1][0] * x + m.m[1][1] * y + m.m[1][2] * z;
@@ -282,44 +268,71 @@ class Transform{
         return glm::vec3(xp, yp, zp);
     }
     
-    __host__ __device__ glm::vec3 normal(glm::vec3 n){
+    __bidevice__ glm::vec3 normal(glm::vec3 n){
         float x = n.x, y = n.y, z = n.z;
         float xp = invM.m[0][0] * x + invM.m[1][0] * y + invM.m[2][0] * z;
         float yp = invM.m[0][1] * x + invM.m[1][1] * y + invM.m[2][1] * z;
         float zp = invM.m[0][2] * x + invM.m[1][2] * y + invM.m[2][2] * z;
         return glm::vec3(xp, yp, zp);
     }
-    
-    __host__ __device__ hit_record surface_interaction(hit_record si)
-    {
-        hit_record ret;
-        ret.u = si.u;
-        ret.v = si.v;
-        ret.hitted = si.hitted;
-        ret.is_specular = si.is_specular;
-        ret.mat_handle = si.mat_handle;
-        ret.p = point(si.p);
-        ret.normal = glm::normalize(normal(si.normal));
-        ret.t = si.t;
-        return ret;
-    }
-    
-    __host__ __device__ Ray ray(Ray r){
-        Ray ret;
-        glm::vec3 oError;
-        glm::vec3 o = this->point(r.origin, &oError);
-        glm::vec3 d = this->vector(r.direction);
-        float len2 = (d.x*d.x + d.y*d.y + d.z*d.z);
-        if(len2 > 0){
-            glm::vec3 ad(ABS(d.x), ABS(d.y), ABS(d.z));
-            float dt = glm::dot(ad, oError) * (1.0f / len2);
-            o += d * dt;
-        }
-        
-        ret.origin = o;
-        ret.direction = d;
-        return ret;
-    }
 };
+
+inline __bidevice__ Transform Scale(float x, float y, float z){
+    Matrix4x4 m(x, 0, 0, 0,
+                0, y, 0, 0,
+                0, 0, z, 0,
+                0, 0, 0, 1);
+    
+    Matrix4x4 inv(1.0f/x, 0,     0,     0,
+                  0,     1.0f/y, 0,     0,
+                  0,      0,    1.0f/z, 0,
+                  0,      0,     0,     1);
+    return Transform(m, inv);
+}
+
+inline __bidevice__ Transform Scale(float s){
+    return Scale(s, s, s);
+}
+
+inline __bidevice__ Transform Scale(glm::vec3 v){
+    return Scale(v.x, v.y, v.z);
+}
+
+inline __bidevice__ Transform Translate(glm::vec3 delta){
+    Matrix4x4 m(1, 0, 0, delta.x,
+                0, 1, 0, delta.y,
+                0, 0, 1, delta.z,
+                0, 0, 0,    1);
+    
+    Matrix4x4 inv(1, 0, 0, -delta.x,
+                  0, 1, 0, -delta.y,
+                  0, 0, 1, -delta.z,
+                  0, 0, 0,    1);
+    return Transform(m, inv);
+}
+
+inline __bidevice__ Transform Rotate(float theta, glm::vec3 axis){
+    glm::vec3 a = glm::normalize(axis);
+    float sinTheta = glm::sin(glm::radians(theta));
+    float cosTheta = glm::cos(glm::radians(theta));
+    Matrix4x4 m;
+    // Compute rotation of first basis vector
+    m.m[0][0] = a.x * a.x + (1 - a.x * a.x) * cosTheta;
+    m.m[0][1] = a.x * a.y * (1 - cosTheta) - a.z * sinTheta;
+    m.m[0][2] = a.x * a.z * (1 - cosTheta) + a.y * sinTheta;
+    m.m[0][3] = 0;
+    
+    // Compute rotations of second and third basis vectors
+    m.m[1][0] = a.x * a.y * (1 - cosTheta) + a.z * sinTheta;
+    m.m[1][1] = a.y * a.y + (1 - a.y * a.y) * cosTheta;
+    m.m[1][2] = a.y * a.z * (1 - cosTheta) - a.x * sinTheta;
+    m.m[1][3] = 0;
+    
+    m.m[2][0] = a.x * a.z * (1 - cosTheta) - a.y * sinTheta;
+    m.m[2][1] = a.y * a.z * (1 - cosTheta) + a.x * sinTheta;
+    m.m[2][2] = a.z * a.z + (1 - a.z * a.z) * cosTheta;
+    m.m[2][3] = 0;
+    return Transform(m, Transpose(m));
+}
 
 #endif

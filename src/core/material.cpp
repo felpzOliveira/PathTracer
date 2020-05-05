@@ -1,5 +1,6 @@
 #include <material.h>
 #include <bsdf.h>
+#include <stdio.h>
 
 __bidevice__
 void material_matte_init(Material *material, texture_handle kd,

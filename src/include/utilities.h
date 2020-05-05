@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 
 #define ABS(x) ((x) > 0.0001 ? (x) : -(x))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 
 inline __bidevice__ float gamma(int n){
     float MachineEpsilon = 5.96046e-08f;

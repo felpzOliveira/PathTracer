@@ -4,10 +4,12 @@ compile_fast_opts=-Xptxas -O3,-v
 
 compile_opts=$(compile_fast_opts) -gencode arch=compute_75,code=sm_75
 
-includes = -I./src -I/home/felpz/Documents/glm -I./src/core -I./src/cuda -I./src/third -I./src/detail -I./src/include
+includes = -I./src -I/home/felpz/Documents/glm -I./src/core -I./src/cuda -I./src/third -I./src/detail -I./src/include -I/home/felpz/Documents/Graphics/include
+
+libs = -L/home/felpz/Documents/Graphics/build -lgraphy
 
 all: $(objects)
-	nvcc $(compile_opts) $(objects) -o main
+	nvcc $(compile_opts) $(objects) -o main $(libs)
 
 %.o: %.cpp
 	nvcc -x cu $(compile_opts) $(includes) -dc $< -o $@

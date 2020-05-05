@@ -74,9 +74,10 @@ Scene *scene_basic(float aspect){
     
     scene_add_sphere(scene, glm::vec3(0.f, 4.f, 0.f), 4.f, ballmat);
     scene_add_rectangle_xz(scene, -500.f, 500.f, -500.f, 500.f, 0.f, ballmat);
+    scene_add_point_light(scene, glm::vec3(10.f, 10.f, 0.f), spec_emit);
     //scene_add_rectangle_xy(scene, -3.f, 3.f, 12.f, 19.f, -13.f, emit, 1, 1);
-    //scene_add_rectangle_xz(scene, -3.f, 3.f, -3.f, 3.f, 10.f, emit, 1, 1);
-    scene_add_rectangle_yz(scene, 3.f, 6.f, -3.f, 3.f, 10.f, emit, 1, 1);
+    //scene_add_rectangle_xz(scene, -3.f, 3.f, -3.f, 3.f, 15.f, emit, 1, 1);
+    //scene_add_rectangle_yz(scene, 3.f, 6.f, -3.f, 3.f, 10.f, emit, 1, 1);
     
     Timed("Building BVH", scene_build_done(scene));
     float focus_dist = glm::length(origin - target);
@@ -120,7 +121,7 @@ Scene *scene_bsdf(float aspect){
     
     texture_handle kdgreen = scene_add_texture_solid(scene, glm::vec3(0.6784313725490196, 1.f, 0.1843137254901961));
     
-    Spectrum spec_emit = Spectrum::FromRGB(10.f,10.f,9.41f)*.1f;
+    Spectrum spec_emit = Spectrum::FromRGB(10.f,10.f,9.41f)*6.f;
     texture_handle milk = scene_add_texture_solid(scene, glm::vec3(1.f,1.f,0.941f));
     
     material_handle red = scene_add_matte_material(scene, solidRed, sigma);
@@ -175,6 +176,7 @@ Scene *scene_bsdf(float aspect){
     */
     
     translate = glm::translate(translate, glm::vec3(0.0f, 1.f, 0.0f));
+    rot = glm::rotate(rot, glm::radians(0.f), glm::vec3(1.f,0.f,0.f));
     transform.toWorld = translate * scale * rot;
     Mesh *mesh = load_mesh_obj(DEMON, bsdfPlastic, transform);
     
@@ -268,10 +270,11 @@ Scene *scene_bsdf(float aspect){
     //    scene_add_sphere(scene, glm::vec3(0.15f, 0.25f, 0.f), 0.25f, mirror);
     //    scene_add_sphere(scene, glm::vec3(-0.5f, 0.15f, 0.f), 0.15f, bsdfPlastic);
     scene_add_rectangle_xz(scene, -500, 500, -500, 500, 0.f, bsdf3);
-    float w = 10.f;
+    float w = 3.f;
     glm::vec3 v(0.f, 8.f, 0.f);
     
-    scene_add_rectangle_yz(scene, 3.f, 9.f, -3.f, 3.f, -6.f, emit, 0, 1);
+    scene_add_point_light(scene, glm::vec3(3.5f, 4.f, -7.f), spec_emit);
+    //scene_add_rectangle_yz(scene, 3.f, 9.f, -3.f, 3.f, -6.f, emit, 0, 1);
     //scene_add_rectangle_xz(scene, v.x-w, v.x+w, v.z-w, v.z+w, 10.f, emit, 1, 1);
     //scene_add_sphere(scene, glm::vec3(4.f, 7.f, 2.f), 1.f, emit);
     

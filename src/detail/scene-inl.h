@@ -6,6 +6,7 @@
 #include <bvh.h>
 #include <box.h>
 #include <cutil.h>
+#include <light.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -467,6 +468,13 @@ inline __host__ void scene_build_done(Scene *scene){
         scene->samplers_it = size;
     }
     
+    size = scene->hostHelper->lights.size();
+    if(size > 0){
+        scene->lights = (Light *)cudaAllocate(size * sizeof(Light));
+        memcpy(scene->lights, scene->hostHelper->lights.data(), size * sizeof(Light));
+        scene->lights_it = size;
+    }
+    
     cudaPrintMemoryTaken();
 }
 
@@ -681,6 +689,14 @@ Object scene_add_medium(Scene *scene, Object geometry,
     rv.handle = n;
     rv.object_type = OBJECT_MEDIUM;
     return rv;
+}
+
+inline __host__
+void scene_add_point_light(Scene *scene, glm::vec3 pos, Spectrum I){
+    Light light;
+    Transform m = Translate(pos);
+    Light_Point_init(&light, m, I);
+    scene->hostHelper->lights.push_back(light);
 }
 
 inline __host__ 

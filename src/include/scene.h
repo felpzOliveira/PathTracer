@@ -111,6 +111,9 @@ inline __host__
 Object scene_add_medium(Scene *scene, Object geometry,
                         float density, material_handle mat);
 
+inline __host__
+void scene_add_point_light(Scene *scene, glm::vec3 pos, Spectrum I);
+
 #include <detail/scene-inl.h>
 
 #endif

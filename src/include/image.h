@@ -9,7 +9,7 @@
 
 __host__ __device__ float clamp01(float x){ return x<0?0:(x>0.999f?0.999f:x); }
 
-inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol, int samples){
+inline __host__ __device__ glm::ivec3 rgb_to_unsigned(glm::vec3 ccol){
     if(IsNaN<glm::vec3>(ccol)){
         printf("NaN\n");
     }
@@ -31,14 +31,15 @@ inline __host__ Image * image_new(int width, int height){
     img->pixels_count = width * height;
     img->width = width;
     img->height = height;
-    size_t rgb_size = img->pixels_count * sizeof(glm::vec3);
     size_t rng_size = img->pixels_count * sizeof(curandState);
+    size_t pdata_size = img->pixels_count * sizeof(PixelData);
     //TODO: Pack this allocation
-    img->pixels = (glm::vec3 *)cudaAllocate(rgb_size);
     img->states = (curandState *)cudaAllocate(rng_size);
+    img->pixels = (PixelData *)cudaAllocate(pdata_size);
     
     for(int i = 0; i < img->pixels_count; i += 1){
-        img->pixels[i] = glm::vec3(0.0f, 0.0f, 0.0f);
+        img->pixels[i].color   = glm::vec3(0.0f, 0.0f, 0.0f);
+        img->pixels[i].samples = 0;
     }
     
     return img;
@@ -65,7 +66,7 @@ inline __host__ void image_write(Image *image, const char *path, int samples){
     int it = 0;
     
     for(int i = 0; i < image->pixels_count; i += 1){
-        glm::ivec3 v = rgb_to_unsigned(image->pixels[i], samples);
+        glm::ivec3 v = rgb_to_unsigned(image->pixels[i].color);
         data[it++] = v.x;
         data[it++] = v.y;
         data[it++] = v.z;

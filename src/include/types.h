@@ -12,6 +12,7 @@
 #include <types/type_onb.h>
 #include <types/type_texture.h>
 #include <types/type_material.h>
+#include <types/type_light.h>
 
 #define BVH_MAX_DEPTH 20
 #define BVH_MAX_STACK 1024
@@ -184,6 +185,7 @@ typedef struct SceneHostHelper_t{
     std::vector<Material> materials;
     std::vector<Texture> textures;
     std::vector<Object> samplers;
+    std::vector<Light> lights;
 }SceneHostHelper;
 
 /* Scene defintion, collection of geometry */
@@ -219,6 +221,9 @@ typedef struct Scene_t{
     Object *samplers;
     int samplers_it;
     
+    Light *lights;
+    int lights_it;
+    
     Texture *texture_table;
     texture_handle white_texture;
     texture_handle black_texture;
@@ -232,12 +237,18 @@ typedef struct Scene_t{
     SceneHostHelper *hostHelper;
 }Scene;
 
+typedef struct{
+    int samples;
+    glm::vec3 color;
+    glm::vec3 progColor;
+}PixelData;
+
 /* Image definition, collection of rgb pixels */
 typedef struct Image_t{
     int width;
     int height;
     int pixels_count;
-    glm::vec3 *pixels;
+    PixelData *pixels;
     curandState *states;
 }Image;
 
