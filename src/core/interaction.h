@@ -3,6 +3,7 @@
 
 class Shape;
 class Primitive;
+class BSDF;
 
 class Interaction{
     public:
@@ -33,4 +34,9 @@ class SurfaceInteraction : public Interaction{
                                     const vec3f &dpdu, const vec3f &dpdv,
                                     const Normal3f &dndu, const Normal3f &dndv, Float time,
                                     const Shape *sh, int faceIndex = 0);
+    
+    __bidevice__ void ComputeDifferentials(const RayDifferential &r) const{}
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, const RayDifferential &r, 
+                                                 TransportMode mode, bool mLobes);
 };

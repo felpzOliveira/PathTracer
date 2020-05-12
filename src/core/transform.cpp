@@ -97,6 +97,10 @@ __bidevice__ Transform Translate(const vec3f &delta) {
     return Transform(m, minv);
 }
 
+__bidevice__ Transform Translate(Float x, Float y, Float z){
+    return Translate(vec3f(x, y, z));
+}
+
 __bidevice__ Transform Scale(Float x, Float y, Float z) {
     Matrix4x4 m(x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1);
     Matrix4x4 minv(1 / x, 0, 0, 0, 0, 1 / y, 0, 0, 0, 0, 1 / z, 0, 0, 0, 0, 1);
@@ -249,9 +253,7 @@ __bidevice__ SurfaceInteraction Transform::operator()(const SurfaceInteraction &
     return ret;
 }
 
-
-/*
-Bounds3f Transform::operator()(const Bounds3f &b) const {
+__bidevice__ Bounds3f Transform::operator()(const Bounds3f &b) const{
     const Transform &M = *this;
     Bounds3f ret(M(Point3f(b.pMin.x, b.pMin.y, b.pMin.z)));
     ret = Union(ret, M(Point3f(b.pMax.x, b.pMin.y, b.pMin.z)));
@@ -263,4 +265,3 @@ Bounds3f Transform::operator()(const Bounds3f &b) const {
     ret = Union(ret, M(Point3f(b.pMax.x, b.pMax.y, b.pMax.z)));
     return ret;
 }
-*/

@@ -17,6 +17,7 @@ struct Pixel{
     long hits;
     long misses;
     long samples;
+    int max_transverse_tests;
 };
 
 struct Image{
@@ -36,7 +37,17 @@ class Camera{
     Point3f lower_left;
     vec3f horizontal;
     vec3f vertical;
+    Float lensRadius;
+    vec3f u, v, w;
     
     __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect);
+    
+    __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                        Float aspect, Float aperture);
+    
+    __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                        Float aspect, Float aperture, Float focus_dist);
+    
     __bidevice__ Ray SpawnRay(Float u, Float v);
+    __bidevice__ Ray SpawnRay(Float u, Float v, Point2f disk);
 };

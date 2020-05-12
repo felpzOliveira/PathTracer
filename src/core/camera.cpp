@@ -110,12 +110,51 @@ __host__ Image *CreateImage(int res_x, int res_y){
     return image;
 }
 
-__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                            Float aspect, Float aperture, Float focus_dist)
+{
     position = eye;
-    vec3f u, v, w;
+    lensRadius = aperture / 2;
     Float theta = Radians(fov);
     Float half_height = tan(theta/2.f);
     Float half_width  = aspect * half_height;
+    w = Normalize(eye - at);
+    u = Normalize(Cross(up, w));
+    v = Normalize(Cross(w, u));
+    
+    lower_left = position - half_width * focus_dist * u - 
+        half_height * focus_dist * v - focus_dist * w;
+    
+    horizontal = 2.f * half_width * focus_dist * u;
+    vertical   = 2.f * half_height * focus_dist * v;
+}
+
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                            Float aspect, Float aperture)
+{
+    Float focus_dist = (eye - at).Length();
+    position = eye;
+    lensRadius = aperture / 2;
+    Float theta = Radians(fov);
+    Float half_height = tan(theta/2.f);
+    Float half_width  = aspect * half_height;
+    w = Normalize(eye - at);
+    u = Normalize(Cross(up, w));
+    v = Normalize(Cross(w, u));
+    
+    lower_left = position - half_width * focus_dist * u - 
+        half_height * focus_dist * v - focus_dist * w;
+    
+    horizontal = 2.f * half_width * focus_dist * u;
+    vertical   = 2.f * half_height * focus_dist * v;
+}
+
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
+    position = eye;
+    Float theta = Radians(fov);
+    Float half_height = tan(theta/2.f);
+    Float half_width  = aspect * half_height;
+    lensRadius = 0;
     w = Normalize(eye - at);
     u = Normalize(Cross(up, w));
     v = Normalize(Cross(w, u));
@@ -125,7 +164,15 @@ __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float 
     vertical   = 2.f * half_height * v;
 }
 
-__bidevice__ Ray Camera::SpawnRay(Float u, Float v){
-    vec3f d = lower_left + u * horizontal + v * vertical - position;
+__bidevice__ Ray Camera::SpawnRay(Float s, Float t, Point2f disk){
+    Point2f rd = lensRadius * disk;
+    vec3f offset = u * rd.x + v * rd.y;
+    vec3f d = lower_left + s * horizontal + t * vertical - position - offset;
+    return Ray(position + offset, Normalize(d));
+}
+
+__bidevice__ Ray Camera::SpawnRay(Float s, Float t){
+    vec3f d = lower_left + s * horizontal + t * vertical - position;
     return Ray(position, Normalize(d));
 }
+

@@ -11,6 +11,7 @@
 #define __vec3_args(v) v.x, v.y, v.z
 #define __vec3_argsA(v) #v, v.x, v.y, v.z
 
+#define OneMinusEpsilon 0.99999994f
 #define ShadowEpsilon 0.0001f
 #define Pi 3.14159265358979323846
 #define InvPi 0.31830988618379067154
@@ -21,8 +22,14 @@
 #define Sqrt2 1.41421356237309504880
 #define MachineEpsilon 5.96046e-08f
 
-//typedef float Float;
-typedef double Float;
+#define MIN_FLT -FLT_MAX
+
+typedef float Float;
+//typedef double Float;
+
+enum TransportMode{
+    Radiance = 0,
+};
 
 inline __bidevice__ void __assert_check(bool v, const char *name, 
                                         const char *filename, int line)
@@ -169,6 +176,14 @@ template<typename T> class vec3{
         return IsNaN(x) || IsNaN(y) || IsNaN(z);
     }
     
+    __bidevice__ bool IsBlack(){
+        return (IsZero(x) && IsZero(y) && IsZero(z));
+    }
+    
+    __bidevice__ bool IsBlack() const{
+        return (IsZero(x) && IsZero(y) && IsZero(z));
+    }
+    
     __bidevice__ T operator[](int i) const{
         Assert(i >= 0 && i < 3);
         if(i == 0) return x;
@@ -214,6 +229,10 @@ template<typename T> class vec3{
     }
     
     __bidevice__ vec3<T> operator-(){
+        return vec3<T>(-x, -y, -z);
+    }
+    
+    __bidevice__ vec3<T> operator-() const{
         return vec3<T>(-x, -y, -z);
     }
     
@@ -326,6 +345,11 @@ CoordinateSystem(const vec3<T> &v1, vec3<T> *v2, vec3<T> *v3){
     }
     
     *v3 = Cross(v1, *v2);
+}
+
+template<typename T> inline __bidevice__
+vec3<T> Sqrt(const vec3<T> &v){
+    return vec3<T>(std::sqrt(v.x), std::sqrt(v.y), std::sqrt(v.z));
 }
 
 template<typename T> inline __bidevice__ 
@@ -520,6 +544,18 @@ template<typename T> class Point2{
         return *this;
     }
     
+    __bidevice__ T operator[](int i) const {
+        Assert(i >= 0 && i < 2);
+        if (i == 0) return x;
+        return y;
+    }
+    
+    __bidevice__ T &operator[](int i) {
+        Assert(i >= 0 && i < 2);
+        if (i == 0) return x;
+        return y;
+    }
+    
     __bidevice__ bool HasNaN() const{
         return IsNaN(x) || IsNaN(y);
     }
@@ -565,6 +601,10 @@ template<typename T> inline __bidevice__ Point3<T> Max(const Point3<T> &p0,
                                                        const Point3<T> &p1)
 {
     return Point3<T>(Max(p0.x, p1.x), Max(p0.y, p1.y), Max(p0.z, p1.z));
+}
+
+inline __bidevice__ Float Floor(const Float &v){
+    return std::floor(v);
 }
 
 template<typename T> inline __bidevice__ Point3<T> Floor(const Point3<T> &p0)
@@ -716,6 +756,10 @@ template <typename T> inline __bidevice__ T Dot(const Normal3<T> &n1, const Norm
     return n1.x * n2.x + n1.y * n2.y + n1.z * n2.z;
 }
 
+template <typename T> inline __bidevice__ T Dot(const Normal3<T> &n1, const vec3<T> &v) {
+    return n1.x * v.x + n1.y * v.y + n1.z * v.z;
+}
+
 template <typename T> inline __bidevice__ T AbsDot(const Normal3<T> &n1, const vec3<T> &v2) {
     return Absf(n1.x * v2.x + n1.y * v2.y + n1.z * v2.z);
 }
@@ -774,6 +818,166 @@ class RayDifferential : public Ray{
     }
 };
 
+
+template <typename T>
+class Bounds3 {
+    public:
+    Point3<T> pMin, pMax;
+    
+    __bidevice__ Bounds3(){
+        T minNum = FLT_MIN;
+        T maxNum = FLT_MAX;
+        pMin = Point3<T>(maxNum, maxNum, maxNum);
+        pMax = Point3<T>(minNum, minNum, minNum);
+    }
+    
+    __bidevice__ explicit Bounds3(const Point3<T> &p) : pMin(p), pMax(p) {}
+    __bidevice__ Bounds3(const Point3<T> &p1, const Point3<T> &p2)
+        : pMin(Min(p1.x, p2.x), Min(p1.y, p2.y),
+               Min(p1.z, p2.z)),
+    pMax(Max(p1.x, p2.x), Max(p1.y, p2.y),
+         Max(p1.z, p2.z)) {}
+    
+    __bidevice__ const Point3<T> &operator[](int i) const;
+    __bidevice__ Point3<T> &operator[](int i);
+    __bidevice__ bool operator==(const Bounds3<T> &b) const{
+        return b.pMin == pMin && b.pMax == pMax;
+    }
+    
+    __bidevice__ bool operator!=(const Bounds3<T> &b) const{
+        return b.pMin != pMin || b.pMax != pMax;
+    }
+    
+    __bidevice__ Point3<T> Corner(int corner) const{
+        Assert(corner >= 0 && corner < 8);
+        return Point3<T>((*this)[(corner & 1)].x,
+                         (*this)[(corner & 2) ? 1 : 0].y,
+                         (*this)[(corner & 4) ? 1 : 0].z);
+    }
+    
+    __bidevice__ vec3<T> Diagonal() const { return pMax - pMin; }
+    __bidevice__ T SurfaceArea() const{
+        vec3<T> d = Diagonal();
+        return 2 * (d.x * d.y + d.x * d.z + d.y * d.z);
+    }
+    
+    __bidevice__ T Volume() const{
+        vec3<T> d = Diagonal();
+        return d.x * d.y * d.z;
+    }
+    
+    __bidevice__ T ExtentOn(int i) const{
+        Assert(i >= 0 && i < 3);
+        if(i == 0) return Absf(pMax.x - pMin.x);
+        if(i == 1) return Absf(pMax.y - pMin.y);
+        return Absf(pMax.z - pMin.z);
+    }
+    
+    __bidevice__ int MaximumExtent() const{
+        vec3<T> d = Diagonal();
+        if (d.x > d.y && d.x > d.z)
+            return 0;
+        else if (d.y > d.z)
+            return 1;
+        else
+            return 2;
+    }
+    
+    __bidevice__ Point3<T> Lerp(const Point3f &t) const{
+        return Point3<T>(Lerp(t.x, pMin.x, pMax.x),
+                         Lerp(t.y, pMin.y, pMax.y),
+                         Lerp(t.z, pMin.z, pMax.z));
+    }
+    
+    __bidevice__ vec3<T> Offset(const Point3<T> &p) const{
+        vec3<T> o = p - pMin;
+        if (pMax.x > pMin.x) o.x /= pMax.x - pMin.x;
+        if (pMax.y > pMin.y) o.y /= pMax.y - pMin.y;
+        if (pMax.z > pMin.z) o.z /= pMax.z - pMin.z;
+        return o;
+    }
+    
+    __bidevice__ void BoundingSphere(Point3<T> *center, Float *radius) const{
+        *center = (pMin + pMax) / 2;
+        *radius = Inside(*center, *this) ? Distance(*center, pMax) : 0;
+    }
+    
+    template <typename U> __bidevice__ explicit operator Bounds3<U>() const{
+        return Bounds3<U>((Point3<U>)pMin, (Point3<U>)pMax);
+    }
+    
+    __bidevice__ bool IntersectP(const Ray &ray, Float *hitt0 = nullptr,
+                                 Float *hitt1 = nullptr) const;
+    
+    inline __bidevice__ bool IntersectP(const Ray &ray, const vec3f &invDir,
+                                        const int dirIsNeg[3]) const;
+    
+    __bidevice__ void PrintSelf() const{
+        printf("pMin = {x : %g, y : %g, z : %g} pMax = {x : %g, y : %g, z : %g}",
+               pMin.x, pMin.y, pMin.z, pMax.x, pMax.y, pMax.z);
+    }
+};
+
+typedef Bounds3<Float> Bounds3f;
+typedef Bounds3<int> Bounds3i;
+
+
+template <typename T> inline __bidevice__ 
+Point3<T> &Bounds3<T>::operator[](int i){
+    Assert(i == 0 || i == 1);
+    return (i == 0) ? pMin : pMax;
+}
+
+template <typename T> inline __bidevice__
+Bounds3<T> Union(const Bounds3<T> &b, const Point3<T> &p){
+    Bounds3<T> ret;
+    ret.pMin = Min(b.pMin, p);
+    ret.pMax = Max(b.pMax, p);
+    return ret;
+}
+
+template <typename T> inline __bidevice__
+Bounds3<T> Union(const Bounds3<T> &b1, const Bounds3<T> &b2){
+    Bounds3<T> ret;
+    ret.pMin = Min(b1.pMin, b2.pMin);
+    ret.pMax = Max(b1.pMax, b2.pMax);
+    return ret;
+}
+
+template <typename T> inline __bidevice__ 
+Bounds3<T> Intersect(const Bounds3<T> &b1, const Bounds3<T> &b2){
+    Bounds3<T> ret;
+    ret.pMin = Max(b1.pMin, b2.pMin);
+    ret.pMax = Min(b1.pMax, b2.pMax);
+    return ret;
+}
+
+template <typename T> inline __bidevice__ 
+bool Overlaps(const Bounds3<T> &b1, const Bounds3<T> &b2){
+    bool x = (b1.pMax.x >= b2.pMin.x) && (b1.pMin.x <= b2.pMax.x);
+    bool y = (b1.pMax.y >= b2.pMin.y) && (b1.pMin.y <= b2.pMax.y);
+    bool z = (b1.pMax.z >= b2.pMin.z) && (b1.pMin.z <= b2.pMax.z);
+    return (x && y && z);
+}
+
+template <typename T> inline __bidevice__
+bool Inside(const Point3<T> &p, const Bounds3<T> &b){
+    return (p.x >= b.pMin.x && p.x <= b.pMax.x && p.y >= b.pMin.y &&
+            p.y <= b.pMax.y && p.z >= b.pMin.z && p.z <= b.pMax.z);
+}
+
+template <typename T> inline __bidevice__
+bool InsideExclusive(const Point3<T> &p, const Bounds3<T> &b){
+    return (p.x >= b.pMin.x && p.x < b.pMax.x && p.y >= b.pMin.y &&
+            p.y < b.pMax.y && p.z >= b.pMin.z && p.z < b.pMax.z);
+}
+
+template <typename T, typename U> inline __bidevice__ 
+Bounds3<T> Expand(const Bounds3<T> &b, U delta){
+    return Bounds3<T>(b.pMin - vec3<T>(delta, delta, delta),
+                      b.pMax + vec3<T>(delta, delta, delta));
+}
+
 inline __bidevice__ 
 vec3f SphericalDirection(Float sinTheta, Float cosTheta, Float phi){
     return vec3f(sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta);
@@ -784,6 +988,52 @@ vec3f SphericalDirection(Float sinTheta, Float cosTheta, Float phi,
                          const vec3f &x, const vec3f &y, const vec3f &z)
 {
     return sinTheta * std::cos(phi) * x + sinTheta * std::sin(phi) * y + cosTheta * z;
+}
+
+template <typename T> inline __bidevice__ 
+bool Bounds3<T>::IntersectP(const Ray &ray, Float *hitt0, Float *hitt1) const{
+    Float t0 = 0, t1 = ray.tMax;
+    for (int i = 0; i < 3; ++i) {
+        Float invRayDir = 1 / ray.d[i];
+        Float tNear = (pMin[i] - ray.o[i]) * invRayDir;
+        Float tFar = (pMax[i] - ray.o[i]) * invRayDir;
+        
+        if (tNear > tFar) swap(tNear, tFar);
+        
+        tFar *= 1 + 2 * gamma(3);
+        t0 = tNear > t0 ? tNear : t0;
+        t1 = tFar < t1 ? tFar : t1;
+        if (t0 > t1) return false;
+    }
+    if (hitt0) *hitt0 = t0;
+    if (hitt1) *hitt1 = t1;
+    return true;
+}
+
+template <typename T> inline __bidevice__ 
+bool Bounds3<T>::IntersectP(const Ray &ray, const vec3f &invDir,
+                            const int dirIsNeg[3]) const 
+{
+    const Bounds3f &bounds = *this;
+    Float tMin = (bounds[dirIsNeg[0]].x - ray.o.x) * invDir.x;
+    Float tMax = (bounds[1 - dirIsNeg[0]].x - ray.o.x) * invDir.x;
+    Float tyMin = (bounds[dirIsNeg[1]].y - ray.o.y) * invDir.y;
+    Float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.o.y) * invDir.y;
+    
+    tMax *= 1 + 2 * gamma(3);
+    tyMax *= 1 + 2 * gamma(3);
+    if (tMin > tyMax || tyMin > tMax) return false;
+    if (tyMin > tMin) tMin = tyMin;
+    if (tyMax < tMax) tMax = tyMax;
+    
+    Float tzMin = (bounds[dirIsNeg[2]].z - ray.o.z) * invDir.z;
+    Float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.o.z) * invDir.z;
+    
+    tzMax *= 1 + 2 * gamma(3);
+    if (tMin > tzMax || tzMin > tMax) return false;
+    if (tzMin > tMin) tMin = tzMin;
+    if (tzMax < tMax) tMax = tzMax;
+    return (tMin < ray.tMax) && (tMax > 0);
 }
 
 //NOTE: Must be normalized
@@ -836,7 +1086,7 @@ vec3f CosineSampleHemisphere(const Point2f &u) {
 inline __bidevice__ Float CosTheta(const vec3f &w) { return w.z; }
 inline __bidevice__ Float Cos2Theta(const vec3f &w) { return w.z * w.z; }
 inline __bidevice__ Float AbsCosTheta(const vec3f &w) { return Absf(w.z); }
-inline __bidevice__ Float Sin2Theta(const vec3f &w) {
+inline __bidevice__ Float Sin2Theta(const vec3f &w){
     return Max((Float)0, (Float)1 - Cos2Theta(w));
 }
 
@@ -848,12 +1098,12 @@ inline __bidevice__ Float Tan2Theta(const vec3f &w) {
     return Sin2Theta(w) / Cos2Theta(w);
 }
 
-inline __bidevice__ Float CosPhi(const vec3f &w) {
+inline __bidevice__ Float CosPhi(const vec3f &w){
     Float sinTheta = SinTheta(w);
     return (sinTheta == 0) ? 1 : Clamp(w.x / sinTheta, -1, 1);
 }
 
-inline __bidevice__ Float SinPhi(const vec3f &w) {
+inline __bidevice__ Float SinPhi(const vec3f &w){
     Float sinTheta = SinTheta(w);
     return (sinTheta == 0) ? 0 : Clamp(w.y / sinTheta, -1, 1);
 }
@@ -861,3 +1111,18 @@ inline __bidevice__ Float SinPhi(const vec3f &w) {
 inline __bidevice__ Float Cos2Phi(const vec3f &w) { return CosPhi(w) * CosPhi(w); }
 
 inline __bidevice__ Float Sin2Phi(const vec3f &w) { return SinPhi(w) * SinPhi(w); }
+
+inline __bidevice__ vec3f Reflect(const vec3f &wo, const vec3f &n){
+    return -wo + 2 * Dot(wo, n) * n;
+}
+
+inline __bidevice__ bool Refract(const vec3f &wi, const Normal3f &n, Float eta, vec3f *wt){
+    Float cosThetaI  = Dot(n, wi);
+    Float sin2ThetaI = Max(Float(0), Float(1 - cosThetaI * cosThetaI));
+    Float sin2ThetaT = eta * eta * sin2ThetaI;
+    
+    if(sin2ThetaT >= 1) return false;
+    Float cosThetaT = std::sqrt(1 - sin2ThetaT);
+    *wt = eta * -wi + (eta * cosThetaI - cosThetaT) * ToVec3(n);
+    return true;
+}

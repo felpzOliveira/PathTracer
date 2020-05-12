@@ -87,7 +87,7 @@ class Transform {
     __bidevice__ Transform operator*(const Transform &t2) const;
     __bidevice__ bool SwapsHandedness() const;
     
-    //Bounds3f operator()(const Bounds3f &b) const;
+    __bidevice__ Bounds3f operator()(const Bounds3f &b) const;
     __bidevice__ SurfaceInteraction operator()(const SurfaceInteraction &si) const;
     
     template <typename T> inline __bidevice__ Point3<T> operator()(const Point3<T> &pt,
@@ -106,6 +106,7 @@ class Transform {
 };
 
 __bidevice__ Transform Translate(const vec3f &delta);
+__bidevice__ Transform Translate(Float x, Float y, Float z);
 __bidevice__ Transform Scale(Float x, Float y, Float z);
 __bidevice__ Transform RotateX(Float theta);
 __bidevice__ Transform RotateY(Float theta);

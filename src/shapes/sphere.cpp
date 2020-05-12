@@ -1,5 +1,10 @@
 #include <shape.h>
 
+__bidevice__ Bounds3f Sphere::GetBounds() const{
+    return (ObjectToWorld)(Bounds3f(Point3f(-radius, -radius, zMin),
+                                    Point3f(radius, radius, zMax)));
+}
+
 __bidevice__ bool Sphere::Intersect(const Ray &r, Float *tHit, 
                                     SurfaceInteraction *isect) const
 {
@@ -7,8 +12,6 @@ __bidevice__ bool Sphere::Intersect(const Ray &r, Float *tHit,
     Point3f pHit;
     vec3f oErr, dErr;
     Ray ray = (WorldToObject)(r, &oErr, &dErr);
-    
-    //printf(__vec3_strfmtA(r.o) " " __vec3_strfmtA(r.d) "\n", __vec3_argsA(r.o), __vec3_argsA(r.d));
     
     Float ox = ray.o.x, oy = ray.o.y, oz = ray.o.z;
     Float dx = ray.d.x, dy = ray.d.y, dz = ray.d.z;

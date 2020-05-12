@@ -1,4 +1,5 @@
 #include <interaction.h>
+#include <primitive.h>
 
 __bidevice__ 
 SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
@@ -9,3 +10,12 @@ SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
 : Interaction(p, Normal3f(Normalize(Cross(dpdu, dpdv))), pError, wo, time),
 uv(uv), dpdu(dpdu), dpdv(dpdv), dndu(dndu), dndv(dndv), 
 shape(shape), faceIndex(faceIndex){}
+
+__bidevice__ void SurfaceInteraction::ComputeScatteringFunctions(BSDF *bsdf, 
+                                                                 const RayDifferential &r, 
+                                                                 TransportMode mode, 
+                                                                 bool mLobes)
+{
+    ComputeDifferentials(r);
+    primitive->ComputeScatteringFunctions(bsdf, this, mode, mLobes);
+}
