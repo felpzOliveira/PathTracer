@@ -232,7 +232,6 @@ __bidevice__ SurfaceInteraction Transform::operator()(const SurfaceInteraction &
     ret.dpdv = t(si.dpdv);
     ret.dndu = t(si.dndu);
     ret.dndv = t(si.dndv);
-    
     //ret.shading.n = Normalize(t(si.shading.n));
     //ret.shading.dpdu = t(si.shading.dpdu);
     //ret.shading.dpdv = t(si.shading.dpdv);

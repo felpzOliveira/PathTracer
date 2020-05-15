@@ -3,22 +3,26 @@
 #include <util.h>
 #include <camera.h>
 
-__bidevice__ GeometricPrimitive::GeometricPrimitive(Shape *shape, Material *material)
-: shape(shape), material(material) 
-{
-    worldBound = shape->GetBounds();
-}
-
-__bidevice__ bool GeometricPrimitive::Intersect(const Ray &ray, 
-                                                SurfaceInteraction *isect) const
+__bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
+                                     SurfaceInteraction *isect)
 {
     Float tHit;
-    if(!shape->Intersect(ray, &tHit, isect)) return false;
+    if(!primitive->shape->Intersect(ray, &tHit, isect)) return false;
     ray.tMax = tHit;
-    isect->primitive = this;
+    isect->primitive = primitive;
     return true;
 }
 
+__bidevice__ Primitive::Primitive(Shape *shape) : shape(shape){
+    if(shape) worldBound = shape->GetBounds();
+}
+
+__bidevice__ bool Primitive::Intersect(const Ray &ray, SurfaceInteraction *isect) const{
+    return PrimitiveIntersect(this, ray, isect);
+}
+
+__bidevice__ GeometricPrimitive::GeometricPrimitive(Shape *_shape, Material *material)
+: Primitive(_shape), material(material){}
 
 __bidevice__ void GeometricPrimitive::ComputeScatteringFunctions(BSDF *bsdf, 
                                                                  SurfaceInteraction *si,
@@ -59,8 +63,6 @@ __bidevice__ bool Aggregator::IntersectNode(Node *node, const Ray &r,
     return hit_anything;
 }
 
-#define MAX_STACK_SIZE 256
-typedef Node* NodePtr;
 __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect, 
                                         Pixel *pixel) const
 {
@@ -76,6 +78,7 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     
     Float t0, t1;
     bool hit_bound = node->bound.IntersectP(r, &t0, &t1);
+    
     if(hit_bound && node->is_leaf){
         hit_tests += node->n;
         if(hit_tests > pixel->max_transverse_tests) 

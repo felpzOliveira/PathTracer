@@ -98,6 +98,18 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
             ComputeScatteringFunctionsGlass(bsdf, si, mode, mLobes);
         } break;
         
+        case MaterialType::Metal:{
+            ComputeScatteringFunctionsMetal(bsdf, si, mode, mLobes);
+        } break;
+        
+        case MaterialType::Translucent:{
+            ComputeScatteringFunctionsTranslucent(bsdf, si, mode, mLobes);
+        } break;
+        
+        case MaterialType::Plastic:{
+            ComputeScatteringFunctionsPlastic(bsdf, si, mode, mLobes);
+        } break;
+        
         default:{
             printf("Unknown material\n");
         }

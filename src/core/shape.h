@@ -5,8 +5,27 @@
 #include <interaction.h>
 
 enum ShapeType{
-    SPHERE
+    SPHERE, MESH
 };
+
+#define MAX_STACK_SIZE 256
+typedef struct{
+    Bounds3f bound;
+    int handle;
+}PrimitiveHandle;
+
+typedef struct Node_t{
+    struct Node_t *left, *right;
+    PrimitiveHandle *handles;
+    int n;
+    int is_leaf;
+    Bounds3f bound;
+}Node;
+typedef Node* NodePtr;
+
+
+__host__ Node *CreateBVH(PrimitiveHandle *handles, int n, int depth, 
+                         int max_depth, int *totalNodes);
 
 class Shape{
     public:
@@ -48,12 +67,46 @@ class Sphere : public Shape{
     __bidevice__ virtual Bounds3f GetBounds() const override;
 };
 
+//Meshes are in world space?
+class Mesh: public Shape{
+    public:
+    int nTriangles, nVertices;
+    int *indices;
+    Point3f *p;
+    Normal3f *n;
+    vec3f *s;
+    Point2f *uv;
+    
+    PrimitiveHandle *handles;
+    Node *bvh;
+    
+    __bidevice__ Mesh() : Shape(Transform()){type = ShapeType::MESH;}
+    __bidevice__ Mesh(const Transform &toWorld, int nTris, int *_indices,
+                      int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
+    
+    __bidevice__ void Set(const Transform &toWorld, int nTris, int *_indices,
+                          int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
+    
+    __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
+                                        SurfaceInteraction *isect) const override;
+    
+    __bidevice__ virtual Bounds3f GetBounds() const override;
+    
+    __host__ void Wrap();
+    
+    private:
+    bool __bidevice__ IntersectMeshNode(Node *node, const Ray &r, 
+                                        SurfaceInteraction *, Float *) const;
+};
+
 inline __bidevice__ void PrintShape(Shape *shape){
     if(shape->type == ShapeType::SPHERE){
         Sphere *sphere = (Sphere *)shape;
         Point3f center = (shape->ObjectToWorld)(Point3f(0,0,0));
         printf("Sphere [ " __vec3_strfmtA(center) " , radius: %g ]", 
                __vec3_argsA(center), sphere->radius);
+    }else if(shape->type == ShapeType::MESH){
+        printf("Mesh []");
     }else{
         printf("None");
     }

@@ -1076,10 +1076,17 @@ Point2f ConcentricSampleDisk(const Point2f &u){
 }
 
 inline __bidevice__ 
-vec3f CosineSampleHemisphere(const Point2f &u) {
+vec3f CosineSampleHemisphere(const Point2f &u){
     Point2f d = ConcentricSampleDisk(u);
     Float z = std::sqrt(Max((Float)0, 1 - d.x * d.x - d.y * d.y));
     return vec3f(d.x, d.y, z);
+}
+
+inline __bidevice__
+vec3f SampleSphere(const Point2f &u){
+    Float usqrt = 2 * std::sqrt(u[1] * (1 - u[1]));
+    Float utheta = 2 * Pi * u[0];
+    return vec3f(std::cos(utheta) * usqrt, std::sin(utheta) * usqrt, 1 - 2*u[1]);
 }
 
 //Centered at +Z

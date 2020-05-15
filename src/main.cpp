@@ -40,13 +40,15 @@ __global__ void BuildSceneTable(Aggregator *scene){
 }
 
 __device__ void MakeScene(Aggregator *scene, curandState *state){
-#if 0
+#if 1
     Texture ZeroTex(Spectrum(0.f));
     Sphere *sphere = new Sphere(Translate(vec3f(0.f,0.f,-1.f)), 0.5);
     
     Material *matRed = new Material();
-    Texture kdRed(Spectrum(0.7f, 0.3f, 0.3f));
-    matRed->Init_Matte(kdRed, ZeroTex);
+    Texture kdGreen(Spectrum(0.2f, 0.7f, 0.3f));
+    Texture kdRed(Spectrum(0.8f, 0.2f, 0.3f));
+    //matRed->Init_Matte(kdGreen, ZeroTex);
+    matRed->Init_Metal(Spectrum(0.7, 0.8, 1.0), 0.5f, 1.0f, 0.5f);
     
     GeometricPrimitive *geo0 = new GeometricPrimitive(sphere, matRed);
     
@@ -62,21 +64,27 @@ __device__ void MakeScene(Aggregator *scene, curandState *state){
     Texture kdBlue(Spectrum(0.15f,0.34f,0.9f));
     Texture sigma(Spectrum(30.f));
     //matBlue->Init_Mirror(kdBlue);
-    matBlue->Init_Matte(kdRed, sigma);
+    //matBlue->Init_Matte(kdRed, sigma);
+    //matBlue->Init_Translucent(Spectrum(0.0f), Spectrum(1.f),
+    //.01f, Spectrum(0.75f), Spectrum(0.5f));
+    
+    matBlue->Init_Plastic(Spectrum(.1f, .1f, .4f), Spectrum(0.6f), 0.03);
+    
     
     GeometricPrimitive *geo2 = new GeometricPrimitive(sphere3, matBlue);
     
     Sphere *sphere4 = new Sphere(Translate(vec3f(-1.f, 0.f, -1.f)), 0.5);
     Material *matGlass = new Material();
-    matGlass->Init_Glass(Spectrum(0.9f), Spectrum(0.9f), 0, 0, 2.f);
+    //Spectrum glassSpec(0.7f,0.96f,0.75f);
+    Spectrum glassSpec(1.f);
+    matGlass->Init_Glass(glassSpec, glassSpec, 2.f);
     
     GeometricPrimitive *geo3 = new GeometricPrimitive(sphere4, matGlass);
-    
     scene->Reserve(4);
     scene->Insert(geo0);
     scene->Insert(geo1);
-    scene->Insert(geo2);
     scene->Insert(geo3);
+    scene->Insert(geo2);
 #else
     int count = 22 * 22 + 10;
     scene->Reserve(count);
@@ -182,17 +190,17 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
     int i = 0;
     for(i = 0; i < maxi; i++){
         SurfaceInteraction isect;
+        
         if(scene->Intersect(ray, &isect, pixel)){
             BSDF bsdf(isect);
             
-            Float pdf = 1.f;
+            Float pdf = 0.f;
             Point2f u(rand_float(&pixel->state), rand_float(&pixel->state));
             vec3f wi, wo = -ray.d;
             
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
             
-            Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf);
-            
+            Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL);
             if(IsZero(pdf)) break;
             
             curr = curr * f * AbsDot(wi, ToVec3(isect.n)) / pdf;
@@ -221,11 +229,11 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     if(i < width && j < height){
         Float aspect = ((Float)width)/((Float)height);
         
-        //Camera camera(Point3f(0.f,0.5f, -4.f), Point3f(0.0f,0.f,-1.f), 
-        //vec3f(0.f,1.f,0.f), 33.f, aspect);
+        Camera camera(Point3f(0.f,0.5f, -4.f), Point3f(0.0f,0.f,-1.f), 
+                      vec3f(0.f,1.f,0.f), 33.f, aspect);
         
-        Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
-                      vec3f(0.f,1.f,0.f), 20.f, aspect, 0.3);
+        //Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
+        //vec3f(0.f,1.f,0.f), 20.f, aspect, 0.3);
         
         int pixel_index = j * width + i;
         Pixel *pixel = &image->pixels[pixel_index];

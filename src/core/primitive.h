@@ -6,12 +6,15 @@ class BSDF;
 class SurfaceInteraction;
 class Material;
 class Pixel;
+class PhaseFunction;
 
 class Primitive{
     public:
     Bounds3f worldBound;
-    __bidevice__ virtual bool Intersect(const Ray &r, SurfaceInteraction *) const = 0;
-    __bidevice__ virtual void Release() const = 0;
+    Shape *shape;
+    __bidevice__ Primitive(Shape *shape);
+    __bidevice__ virtual bool Intersect(const Ray &r, SurfaceInteraction *) const;
+    __bidevice__ virtual void Release() const{ delete shape; }
     __bidevice__ virtual void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si,
                                                          TransportMode mode, bool mLobes) 
         const = 0;
@@ -20,16 +23,10 @@ class Primitive{
 
 class GeometricPrimitive : public Primitive{
     public:
-    Shape *shape;
     Material *material;
     
-    __bidevice__ GeometricPrimitive(){}
+    __bidevice__ GeometricPrimitive() : Primitive(nullptr){}
     __bidevice__ GeometricPrimitive(Shape *shape, Material *material);
-    
-    __bidevice__ virtual bool Intersect(const Ray &r, SurfaceInteraction *) const override;
-    __bidevice__ virtual void Release() const override{
-        delete shape;
-    }
     
     __bidevice__ virtual 
         void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si,
@@ -41,19 +38,6 @@ class GeometricPrimitive : public Primitive{
         printf(" ) \n");
     }
 };
-
-typedef struct{
-    Bounds3f bound;
-    int handle;
-}PrimitiveHandle;
-
-typedef struct Node_t{
-    struct Node_t *left, *right;
-    PrimitiveHandle *handles;
-    int n;
-    int is_leaf;
-    Bounds3f bound;
-}Node;
 
 class Aggregator{
     public:
