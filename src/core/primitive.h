@@ -61,6 +61,7 @@ class Aggregator{
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, int nTris, int *_indices,
                                int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
                                Point2f *UV);
+    __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=1);
     __host__ void ReserveMeshes(int n);
     __host__ void Wrap();
     

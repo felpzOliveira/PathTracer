@@ -23,7 +23,9 @@ __device__ Point2f rand_point2(curandState *state){
     return Point2f(rand_float(state), rand_float(state));
 }
 
-__device__ void MakeScene(Aggregator *scene, curandState *state){
+__device__ void MakeScene(Aggregator *scene, curandState *state,
+                          ParsedMesh **pMeshes, int nMeshes)
+{
     Texture ZeroTex(Spectrum(0.f));
     Sphere *sphere = new Sphere(Translate(vec3f(0.f,0.f,-1.f)), 0.5);
     
@@ -40,11 +42,11 @@ __device__ void MakeScene(Aggregator *scene, curandState *state){
     Point3f p[4];
     //p[0] = Point3f(-1,0,0); p[1] = Point3f(1,0,0);
     //p[2] = Point3f(0,1,0);
-    p[0] = Point3f(-100, -0.5, -100); p[1] = Point3f(100, -0.5, -100);
-    p[2] = Point3f(100, -0.5, 100); p[3] = Point3f(-100, -0.5, 100);
+    p[0] = Point3f(-1000, -0.1, -100); p[1] = Point3f(1000, -0.1, -100);
+    p[2] = Point3f(1000, -0.1, 100); p[3] = Point3f(-1000, -0.1, 100);
     
-    //Sphere *ground = new Sphere(Translate(vec3f(0.f,-100.5f,-1.f)), 100);
-    Mesh *ground = scene->AddMesh(Transform(), 2, indices, 4, p, 0, 0, 0);
+    Mesh *ground = scene->AddMesh(Translate(vec3f(10,0,-10)), 
+                                  2, indices, 4, p, 0, 0, 0);
     
     Material *matYellow = new Material();
     Texture kdYellow(Spectrum(0.7f, 0.7f, 0.0f));
@@ -52,35 +54,53 @@ __device__ void MakeScene(Aggregator *scene, curandState *state){
     
     GeometricPrimitive *geo1 = new GeometricPrimitive(ground, matYellow);
     
-    Sphere *sphere3 = new Sphere(Translate(vec3f(1.f,0.f,-1.f)), 0.5);
+    Sphere *sphere3 = new Sphere(Translate(vec3f(9.5f,5.f,-1.f)), 5);
     Material *matBlue = new Material();
     Texture kdBlue(Spectrum(0.15f,0.34f,0.9f));
     Texture sigma(Spectrum(30.f));
     matBlue->Init_Plastic(Spectrum(.1f, .1f, .4f), Spectrum(0.6f), 0.03);
     
     
-    GeometricPrimitive *geo2 = new GeometricPrimitive(sphere3, matBlue);
+    GeometricPrimitive *geo2 = new GeometricPrimitive(sphere3, matRed);
     
-    Sphere *sphere4 = new Sphere(Translate(vec3f(-1.f, 0.f, -1.f)), 0.5);
+    Sphere *sphere4 = new Sphere(Translate(vec3f(-9.f, 5.f, -1.f)), 5);
     Material *matGlass = new Material();
     //Spectrum glassSpec(0.7f,0.96f,0.75f);
     Spectrum glassSpec(1.f);
     matGlass->Init_Glass(glassSpec, glassSpec, 2.f);
     
     GeometricPrimitive *geo3 = new GeometricPrimitive(sphere4, matGlass);
-    scene->Reserve(4);
-    scene->Insert(geo0);
+    
+    Material *matGlass2 = new Material();
+    Spectrum R(0.31, 0.64, 0.32);
+    //Spectrum R(1.f);
+    Spectrum T(1.f);
+    //matGlass2->Init_Glass(R, T, .05, .05, 1.5f);
+    //matGlass2->Init_Matte(Spectrum(.7), 40);
+    matGlass2->Init_Uber(Spectrum(.05), Spectrum(.8), Spectrum(0), 
+                         Spectrum(0), 0.001, 0.001, 1.f, 2.5f);
+    
+    scene->Reserve(4+nMeshes);
+    for(int i = 0; i < nMeshes; i++){
+        Mesh *mptr = scene->AddMesh(pMeshes[i]->toWorld, pMeshes[i], 0);
+        GeometricPrimitive *mGeo = new GeometricPrimitive(mptr, matGlass2);
+        scene->Insert(mGeo);
+    }
+    
+    
+    //scene->Insert(geo0);
     scene->Insert(geo3);
     scene->Insert(geo2);
-    
     
     scene->Insert(geo1);
 }
 
-__global__ void BuildScene(Aggregator *scene, Image *image){
+__global__ void BuildScene(Aggregator *scene, Image *image, 
+                           ParsedMesh **pMeshes, int nMeshes)
+{
     if(threadIdx.x == 0 && blockIdx.x == 0){
         curandState *state = &image->pixels[0].state;
-        MakeScene(scene, state);
+        MakeScene(scene, state, pMeshes, nMeshes);
     }
 }
 
@@ -137,7 +157,7 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
             
             curr = curr * f * AbsDot(wi, ToVec3(isect.n)) / pdf;
             ray.d = Normalize(wi);
-            ray.o = isect.p + 3. * ShadowEpsilon * ray.d;
+            ray.o = isect.p + 3.0 * ShadowEpsilon * ray.d;
             
             pixel->hits += 1;
         }else{
@@ -161,8 +181,8 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     if(i < width && j < height){
         Float aspect = ((Float)width)/((Float)height);
         
-        Camera camera(Point3f(0.f,0.5f, -4.f), Point3f(0.0f,0.f,-1.f), 
-                      vec3f(0.f,1.f,0.f), 33.f, aspect);
+        Camera camera(Point3f(0.f, 20.f, -40.f), Point3f(0.0f,10.f,0.f), 
+                      vec3f(0.f,1.f,0.f), 30.f, aspect);
         
         //Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
         //vec3f(0.f,1.f,0.f), 20.f, aspect, 0.3);
@@ -194,14 +214,25 @@ void launch_render_kernel(Image *image){
     int ty = 8;
     int nx = image->width;
     int ny = image->height;
-    int it = 100;
+    int it = 1000;
     unsigned long long seed = time(0);
+    int nMeshes = 1;
+    int mIt = 0;
+    
+    ParsedMesh **pMeshes = nullptr;
+    if(nMeshes > 0){
+        pMeshes = cudaAllocateVx(ParsedMesh*, nMeshes);
+    }
+    
+    LoadObjData("/home/felpz/Documents/budda.obj", &pMeshes[mIt]);
+    pMeshes[mIt]->toWorld = Scale(20,20,20); mIt++;
+    //LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &pMeshes[mIt++]);
     
     dim3 blocks(nx/tx+1, ny/ty+1);
     dim3 threads(tx,ty);
     
     Aggregator *scene = cudaAllocateVx(Aggregator, 1);
-    scene->ReserveMeshes(1);
+    scene->ReserveMeshes(1 + nMeshes);
     
     std::cout << "Initializing image..." << std::flush;
     SetupPixels<<<blocks, threads>>>(image, seed);
@@ -209,7 +240,7 @@ void launch_render_kernel(Image *image){
     std::cout << "OK" << std::endl;
     
     std::cout << "Building scene..." << std::flush;
-    BuildScene<<<1, 1>>>(scene, image);
+    BuildScene<<<1, 1>>>(scene, image, pMeshes, nMeshes);
     cudaDeviceAssert();
     std::cout << "OK" << std::endl;
     
@@ -235,8 +266,9 @@ void launch_render_kernel(Image *image){
 
 int main(int argc, char **argv){
     cudaInitEx();
+    
     Float aspect_ratio = 16.0 / 9.0;
-    const int image_width = 800;
+    const int image_width = 1366;
     const int image_height = (int)((Float)image_width / aspect_ratio);
     
     Image *image = CreateImage(image_width, image_height);

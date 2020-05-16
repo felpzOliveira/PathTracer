@@ -110,6 +110,10 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
             ComputeScatteringFunctionsPlastic(bsdf, si, mode, mLobes);
         } break;
         
+        case MaterialType::Uber:{
+            ComputeScatteringFunctionsUber(bsdf, si, mode, mLobes);
+        } break;
+        
         default:{
             printf("Unknown material\n");
         }

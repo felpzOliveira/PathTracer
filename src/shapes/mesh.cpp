@@ -8,6 +8,35 @@ __bidevice__ Mesh::Mesh(const Transform &toWorld, int nTris, int *_indices,
     type = ShapeType::MESH;
 }
 
+__bidevice__ Mesh::Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy) 
+: Shape(toWorld)
+{
+    if(copy){
+        Set(toWorld, pMesh->nTriangles, pMesh->indices, pMesh->nVertices,
+            pMesh->p, pMesh->s, pMesh->n, pMesh->uv);
+    }else{
+        nTriangles = pMesh->nTriangles;
+        nVertices = pMesh->nVertices;
+        indices = pMesh->indices;
+        p = pMesh->p;
+        n = pMesh->n;
+        s = pMesh->s;
+        uv = pMesh->uv;
+        
+        for(int i = 0; i < nVertices; i++) p[i] = ObjectToWorld(p[i]);
+        
+        if(n){
+            for(int i = 0; i < nVertices; i++) n[i] = ObjectToWorld(n[i]);
+        }
+        
+        if(s){
+            for(int i = 0; i < nVertices; i++) s[i] = ObjectToWorld(s[i]);
+        }
+    }
+    
+    type = ShapeType::MESH;
+}
+
 __bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
                             int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
                             Point2f *UV)
@@ -44,11 +73,14 @@ __bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
     type = ShapeType::MESH;
 }
 
-__bidevice__ void Mesh::GetUVs(Point2f st[3], int nTri) const{
-    if(uv){//TODO: Does this need to query indices?
-        st[0] = uv[3 * nTri + 0];
-        st[1] = uv[3 * nTri + 1];
-        st[2] = uv[3 * nTri + 2];
+__bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
+    if(uv && 0){//TODO: Does this need to query indices?
+        int i0 = indices[3 * triNum + 0];
+        int i1 = indices[3 * triNum + 1];
+        int i2 = indices[3 * triNum + 2];
+        st[0] = uv[i0];
+        st[1] = uv[i1];
+        st[2] = uv[i2];
     }else{
         st[0] = Point2f(0, 0);
         st[1] = Point2f(1, 0);
@@ -65,6 +97,10 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
     Point3f p0 = p[i0];
     Point3f p1 = p[i1];
     Point3f p2 = p[i2];
+#if 0
+    printf(v3fA(p0) " " v3fA(p1) " " v3fA(p2) "\n",
+           v3aA(p0), v3aA(p1), v3aA(p2));
+#endif
     
     Point3f p0t = p0 - vec3f(ray.o);
     Point3f p1t = p1 - vec3f(ray.o);
@@ -155,6 +191,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         dpdv = (-dst12[0] * dp02 + dst02[0] * dp12) * invdet;
     }
     
+#if 0
     if(degenerateUV || IsZero(Cross(dpdu, dpdv).LengthSquared())){
         // Handle zero determinant for triangle partial derivative matrix
         vec3f ng = Cross(p2 - p0, p1 - p0);
@@ -164,6 +201,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         
         CoordinateSystem(Normalize(ng), &dpdu, &dpdv);
     }
+#endif
     
     Float xAbsSum = (Absf(b0 * p0.x) + Absf(b1 * p1.x) + Absf(b2 * p2.x));
     Float yAbsSum = (Absf(b0 * p0.y) + Absf(b1 * p1.y) + Absf(b2 * p2.y));
@@ -288,6 +326,12 @@ __bidevice__ Bounds3f Mesh::GetBounds() const{
     }
 }
 
+/* The following build is required since Mesh vtable is not available to the CPU */
+struct MeshData{
+    int nTriangles, nVertices;
+};
+
+
 __global__ void MeshGetBounds(PrimitiveHandle *handles, Mesh *mesh){
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid < mesh->nTriangles){
@@ -307,11 +351,6 @@ __global__ void MeshGetBounds(PrimitiveHandle *handles, Mesh *mesh){
     }
 }
 
-
-/* The following build is required since Mesh vtable is not available to the CPU */
-struct MeshData{
-    int nTriangles, nVertices;
-};
 __global__ void GetMeshData(MeshData *data, Mesh *mesh){
     if(threadIdx.x == 0 && blockIdx.x == 0){
         data->nTriangles = mesh->nTriangles;

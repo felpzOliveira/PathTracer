@@ -36,7 +36,7 @@ class Texture{
 
 
 enum MaterialType{
-    Matte, Mirror, Glass, Metal, Translucent, Plastic
+    Matte, Mirror, Glass, Metal, Translucent, Plastic, Uber
 };
 
 class Material{
@@ -53,6 +53,8 @@ class Material{
                                                  TransportMode mode, bool mLobes) const;
     
     __bidevice__ void Init_Matte(Texture Kd, Texture sigma);
+    __bidevice__ void Init_Matte(Spectrum kd, Float sigma=0);
+    
     __bidevice__ void Init_Mirror(Texture Kr);
     __bidevice__ void Init_Metal(Texture R, Texture etaI, 
                                  Texture etaT, Texture k);
@@ -73,6 +75,12 @@ class Material{
     __bidevice__ void Init_Translucent(Spectrum kd, Spectrum ks, Float rough,
                                        Spectrum refl, Spectrum trans);
     
+    __bidevice__ void Init_Uber(Texture kd, Texture ks, Texture kr, Texture kt,
+                                Texture roughu, Texture roughv, Texture op, Texture eta);
+    
+    __bidevice__ void Init_Uber(Spectrum kd, Spectrum ks, Spectrum kr, Spectrum kt,
+                                Float roughu, Float roughv, Spectrum op, Float eta);
+    
     private:
     __bidevice__ void ComputeScatteringFunctionsMatte(BSDF *bsdf, SurfaceInteraction *si, 
                                                       TransportMode mode, bool mLobes) const;
@@ -86,4 +94,6 @@ class Material{
                                                             TransportMode mode, bool mLobes) const;
     __bidevice__ void ComputeScatteringFunctionsPlastic(BSDF *bsdf, SurfaceInteraction *si, 
                                                         TransportMode mode, bool mLobes) const;
+    __bidevice__ void ComputeScatteringFunctionsUber(BSDF *bsdf, SurfaceInteraction *si, 
+                                                     TransportMode mode, bool mLobes) const;
 };

@@ -67,6 +67,17 @@ class Sphere : public Shape{
     __bidevice__ virtual Bounds3f GetBounds() const override;
 };
 
+
+typedef struct{
+    Point3f *p;
+    Normal3f *n;
+    vec3f *s;
+    Point2f *uv;
+    int *indices;
+    int nTriangles, nVertices;
+    Transform toWorld;
+}ParsedMesh;
+
 //Meshes are in world space?
 class Mesh: public Shape{
     public:
@@ -83,6 +94,7 @@ class Mesh: public Shape{
     __bidevice__ Mesh() : Shape(Transform()){type = ShapeType::MESH;}
     __bidevice__ Mesh(const Transform &toWorld, int nTris, int *_indices,
                       int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
+    __bidevice__ Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy=1);
     
     __bidevice__ void Set(const Transform &toWorld, int nTris, int *_indices,
                           int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
@@ -108,10 +120,13 @@ inline __bidevice__ void PrintShape(Shape *shape){
         printf("Sphere [ " __vec3_strfmtA(center) " , radius: %g ]", 
                __vec3_argsA(center), sphere->radius);
     }else if(shape->type == ShapeType::MESH){
-        printf("Mesh []");
+        Mesh *mesh = (Mesh *)shape;
+        printf("Mesh [ triangles: %d , vertices: %d]", mesh->nTriangles,
+               mesh->nVertices);
     }else{
         printf("None");
     }
 }
 
 __host__ void WrapMesh(Mesh *mesh);
+__host__ bool LoadObjData(const char *obj, ParsedMesh **data);

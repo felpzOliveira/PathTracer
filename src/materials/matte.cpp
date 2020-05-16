@@ -6,6 +6,12 @@ __bidevice__ void Material::Init_Matte(Texture _Kd, Texture _sigma){
     type = MaterialType::Matte;
 }
 
+__bidevice__ void Material::Init_Matte(Spectrum kd, Float _sigma){
+    K.Init_ConstantTexture(kd);
+    sigma.Init_ConstantTexture(Spectrum(_sigma));
+    type = MaterialType::Matte;
+}
+
 __bidevice__ void Material::ComputeScatteringFunctionsMatte(BSDF *bsdf, 
                                                             SurfaceInteraction *si, 
                                                             TransportMode mode, 

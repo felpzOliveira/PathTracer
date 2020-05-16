@@ -402,11 +402,12 @@ __bidevice__ Spectrum BSDF::Sample_f(const vec3f &woWorld, vec3f *wiWorld, const
     BxDF *bxdf = nullptr;
     int count = comp;
     int picked = -1;
-    for(int i = 0; i < nBxDFs; ++i)
+    for(int i = 0; i < nBxDFs; ++i){
         if(bxdfs[i].MatchesFlags(type) && count-- == 0){
-        bxdf = (BxDF *)&bxdfs[i];
-        picked = i;
-        break;
+            bxdf = (BxDF *)&bxdfs[i];
+            picked = i;
+            break;
+        }
     }
     
     Point2f uRemapped(Min(u[0] * matchingComps - comp, OneMinusEpsilon), u[1]);
@@ -426,22 +427,28 @@ __bidevice__ Spectrum BSDF::Sample_f(const vec3f &woWorld, vec3f *wiWorld, const
     
     *wiWorld = LocalToWorld(wi);
     
-    if(!(bxdf->type & BSDF_SPECULAR) && matchingComps > 1)
-        for(int i = 0; i < nBxDFs; ++i)
-        if(i != picked && bxdfs[i].MatchesFlags(type))
-        *pdf += bxdfs[i].Pdf(wo, wi);
-    if(matchingComps > 1) *pdf /= matchingComps;
+    if(!(bxdf->type & BSDF_SPECULAR) && matchingComps > 1){
+        for(int i = 0; i < nBxDFs; ++i){
+            if(i != picked && bxdfs[i].MatchesFlags(type)){
+                *pdf += bxdfs[i].Pdf(wo, wi);
+            }
+        }
+    }
     
+    if(matchingComps > 1) *pdf /= matchingComps;
     
     if(!(bxdf->type & BSDF_SPECULAR)){
         bool reflect = Dot(*wiWorld, ToVec3(ng)) * Dot(woWorld, ToVec3(ng)) > 0;
         f = 0.;
         
-        for(int i = 0; i < nBxDFs; ++i)
+        for(int i = 0; i < nBxDFs; ++i){
             if(bxdfs[i].MatchesFlags(type) &&
                ((reflect && (bxdfs[i].type & BSDF_REFLECTION)) ||
                 (!reflect && (bxdfs[i].type & BSDF_TRANSMISSION))))
-            f += bxdfs[i].f(wo, wi);
+            {
+                f += bxdfs[i].f(wo, wi);
+            }
+        }
     }
     
     return f;
