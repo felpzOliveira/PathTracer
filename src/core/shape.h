@@ -35,7 +35,7 @@ class Shape{
     ObjectToWorld(toWorld), WorldToObject(Inverse(toWorld))
     {}
     
-    __bidevice__ virtual Bounds3f GetBounds() const = 0;
+    __bidevice__ virtual Bounds3f GetBounds() const{ return Bounds3f(); }
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
                                         SurfaceInteraction *isect) const = 0;
 };
@@ -92,11 +92,13 @@ class Mesh: public Shape{
     
     __bidevice__ virtual Bounds3f GetBounds() const override;
     
-    __host__ void Wrap();
-    
     private:
     bool __bidevice__ IntersectMeshNode(Node *node, const Ray &r, 
                                         SurfaceInteraction *, Float *) const;
+    bool __bidevice__ IntersectTriangle(const Ray &r, SurfaceInteraction * isect,
+                                        int triNum, Float *tHit) const;
+    
+    __bidevice__ void GetUVs(Point2f uv[3], int nTri) const;
 };
 
 inline __bidevice__ void PrintShape(Shape *shape){
@@ -111,3 +113,5 @@ inline __bidevice__ void PrintShape(Shape *shape){
         printf("None");
     }
 }
+
+__host__ void WrapMesh(Mesh *mesh);

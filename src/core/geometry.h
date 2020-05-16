@@ -10,6 +10,8 @@
 #define __vec3_strfmt(v) "[%g %g %g]"
 #define __vec3_args(v) v.x, v.y, v.z
 #define __vec3_argsA(v) #v, v.x, v.y, v.z
+#define v3fA(v) __vec3_strfmtA(v)
+#define v3aA(v) __vec3_argsA(v)
 
 #define OneMinusEpsilon 0.99999994f
 #define ShadowEpsilon 0.0001f

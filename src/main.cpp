@@ -23,24 +23,7 @@ __device__ Point2f rand_point2(curandState *state){
     return Point2f(rand_float(state), rand_float(state));
 }
 
-__bidevice__ void MakeSceneTable(Aggregator *scene, int id){
-    if(id < scene->head){
-        Primitive *pri = scene->primitives[id];
-        scene->handles[id].bound = pri->worldBound;
-        scene->handles[id].handle = id;
-    }
-}
-
-__global__ void BuildSceneTable(Aggregator *scene){
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    
-    if(tid < scene->head){
-        MakeSceneTable(scene, tid);
-    }
-}
-
 __device__ void MakeScene(Aggregator *scene, curandState *state){
-#if 1
     Texture ZeroTex(Spectrum(0.f));
     Sphere *sphere = new Sphere(Translate(vec3f(0.f,0.f,-1.f)), 0.5);
     
@@ -52,22 +35,27 @@ __device__ void MakeScene(Aggregator *scene, curandState *state){
     
     GeometricPrimitive *geo0 = new GeometricPrimitive(sphere, matRed);
     
-    Sphere *sphere2 = new Sphere(Translate(vec3f(0.f,-100.5f,-1.f)), 100);
+    int indices[] = {0, 1, 2, 2, 3, 0};
+    //int indices[] = {0, 1, 2};
+    Point3f p[4];
+    //p[0] = Point3f(-1,0,0); p[1] = Point3f(1,0,0);
+    //p[2] = Point3f(0,1,0);
+    p[0] = Point3f(-100, -0.5, -100); p[1] = Point3f(100, -0.5, -100);
+    p[2] = Point3f(100, -0.5, 100); p[3] = Point3f(-100, -0.5, 100);
+    
+    //Sphere *ground = new Sphere(Translate(vec3f(0.f,-100.5f,-1.f)), 100);
+    Mesh *ground = scene->AddMesh(Transform(), 2, indices, 4, p, 0, 0, 0);
+    
     Material *matYellow = new Material();
     Texture kdYellow(Spectrum(0.7f, 0.7f, 0.0f));
     matYellow->Init_Matte(kdYellow, ZeroTex);
     
-    GeometricPrimitive *geo1 = new GeometricPrimitive(sphere2, matYellow);
+    GeometricPrimitive *geo1 = new GeometricPrimitive(ground, matYellow);
     
     Sphere *sphere3 = new Sphere(Translate(vec3f(1.f,0.f,-1.f)), 0.5);
     Material *matBlue = new Material();
     Texture kdBlue(Spectrum(0.15f,0.34f,0.9f));
     Texture sigma(Spectrum(30.f));
-    //matBlue->Init_Mirror(kdBlue);
-    //matBlue->Init_Matte(kdRed, sigma);
-    //matBlue->Init_Translucent(Spectrum(0.0f), Spectrum(1.f),
-    //.01f, Spectrum(0.75f), Spectrum(0.5f));
-    
     matBlue->Init_Plastic(Spectrum(.1f, .1f, .4f), Spectrum(0.6f), 0.03);
     
     
@@ -82,71 +70,15 @@ __device__ void MakeScene(Aggregator *scene, curandState *state){
     GeometricPrimitive *geo3 = new GeometricPrimitive(sphere4, matGlass);
     scene->Reserve(4);
     scene->Insert(geo0);
-    scene->Insert(geo1);
     scene->Insert(geo3);
     scene->Insert(geo2);
-#else
-    int count = 22 * 22 + 10;
-    scene->Reserve(count);
-    Sphere *spherePtr = nullptr;
-    Material *material = nullptr;
-    GeometricPrimitive *gPri = nullptr;
     
-    spherePtr = new Sphere(Translate(0,1,0),1);
-    material = new Material();
-    material->Init_Glass(Spectrum(0.9f), Spectrum(0.9f), 0, 0, 2.f);
-    gPri = new GeometricPrimitive(spherePtr, material);
-    scene->Insert(gPri);
     
-    spherePtr = new Sphere(Translate(0,-1000,0),1000);
-    material = new Material();
-    material->Init_Matte(Texture(Spectrum(0.5)), Texture(Spectrum(30.f)));
-    gPri = new GeometricPrimitive(spherePtr, material);
-    scene->Insert(gPri);
-    
-#if 1
-    
-    spherePtr = new Sphere(Translate(-4,1,0),1);
-    material = new Material();
-    material->Init_Matte(Texture(Spectrum(.4,.2,.1)), Texture(Spectrum(0.f)));
-    gPri = new GeometricPrimitive(spherePtr, material);
-    scene->Insert(gPri);
-    
-    spherePtr = new Sphere(Translate(4,1,0),1);
-    material = new Material();
-    material->Init_Mirror(Texture(Spectrum(.7,.6,.5)));
-    gPri = new GeometricPrimitive(spherePtr, material);
-    scene->Insert(gPri);
-    
-    for(int a = -11; a < 11; a++){
-        for(int b = -11; b < 11; b++){
-            vec3f center(a + 0.9*rand_float(state), 0.2, b + 0.9*rand_float(state));
-            if((center - vec3f(4, 0.2, 0)).Length() > 0.9){
-                Float mat_rng = rand_float(state);
-                material = new Material();
-                if(mat_rng < 0.8){
-                    Spectrum R = rand_vec(state);
-                    Float ang = rand_float(state) * 60.f;
-                    material->Init_Matte(Texture(R), Texture(Spectrum(ang)));
-                }else if(mat_rng < 0.95){
-                    Spectrum R = rand_vec(state) * 0.5 + vec3f(0.5);
-                    material->Init_Mirror(Texture(R));
-                }else{
-                    material->Init_Glass(Spectrum(0.9f), Spectrum(0.9f), 0, 0, 3.5f);
-                }
-                
-                spherePtr = new Sphere(Translate(center), 0.2);
-                gPri = new GeometricPrimitive(spherePtr, material);
-                scene->Insert(gPri);
-            }
-        }
-    }
-#endif
-#endif
+    scene->Insert(geo1);
 }
 
 __global__ void BuildScene(Aggregator *scene, Image *image){
-    if (threadIdx.x == 0 && blockIdx.x == 0){
+    if(threadIdx.x == 0 && blockIdx.x == 0){
         curandState *state = &image->pixels[0].state;
         MakeScene(scene, state);
     }
@@ -247,6 +179,8 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             
             Ray ray = camera.SpawnRay(u, v, sample);
+            //vec3f d = Normalize(Point3f(-0.01, 0.1, 0) - Point3f(0,0,5));
+            //Ray ray(Point3f(0,0,5), d);
             out += Li(ray, scene, pixel);
             pixel->samples ++;
         }
@@ -267,6 +201,8 @@ void launch_render_kernel(Image *image){
     dim3 threads(tx,ty);
     
     Aggregator *scene = cudaAllocateVx(Aggregator, 1);
+    scene->ReserveMeshes(1);
+    
     std::cout << "Initializing image..." << std::flush;
     SetupPixels<<<blocks, threads>>>(image, seed);
     cudaDeviceAssert();
@@ -275,18 +211,9 @@ void launch_render_kernel(Image *image){
     std::cout << "Building scene..." << std::flush;
     BuildScene<<<1, 1>>>(scene, image);
     cudaDeviceAssert();
-    
-    size_t pThreads = 64;
-    size_t pBlocks = (scene->head + pThreads - 1)/pThreads;
-    scene->handles = cudaAllocateVx(PrimitiveHandle, scene->head);
-    BuildSceneTable<<<pBlocks,pThreads>>>(scene);
-    cudaDeviceAssert();
-    
     std::cout << "OK" << std::endl;
     
-    std::cout << "Packing scene..." << std::flush;
     scene->Wrap();
-    std::cout << "OK [ Build BVH with " << scene->totalNodes << " nodes ]" << std::endl;
     
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){

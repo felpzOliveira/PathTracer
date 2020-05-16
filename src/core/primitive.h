@@ -48,12 +48,20 @@ class Aggregator{
     PrimitiveHandle *handles;
     int totalNodes;
     
+    Mesh **meshPtrs;
+    int nAllowedMeshes;
+    int nMeshes;
+    
     __bidevice__ Aggregator();
     __bidevice__ void Reserve(int size);
     __bidevice__ void Insert(Primitive *pri);
     __bidevice__ bool Intersect(const Ray &r, SurfaceInteraction *, Pixel *) const;
     __bidevice__ void Release();
     __bidevice__ void PrintHandle(int which=-1);
+    __bidevice__ Mesh *AddMesh(const Transform &toWorld, int nTris, int *_indices,
+                               int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
+                               Point2f *UV);
+    __host__ void ReserveMeshes(int n);
     __host__ void Wrap();
     
     private:

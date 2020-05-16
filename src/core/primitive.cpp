@@ -13,9 +13,7 @@ __bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
     return true;
 }
 
-__bidevice__ Primitive::Primitive(Shape *shape) : shape(shape){
-    if(shape) worldBound = shape->GetBounds();
-}
+__bidevice__ Primitive::Primitive(Shape *shape) : shape(shape){}
 
 __bidevice__ bool Primitive::Intersect(const Ray &ray, SurfaceInteraction *isect) const{
     return PrimitiveIntersect(this, ray, isect);
@@ -37,6 +35,30 @@ __bidevice__ void GeometricPrimitive::ComputeScatteringFunctions(BSDF *bsdf,
 __bidevice__ Aggregator::Aggregator(){
     length = 0;
     head = 0;
+    nMeshes = 0;
+    nAllowedMeshes = 0;
+}
+
+__host__ void Aggregator::ReserveMeshes(int n){
+    nAllowedMeshes = n;
+    meshPtrs = cudaAllocateVx(Mesh*, n);
+    nMeshes = 0;
+}
+
+__bidevice__ Mesh *Aggregator::AddMesh(const Transform &toWorld, int nTris, int *_indices,
+                                       int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
+                                       Point2f *UV)
+{
+    Mesh *ptr = nullptr;
+    if(nMeshes < nAllowedMeshes){
+        meshPtrs[nMeshes] = new Mesh(toWorld, nTris, _indices, nVerts, P, S, N, UV);
+        ptr = meshPtrs[nMeshes];
+        nMeshes ++;
+    }else{
+        printf("Hit maximum meshes allowed [%d] \n", nMeshes);
+    }
+    
+    return ptr;
 }
 
 __bidevice__ void Aggregator::Reserve(int size){
@@ -86,7 +108,6 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
         
         return IntersectNode(node, r, isect);
     }
-    
     do{
         if(hit_bound){
             NodePtr childL = node->left;
@@ -255,8 +276,37 @@ __host__ Node *CreateBVH(PrimitiveHandle *handles,int n, int depth,
     return node;
 }
 
+__bidevice__ void MakeSceneTable(Aggregator *scene, int id){
+    if(id < scene->head){
+        Primitive *pri = scene->primitives[id];
+        Shape *shape = pri->shape;
+        scene->handles[id].bound = shape->GetBounds();
+        scene->handles[id].handle = id;
+    }
+}
+
+__global__ void BuildSceneTable(Aggregator *scene){
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < scene->head){
+        MakeSceneTable(scene, tid);
+    }
+}
+
 __host__ void Aggregator::Wrap(){
     int max_depth = 12;
     totalNodes = 0;
+    handles = cudaAllocateVx(PrimitiveHandle, head);
+    
+    for(int i = 0; i < nMeshes; i++){
+        WrapMesh(meshPtrs[i]);
+    }
+    
+    size_t pThreads = 64;
+    size_t pBlocks = (head + pThreads - 1)/pThreads;
+    BuildSceneTable<<<pBlocks,pThreads>>>(this);
+    cudaDeviceAssert();
+    
+    printf("Wrapping primitives...");
     root = CreateBVH(handles, head, 0, max_depth, &totalNodes);
+    printf("OK [ Build BVH with %d nodes ]\n", totalNodes);
 }
