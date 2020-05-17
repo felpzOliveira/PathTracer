@@ -72,10 +72,12 @@ class Aggregator{
     Mesh **meshPtrs;
     int nAllowedMeshes;
     int nMeshes;
+    int lightList[256];
+    int lightCounter;
     
     __bidevice__ Aggregator();
     __bidevice__ void Reserve(int size);
-    __bidevice__ void Insert(Primitive *pri);
+    __bidevice__ void Insert(Primitive *pri, int is_light=0);
     __bidevice__ bool Intersect(const Ray &r, SurfaceInteraction *, Pixel *) const;
     __bidevice__ void Release();
     __bidevice__ void PrintHandle(int which=-1);

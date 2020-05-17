@@ -289,6 +289,12 @@ class BSDF{
                                    Float *pdf, BxDFType type,
                                    BxDFType *sampledType = nullptr) const;
     
+    __bidevice__ Spectrum f(const vec3f &woW, const vec3f &wiW, 
+                            BxDFType flags = BSDF_ALL) const;
+    
+    __bidevice__ Float Pdf(const vec3f &wo, const vec3f &wi, 
+                           BxDFType flags = BSDF_ALL) const;
+    
     __bidevice__ void Push(BxDF *bxdf){
         if(nBxDFs < MAX_BxDFS){
             bxdfs[nBxDFs++] = *bxdf;

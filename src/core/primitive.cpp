@@ -50,6 +50,7 @@ __bidevice__ Aggregator::Aggregator(){
     head = 0;
     nMeshes = 0;
     nAllowedMeshes = 0;
+    lightCounter = 0;
 }
 
 __host__ void Aggregator::ReserveMeshes(int n){
@@ -93,9 +94,15 @@ __bidevice__ void Aggregator::Reserve(int size){
     primitives = new Primitive*[size];
 }
 
-__bidevice__ void Aggregator::Insert(Primitive *pri){
+__bidevice__ void Aggregator::Insert(Primitive *pri, int is_light){
     Assert(head < length && primitives);
-    primitives[head++] = pri;
+    primitives[head] = pri;
+    if(is_light){
+        Assert(lightCounter < 256);
+        lightList[lightCounter++] = head;
+    }
+    
+    head++;
 }
 
 __bidevice__ bool Aggregator::IntersectNode(Node *node, const Ray &r, 

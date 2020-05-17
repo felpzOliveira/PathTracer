@@ -102,7 +102,7 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     if(i < width && j < height){
         Float aspect = ((Float)width)/((Float)height);
         
-        Camera camera(Point3f(0.f, 20.f, -50.f), Point3f(0.0f,10.f,0.f), 
+        Camera camera(Point3f(0.f, 20.f, -40.f), Point3f(0.0f,10.f,0.f), 
                       vec3f(0.f,1.f,0.f), 30.f, aspect);
         
         //Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
@@ -145,30 +145,23 @@ void HostSetupScene(){
     InsertPrimitive(sphere2, matBlue);
 #endif
     
-    SphereDescriptor glassSphere = MakeSphere(Translate(-10.f, 5.f, -1.f), 5);
-    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
-    //InsertPrimitive(glassSphere, matGlass);
+    SphereDescriptor glassSphere = MakeSphere(Translate(10.f, 5.f, -1.f), 5);
+    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 2.5);
+    InsertPrimitive(glassSphere, matGlass);
     
-    SphereDescriptor lSphere = MakeSphere(Translate(-15,25,-5), 5);
+    Transform r = Translate(0, 25, 0) * RotateX(90) * RotateZ(30);
+    RectDescriptor rect = MakeRectangle(r, 30, 30);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(4));
-    InsertPrimitive(lSphere, matEm);
+    InsertPrimitive(rect, matEm);
     
-    SphereDescriptor l2Sphere = MakeSphere(Translate(-15,25,5),5);
-    InsertPrimitive(l2Sphere, matEm);
-    
-    SphereDescriptor l3Sphere = MakeSphere(Translate(15,25,5),5);
-    InsertPrimitive(l3Sphere, matEm);
-    
-    SphereDescriptor l4Sphere = MakeSphere(Translate(15,25,5),5);
-    InsertPrimitive(l4Sphere, matEm);
 #if 1
     ParsedMesh *buddaMesh;
     LoadObjData("/home/felpz/Documents/budda.obj", &buddaMesh);
     buddaMesh->toWorld = Scale(20,20,20);
     
     MeshDescriptor budda = MakeMesh(buddaMesh);
-    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),//Spectrum(0.31, 0.64, 0.32), 
-                                                     Spectrum(1), 1.5);
+    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),
+                                                     Spectrum(0.31, 0.64, 0.32), 1.5);
     //Spectrum(1), 1.5, 0.02, 0.02);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 

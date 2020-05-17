@@ -3,9 +3,10 @@
 #include <transform.h>
 #include <cutil.h>
 #include <interaction.h>
+#include <util.h>
 
 enum ShapeType{
-    SPHERE, MESH
+    SPHERE, RECTANGLE, MESH
 };
 
 #define MAX_STACK_SIZE 256
@@ -38,6 +39,10 @@ class Shape{
     __bidevice__ virtual Bounds3f GetBounds() const{ return Bounds3f(); }
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
                                         SurfaceInteraction *isect) const = 0;
+    
+    __bidevice__ virtual Float Area() const = 0;
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const = 0;
 };
 
 class Sphere : public Shape{
@@ -65,8 +70,28 @@ class Sphere : public Shape{
                                         SurfaceInteraction *isect) const override;
     
     __bidevice__ virtual Bounds3f GetBounds() const override;
+    __bidevice__ virtual Float Area() const override;
+    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const;
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override;
 };
 
+//NOTE: Unit rectangle in XY plane
+class Rectangle : public Shape{
+    public:
+    Float sizex, sizey;
+    __bidevice__ Rectangle(const Transform &toWorld, Float sizex, Float sizey)
+        : Shape(toWorld), sizex(Max(0, sizex)), sizey(Max(0, sizey))
+    {type = ShapeType::RECTANGLE;}
+    
+    __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
+                                        SurfaceInteraction *isect) const override;
+    __bidevice__ virtual Bounds3f GetBounds() const override;
+    __bidevice__ virtual Float Area() const override;
+    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const;
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override;
+};
 
 typedef struct{
     Point3f *p;
@@ -104,6 +129,19 @@ class Mesh: public Shape{
     
     __bidevice__ virtual Bounds3f GetBounds() const override;
     
+    __bidevice__ virtual Float Area() const override{
+        UMETHOD();
+        return 1;
+    }
+    
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override
+    {
+        UMETHOD();
+        *pdf = 0;
+        return Interaction();
+    }
+    
     private:
     __bidevice__ bool IntersectMeshNode(Node *node, const Ray &r, 
                                         SurfaceInteraction *, Float *) const;
@@ -123,6 +161,9 @@ inline __bidevice__ void PrintShape(Shape *shape){
         Mesh *mesh = (Mesh *)shape;
         printf("Mesh [ triangles: %d , vertices: %d]", mesh->nTriangles,
                mesh->nVertices);
+    }else if(shape->type == ShapeType::RECTANGLE){
+        Rectangle *rect = (Rectangle *)shape;
+        printf("Rectangle [ %g x %g ]", rect->sizex, rect->sizey);
     }else{
         printf("None");
     }

@@ -18,6 +18,12 @@ typedef struct{
 }MeshDescriptor;
 
 typedef struct{
+    Float sizex, sizey;
+    Transform toWorld;
+    int id;
+}RectDescriptor;
+
+typedef struct{
     int is_emissive;
     MaterialType type;
     Spectrum svals[16];
@@ -29,11 +35,13 @@ typedef struct{
     ShapeType shapeType;
     SphereDescriptor sphereDesc;
     MeshDescriptor meshDesc;
+    RectDescriptor rectDesc;
     MaterialDescriptor mat;
 }PrimitiveDescriptor;
 
 __host__ void                BeginScene(Aggregator *scene);
 __host__ SphereDescriptor    MakeSphere(Transform toWorld, Float radius);
+__host__ RectDescriptor      MakeRectangle(Transform toWorld, Float sizex, Float sizey);
 __host__ MeshDescriptor      MakeMesh(ParsedMesh *mesh);
 
 __host__ MaterialDescriptor  MakeMatteMaterial(Spectrum kd, Float sigma=0);
@@ -52,5 +60,6 @@ __host__ MaterialDescriptor  MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum
 __host__ MaterialDescriptor  MakeEmissive(Spectrum L);
 
 __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat);
+__host__ void                InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat);
 __host__ void                PrepareSceneForRendering(Aggregator *scene);

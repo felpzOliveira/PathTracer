@@ -212,7 +212,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
     
     *isect = SurfaceInteraction(pHit, pError, stHit, -ray.d, dpdu, dpdv,
                                 Normal3f(0, 0, 0), Normal3f(0, 0, 0), ray.time,
-                                this);
+                                this, triNum);
     
     isect->n = Normal3f(Normalize(Cross(dp02, dp12)));
     

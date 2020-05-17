@@ -6,6 +6,7 @@ std::vector<PrimitiveDescriptor> hPrimitives;
 int spheresIds = 0;
 int meshesIds = 0;
 int matId = 0;
+int rectsIds = 0;
 
 typedef struct{
     SphereDescriptor *spheres;
@@ -43,6 +44,16 @@ __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius){
     desc.radius = radius;
     desc.id = spheresIds;
     spheresIds++;
+    return desc;
+}
+
+__host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float sizey){
+    RectDescriptor desc;
+    desc.toWorld = toWorld;
+    desc.sizex = sizex;
+    desc.sizey = sizey;
+    desc.id = rectsIds;
+    rectsIds++;
     return desc;
 }
 
@@ -143,6 +154,14 @@ __host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat){
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat){
+    PrimitiveDescriptor desc;
+    desc.shapeType = ShapeType::RECTANGLE;
+    desc.mat = mat;
+    desc.rectDesc = shape;
+    hPrimitives.push_back(desc);
+}
+
 __host__ void InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat){
     PrimitiveDescriptor desc;
     desc.shapeType = ShapeType::MESH;
@@ -155,10 +174,12 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     Shape *shape = nullptr;
     
     if(pri->shapeType == ShapeType::SPHERE){
-        shape = new Sphere(pri->sphereDesc.toWorld,
-                           pri->sphereDesc.radius);
+        shape = new Sphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius);
     }else if(pri->shapeType == ShapeType::MESH){
         shape = scene->AddMesh(pri->meshDesc.mesh->toWorld, pri->meshDesc.mesh);
+    }else if(pri->shapeType == ShapeType::RECTANGLE){
+        shape = new Rectangle(pri->rectDesc.toWorld, 
+                              pri->rectDesc.sizex, pri->rectDesc.sizey);
     }
     
     return shape;
@@ -230,7 +251,7 @@ __global__ void MakeSceneGPU(Aggregator *scene, SceneDescription *description){
                 primitive = new GeometricPrimitive(shape, mat);
             }
             
-            scene->Insert(primitive);
+            scene->Insert(primitive, pri->mat.is_emissive);
         }
     }
 }
@@ -247,6 +268,8 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         cudaDeviceAssert();
         
         scene->Wrap();
+        
+        printf(" * Scene contains %d light(s)\n", scene->lightCounter);
         
     }else{
         printf("Invalid scene, you need to call BeginScene once\n");

@@ -466,3 +466,41 @@ __bidevice__ Spectrum BSDF::Sample_f(const vec3f &woWorld, vec3f *wiWorld, const
     
     return f;
 }
+
+
+__bidevice__ Spectrum BSDF::f(const vec3f &woW, const vec3f &wiW, BxDFType flags) const{
+    return 0;
+    vec3f wi = WorldToLocal(wiW), wo = WorldToLocal(woW);
+    if(IsZero(wo.z)) return 0.;
+    
+    bool reflect = Dot(wiW, ToVec3(ng)) * Dot(woW, ToVec3(ng)) > 0;
+    Spectrum f(0.f);
+    for(int i = 0; i < nBxDFs; ++i){
+        if (bxdfs[i].MatchesFlags(flags) &&
+            ((reflect && (bxdfs[i].type & BSDF_REFLECTION)) ||
+             (!reflect && (bxdfs[i].type & BSDF_TRANSMISSION))))
+        {
+            f += bxdfs[i].f(wo, wi);
+        }
+    }
+    
+    return f;
+}
+
+__bidevice__ Float BSDF::Pdf(const vec3f &woWorld, const vec3f &wiWorld, BxDFType flags) const{
+    if(nBxDFs == 0.f) return 0.f;
+    
+    vec3f wo = WorldToLocal(woWorld), wi = WorldToLocal(wiWorld);
+    if(IsZero(wo.z)) return 0.;
+    Float pdf = 0.f;
+    int matchingComps = 0;
+    for(int i = 0; i < nBxDFs; i++){
+        if(bxdfs[i].MatchesFlags(flags)){
+            pdf += bxdfs[i].Pdf(wo, wi);
+            matchingComps += 1;
+        }
+    }
+    
+    Float v = matchingComps > 0 ? pdf / matchingComps : 0.f;
+    return v;
+}
