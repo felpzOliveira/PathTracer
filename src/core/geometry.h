@@ -3,6 +3,7 @@
 #include <cutil.h>
 #include <cfloat>
 #include <stdio.h>
+#include <stdint.h>
 
 #define Assert(x) __assert_check((x), #x, __FILE__, __LINE__)
 #define Infinity FLT_MAX
@@ -49,6 +50,74 @@ inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
 inline __bidevice__ Float Radians(Float deg) { return (Pi / 180) * deg; }
 inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 0.00001; }
+
+inline __bidevice__ uint32_t FloatToBits(float f){
+    uint32_t ui;
+    memcpy(&ui, &f, sizeof(float));
+    return ui;
+}
+
+inline __bidevice__ float BitsToFloat(uint32_t ui){
+    float f;
+    memcpy(&f, &ui, sizeof(uint32_t));
+    return f;
+}
+
+inline __bidevice__ uint64_t FloatToBits(double f){
+    uint64_t ui;
+    memcpy(&ui, &f, sizeof(double));
+    return ui;
+}
+
+inline __bidevice__ double BitsToFloat(uint64_t ui){
+    double f;
+    memcpy(&f, &ui, sizeof(uint64_t));
+    return f;
+}
+
+inline __bidevice__ float NextFloatUp(float v){
+    if(std::isinf(v) && v > 0.) return v;
+    if(v == -0.f) v = 0.f;
+    uint32_t ui = FloatToBits(v);
+    if(v >= 0)
+        ++ui;
+    else
+        --ui;
+    return BitsToFloat(ui);
+}
+
+inline __bidevice__ float NextFloatDown(float v){
+    if(std::isinf(v) && v < 0.) return v;
+    if(v == 0.f) v = -0.f;
+    uint32_t ui = FloatToBits(v);
+    if(v > 0)
+        --ui;
+    else
+        ++ui;
+    return BitsToFloat(ui);
+}
+
+inline __bidevice__ double NextFloatUp(double v, int delta = 1) {
+    if(std::isinf(v) && v > 0.) return v;
+    if(v == -0.f) v = 0.f;
+    uint64_t ui = FloatToBits(v);
+    if (v >= 0.)
+        ui += delta;
+    else
+        ui -= delta;
+    return BitsToFloat(ui);
+}
+
+inline __bidevice__ double NextFloatDown(double v, int delta = 1) {
+    if(std::isinf(v) && v < 0.) return v;
+    if(v == 0.f) v = -0.f;
+    uint64_t ui = FloatToBits(v);
+    if(v > 0.)
+        ui -= delta;
+    else
+        ui += delta;
+    return BitsToFloat(ui);
+}
 
 template <typename T, typename U, typename V> 
 inline __bidevice__ T Clamp(T val, U low, V high){
@@ -1036,6 +1105,24 @@ bool Bounds3<T>::IntersectP(const Ray &ray, const vec3f &invDir,
     if (tzMin > tMin) tMin = tzMin;
     if (tzMax < tMax) tMax = tzMax;
     return (tMin < ray.tMax) && (tMax > 0);
+}
+
+inline __bidevice__ Point3f OffsetRayOrigin(const Point3f &p, const vec3f &pError,
+                                            const Normal3f &n, const vec3f &w)
+{
+    Float d = Dot(Abs(n), pError);
+    //printf(v3fA(pError) "\n", v3aA(pError));
+    vec3f offset = d * ToVec3(n);
+    if(Dot(w, ToVec3(n)) < 0) offset = -offset;
+    Point3f po = p + offset;
+    for (int i = 0; i < 3; ++i) {
+        if(offset[i] > 0)
+            po[i] = NextFloatUp(po[i]);
+        else if(offset[i] < 0)
+            po[i] = NextFloatDown(po[i]);
+    }
+    
+    return po;
 }
 
 //NOTE: Must be normalized

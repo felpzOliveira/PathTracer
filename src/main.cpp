@@ -67,7 +67,7 @@ __device__ void MakeScene(Aggregator *scene, curandState *state,
     Material *matGlass = new Material();
     //Spectrum glassSpec(0.7f,0.96f,0.75f);
     Spectrum glassSpec(1.f);
-    matGlass->Init_Glass(glassSpec, glassSpec, 2.f);
+    matGlass->Init_Glass(glassSpec, glassSpec, 1.5f);
     
     GeometricPrimitive *geo3 = new GeometricPrimitive(sphere4, matGlass);
     
@@ -75,10 +75,10 @@ __device__ void MakeScene(Aggregator *scene, curandState *state,
     Spectrum R(0.31, 0.64, 0.32);
     //Spectrum R(1.f);
     Spectrum T(1.f);
-    //matGlass2->Init_Glass(R, T, .05, .05, 1.5f);
+    //matGlass2->Init_Glass(R, T, 1.5f);
     //matGlass2->Init_Matte(Spectrum(.7), 40);
-    matGlass2->Init_Uber(Spectrum(.05), Spectrum(.8), Spectrum(0), 
-                         Spectrum(0), 0.001, 0.001, 1.f, 2.5f);
+    matGlass2->Init_Uber(Spectrum(.05), Spectrum(.8,0.34,0.13), Spectrum(0), 
+                         Spectrum(0.8), 0.001, 0.001, 1.f, 1.5f);
     
     scene->Reserve(4+nMeshes);
     for(int i = 0; i < nMeshes; i++){
@@ -156,9 +156,7 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
             if(IsZero(pdf)) break;
             
             curr = curr * f * AbsDot(wi, ToVec3(isect.n)) / pdf;
-            ray.d = Normalize(wi);
-            ray.o = isect.p + 3.0 * ShadowEpsilon * ray.d;
-            
+            ray = isect.SpawnRay(wi);
             pixel->hits += 1;
         }else{
             out = curr * GetSky(ray.d);
@@ -199,8 +197,6 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             
             Ray ray = camera.SpawnRay(u, v, sample);
-            //vec3f d = Normalize(Point3f(-0.01, 0.1, 0) - Point3f(0,0,5));
-            //Ray ray(Point3f(0,0,5), d);
             out += Li(ray, scene, pixel);
             pixel->samples ++;
         }
@@ -214,7 +210,7 @@ void launch_render_kernel(Image *image){
     int ty = 8;
     int nx = image->width;
     int ny = image->height;
-    int it = 1000;
+    int it = 500;
     unsigned long long seed = time(0);
     int nMeshes = 1;
     int mIt = 0;
