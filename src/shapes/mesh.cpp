@@ -38,8 +38,7 @@ __bidevice__ Mesh::Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy)
 }
 
 __bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
-                            int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
-                            Point2f *UV)
+                            int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV)
 {
     nTriangles = nTris;
     nVertices = nVerts;

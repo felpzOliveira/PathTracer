@@ -19,8 +19,21 @@ __bidevice__ bool Primitive::Intersect(const Ray &ray, SurfaceInteraction *isect
     return PrimitiveIntersect(this, ray, isect);
 }
 
+__bidevice__ GeometricEmitterPrimitive::GeometricEmitterPrimitive(Shape *_shape, Spectrum _L)
+: Primitive(_shape), L(_L) {}
+
 __bidevice__ GeometricPrimitive::GeometricPrimitive(Shape *_shape, Material *material)
-: Primitive(_shape), material(material){}
+: Primitive(_shape), material(material) {}
+
+
+__bidevice__ void GeometricEmitterPrimitive::ComputeScatteringFunctions(BSDF *bsdf, 
+                                                                        SurfaceInteraction *si,
+                                                                        TransportMode mode, 
+                                                                        bool mLobes) const
+{
+    BxDF bxdf; bxdf.Invalidate();
+    bsdf->Push(&bxdf);
+}
 
 __bidevice__ void GeometricPrimitive::ComputeScatteringFunctions(BSDF *bsdf, 
                                                                  SurfaceInteraction *si,

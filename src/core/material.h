@@ -21,7 +21,7 @@ class Texture{
         Init_ConstantTexture(t);
     }
     
-    //NOTE: When we do add support for images, update this operator
+    //NOTE: When we do add support for images, this might be usefull
     __bidevice__ void operator=(const Texture &t){
         C = t.C;
         type = t.type;
@@ -56,13 +56,14 @@ class Material{
     __bidevice__ void Init_Matte(Spectrum kd, Float sigma=0);
     
     __bidevice__ void Init_Mirror(Texture Kr);
-    __bidevice__ void Init_Metal(Texture R, Texture etaI, 
-                                 Texture etaT, Texture k);
+    __bidevice__ void Init_Mirror(Spectrum kr);
+    
+    __bidevice__ void Init_Metal(Texture R, Texture etaI, Texture etaT, Texture k);
+    __bidevice__ void Init_Metal(Spectrum R, Float etaI, Float etaT, Float k);
     
     __bidevice__ void Init_Plastic(Spectrum kd, Spectrum ks, Float rough);
     __bidevice__ void Init_Plastic(Texture kd, Texture ks, Texture rough);
     
-    __bidevice__ void Init_Metal(Spectrum R, Float etaI, Float etaT, Float k);
     
     __bidevice__ void Init_Glass(Texture Kr, Texture Kt, Texture uRough,
                                  Texture vRough, Texture index);

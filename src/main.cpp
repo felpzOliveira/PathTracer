@@ -8,6 +8,7 @@
 #include <reflection.h>
 #include <material.h>
 #include <util.h>
+#include <scene.h>
 
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
@@ -21,87 +22,6 @@ __device__ vec3f rand_vec(curandState *state){
 
 __device__ Point2f rand_point2(curandState *state){
     return Point2f(rand_float(state), rand_float(state));
-}
-
-__device__ void MakeScene(Aggregator *scene, curandState *state,
-                          ParsedMesh **pMeshes, int nMeshes)
-{
-    Texture ZeroTex(Spectrum(0.f));
-    Sphere *sphere = new Sphere(Translate(vec3f(0.f,0.f,-1.f)), 0.5);
-    
-    Material *matRed = new Material();
-    Texture kdGreen(Spectrum(0.2f, 0.7f, 0.3f));
-    Texture kdRed(Spectrum(0.8f, 0.2f, 0.3f));
-    //matRed->Init_Matte(kdGreen, ZeroTex);
-    matRed->Init_Metal(Spectrum(0.7, 0.8, 1.0), 0.5f, 1.0f, 0.5f);
-    
-    GeometricPrimitive *geo0 = new GeometricPrimitive(sphere, matRed);
-    
-    int indices[] = {0, 1, 2, 2, 3, 0};
-    //int indices[] = {0, 1, 2};
-    Point3f p[4];
-    //p[0] = Point3f(-1,0,0); p[1] = Point3f(1,0,0);
-    //p[2] = Point3f(0,1,0);
-    p[0] = Point3f(-1000, -0.1, -100); p[1] = Point3f(1000, -0.1, -100);
-    p[2] = Point3f(1000, -0.1, 100); p[3] = Point3f(-1000, -0.1, 100);
-    
-    Mesh *ground = scene->AddMesh(Translate(vec3f(10,0,-10)), 
-                                  2, indices, 4, p, 0, 0, 0);
-    
-    Material *matYellow = new Material();
-    Texture kdYellow(Spectrum(0.7f, 0.7f, 0.0f));
-    matYellow->Init_Matte(kdYellow, ZeroTex);
-    
-    GeometricPrimitive *geo1 = new GeometricPrimitive(ground, matYellow);
-    
-    Sphere *sphere3 = new Sphere(Translate(vec3f(9.5f,5.f,-1.f)), 5);
-    Material *matBlue = new Material();
-    Texture kdBlue(Spectrum(0.15f,0.34f,0.9f));
-    Texture sigma(Spectrum(30.f));
-    matBlue->Init_Plastic(Spectrum(.1f, .1f, .4f), Spectrum(0.6f), 0.03);
-    
-    
-    GeometricPrimitive *geo2 = new GeometricPrimitive(sphere3, matRed);
-    
-    Sphere *sphere4 = new Sphere(Translate(vec3f(-9.f, 5.f, -1.f)), 5);
-    Material *matGlass = new Material();
-    //Spectrum glassSpec(0.7f,0.96f,0.75f);
-    Spectrum glassSpec(1.f);
-    matGlass->Init_Glass(glassSpec, glassSpec, 1.5f);
-    
-    GeometricPrimitive *geo3 = new GeometricPrimitive(sphere4, matGlass);
-    
-    Material *matGlass2 = new Material();
-    Spectrum R(0.31, 0.64, 0.32);
-    //Spectrum R(1.f);
-    Spectrum T(1.f);
-    //matGlass2->Init_Glass(R, T, 1.5f);
-    //matGlass2->Init_Matte(Spectrum(.7), 40);
-    matGlass2->Init_Uber(Spectrum(.05), Spectrum(.8,0.34,0.13), Spectrum(0), 
-                         Spectrum(0.8), 0.001, 0.001, 1.f, 1.5f);
-    
-    scene->Reserve(4+nMeshes);
-    for(int i = 0; i < nMeshes; i++){
-        Mesh *mptr = scene->AddMesh(pMeshes[i]->toWorld, pMeshes[i], 0);
-        GeometricPrimitive *mGeo = new GeometricPrimitive(mptr, matGlass2);
-        scene->Insert(mGeo);
-    }
-    
-    
-    //scene->Insert(geo0);
-    scene->Insert(geo3);
-    scene->Insert(geo2);
-    
-    scene->Insert(geo1);
-}
-
-__global__ void BuildScene(Aggregator *scene, Image *image, 
-                           ParsedMesh **pMeshes, int nMeshes)
-{
-    if(threadIdx.x == 0 && blockIdx.x == 0){
-        curandState *state = &image->pixels[0].state;
-        MakeScene(scene, state, pMeshes, nMeshes);
-    }
 }
 
 __global__ void SetupPixels(Image *image, unsigned long long seed){
@@ -129,6 +49,7 @@ __global__ void ReleaseScene(Aggregator *scene){
 }
 
 __bidevice__ Spectrum GetSky(vec3f dir){
+    return Spectrum(0);
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
     return (1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0);
@@ -151,6 +72,8 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
             vec3f wi, wo = -ray.d;
             
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
+            Spectrum L = isect.primitive->Le();
+            out += curr * L;
             
             Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL);
             if(IsZero(pdf)) break;
@@ -159,7 +82,7 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
             ray = isect.SpawnRay(wi);
             pixel->hits += 1;
         }else{
-            out = curr * GetSky(ray.d);
+            out += curr * GetSky(ray.d);
             pixel->misses += 1;
             break;
         }
@@ -179,7 +102,7 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     if(i < width && j < height){
         Float aspect = ((Float)width)/((Float)height);
         
-        Camera camera(Point3f(0.f, 20.f, -40.f), Point3f(0.0f,10.f,0.f), 
+        Camera camera(Point3f(0.f, 20.f, -50.f), Point3f(0.0f,10.f,0.f), 
                       vec3f(0.f,1.f,0.f), 30.f, aspect);
         
         //Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
@@ -205,42 +128,84 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     }
 }
 
-void launch_render_kernel(Image *image){
+void HostSetupScene(){
+    int indices[] = {0, 1, 2, 2, 3, 0};
+    Point3f p[4];
+    p[0] = Point3f(-1000, -0.1, -100); p[1] = Point3f(1000, -0.1, -100);
+    p[2] = Point3f(1000, -0.1, 100); p[3] = Point3f(-1000, -0.1, 100);
+    MeshDescriptor ground = MakeMesh(ParsedMeshFromData(Translate(10,0,-10), 
+                                                        2, indices, 4, p, 0, 0, 0, 1));
+    MaterialDescriptor matYellow = MakeMatteMaterial(Spectrum(0.7f, 0.7f, 0.0f));
+    InsertPrimitive(ground, matYellow);
+    
+#if 0
+    SphereDescriptor sphere2 = MakeSphere(Translate(10,5.f,-1.f), 5);
+    MaterialDescriptor matBlue = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
+                                                     Spectrum(0.6f), 0.03);
+    InsertPrimitive(sphere2, matBlue);
+#endif
+    
+    SphereDescriptor glassSphere = MakeSphere(Translate(-10.f, 5.f, -1.f), 5);
+    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
+    //InsertPrimitive(glassSphere, matGlass);
+    
+    SphereDescriptor lSphere = MakeSphere(Translate(-15,25,-5), 5);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(4));
+    InsertPrimitive(lSphere, matEm);
+    
+    SphereDescriptor l2Sphere = MakeSphere(Translate(-15,25,5),5);
+    InsertPrimitive(l2Sphere, matEm);
+    
+    SphereDescriptor l3Sphere = MakeSphere(Translate(15,25,5),5);
+    InsertPrimitive(l3Sphere, matEm);
+    
+    SphereDescriptor l4Sphere = MakeSphere(Translate(15,25,5),5);
+    InsertPrimitive(l4Sphere, matEm);
+#if 1
+    ParsedMesh *buddaMesh;
+    LoadObjData("/home/felpz/Documents/budda.obj", &buddaMesh);
+    buddaMesh->toWorld = Scale(20,20,20);
+    
+    MeshDescriptor budda = MakeMesh(buddaMesh);
+    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),//Spectrum(0.31, 0.64, 0.32), 
+                                                     Spectrum(1), 1.5);
+    //Spectrum(1), 1.5, 0.02, 0.02);
+    
+    MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
+                                                  Spectrum(0), Spectrum(0), 0.001, 
+                                                  0.001, Spectrum(1), 1.5f);
+    
+    InsertPrimitive(budda, matGlass2);
+#endif
+}
+
+void render(Image *image){
     int tx = 8;
     int ty = 8;
     int nx = image->width;
     int ny = image->height;
     int it = 500;
     unsigned long long seed = time(0);
-    int nMeshes = 1;
-    int mIt = 0;
-    
-    ParsedMesh **pMeshes = nullptr;
-    if(nMeshes > 0){
-        pMeshes = cudaAllocateVx(ParsedMesh*, nMeshes);
-    }
-    
-    LoadObjData("/home/felpz/Documents/budda.obj", &pMeshes[mIt]);
-    pMeshes[mIt]->toWorld = Scale(20,20,20); mIt++;
-    //LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &pMeshes[mIt++]);
     
     dim3 blocks(nx/tx+1, ny/ty+1);
     dim3 threads(tx,ty);
     
     Aggregator *scene = cudaAllocateVx(Aggregator, 1);
-    scene->ReserveMeshes(1 + nMeshes);
     
     std::cout << "Initializing image..." << std::flush;
     SetupPixels<<<blocks, threads>>>(image, seed);
     cudaDeviceAssert();
     std::cout << "OK" << std::endl;
     
-    std::cout << "Building scene..." << std::flush;
-    BuildScene<<<1, 1>>>(scene, image, pMeshes, nMeshes);
-    cudaDeviceAssert();
-    std::cout << "OK" << std::endl;
+    BeginScene(scene);
     
-    scene->Wrap();
+    //NOTE: Use this function to perform scene setup
+    HostSetupScene();
+    ////////////////////////////////////////////////
+    
+    std::cout << "Building scene\n" << std::flush;
+    PrepareSceneForRendering(scene);
+    std::cout << "Done" << std::endl;
     
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){
@@ -269,7 +234,7 @@ int main(int argc, char **argv){
     
     Image *image = CreateImage(image_width, image_height);
     
-    launch_render_kernel(image);
+    render(image);
     
     ImageWrite(image, "output.png", 1.f, ToneMapAlgorithm::Exponential);
     ImageFree(image);

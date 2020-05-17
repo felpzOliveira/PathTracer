@@ -19,6 +19,7 @@ class Primitive{
                                                          TransportMode mode, bool mLobes) 
         const = 0;
     __bidevice__ virtual void PrintSelf() const = 0;
+    __bidevice__ virtual Spectrum Le() const{ return Spectrum(0.f); }
 };
 
 class GeometricPrimitive : public Primitive{
@@ -37,6 +38,26 @@ class GeometricPrimitive : public Primitive{
         PrintShape(shape);
         printf(" ) \n");
     }
+};
+
+class GeometricEmitterPrimitive : public Primitive{
+    public:
+    Spectrum L;
+    
+    __bidevice__ GeometricEmitterPrimitive() : Primitive(nullptr){}
+    __bidevice__ GeometricEmitterPrimitive(Shape *shape, Spectrum L);
+    __bidevice__ virtual 
+        void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si,
+                                        TransportMode mode, bool mLobes) const override;
+    
+    __bidevice__ virtual Spectrum Le() const{ return L; }
+    
+    __bidevice__ virtual void PrintSelf() const override{
+        printf("Geometric Emitter( ");
+        PrintShape(shape);
+        printf(" [ " v3fA(L) " ] ) \n", v3aA(L));
+    }
+    
 };
 
 class Aggregator{

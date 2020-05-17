@@ -5,6 +5,11 @@ __bidevice__ void Material::Init_Mirror(Texture Kr){
     type = MaterialType::Mirror;
 }
 
+__bidevice__ void Material::Init_Mirror(Spectrum kr){
+    K.Init_ConstantTexture(kr);
+    type = MaterialType::Mirror;
+}
+
 __bidevice__ void Material::ComputeScatteringFunctionsMirror(BSDF *bsdf, 
                                                              SurfaceInteraction *si, 
                                                              TransportMode mode, 

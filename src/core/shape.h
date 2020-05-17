@@ -105,9 +105,9 @@ class Mesh: public Shape{
     __bidevice__ virtual Bounds3f GetBounds() const override;
     
     private:
-    bool __bidevice__ IntersectMeshNode(Node *node, const Ray &r, 
+    __bidevice__ bool IntersectMeshNode(Node *node, const Ray &r, 
                                         SurfaceInteraction *, Float *) const;
-    bool __bidevice__ IntersectTriangle(const Ray &r, SurfaceInteraction * isect,
+    __bidevice__ bool IntersectTriangle(const Ray &r, SurfaceInteraction * isect,
                                         int triNum, Float *tHit) const;
     
     __bidevice__ void GetUVs(Point2f uv[3], int nTri) const;
@@ -130,3 +130,6 @@ inline __bidevice__ void PrintShape(Shape *shape){
 
 __host__ void WrapMesh(Mesh *mesh);
 __host__ bool LoadObjData(const char *obj, ParsedMesh **data);
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, int *_indices,
+                                        int nVerts, Point3f *P, vec3f *S, 
+                                        Normal3f *N, Point2f *UV, int copy=0);

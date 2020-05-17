@@ -46,6 +46,10 @@ __bidevice__ Float BxDF::FresnelBlend_Pdf(const vec3f &wo, const vec3f &wi) cons
 }
 
 __bidevice__ Float BxDF::Pdf(const vec3f &wo, const vec3f &wi) const{
+    if(!is_valid){
+        return 0;
+    }
+    
     switch(impl){
         case BxDFImpl::LambertianReflection:{
             return LambertianReflection_Pdf(wo, wi);
@@ -166,6 +170,10 @@ __bidevice__ Spectrum BxDF::FresnelBlend_f(const vec3f &wo, const vec3f &wi) con
 }
 
 __bidevice__ Spectrum BxDF::f(const vec3f &wo, const vec3f &wi) const{
+    if(!is_valid){
+        return Spectrum(0);
+    }
+    
     switch(impl){
         case BxDFImpl::LambertianReflection:{
             return LambertianReflection_f(wo, wi);
@@ -337,6 +345,11 @@ __bidevice__ Spectrum BxDF::Sample_f(const vec3f &wo, vec3f *wi,
                                      const Point2f &sample, Float *pdf,
                                      BxDFType *sampledType) const
 {
+    if(!is_valid){
+        *pdf = 0;
+        return Spectrum(0);
+    }
+    
     switch(impl){
         case BxDFImpl::LambertianReflection:{
             return LambertianReflection_Sample_f(wo, wi, sample, pdf, sampledType);

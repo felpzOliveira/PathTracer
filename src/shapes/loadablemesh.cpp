@@ -7,6 +7,51 @@
 //TODO: We might want to write our own obj parser so we don't 
 //      have to waste time with data type translation
 
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, int *_indices,
+                                        int nVerts, Point3f *P, vec3f *S, 
+                                        Normal3f *N, Point2f *UV, int copy)
+{
+    ParsedMesh *mesh = cudaAllocateVx(ParsedMesh, 1);
+    mesh->toWorld = toWorld;
+    mesh->nTriangles = nTris;
+    mesh->nVertices = nVerts;
+    
+    if(!copy){
+        mesh->p = P;
+        mesh->n = N;
+        mesh->s = S;
+        mesh->uv = UV;
+        mesh->indices = _indices;
+    }else{
+        int ic = mesh->nVertices * 3;
+        mesh->p = cudaAllocateVx(Point3f, mesh->nVertices);
+        mesh->indices = cudaAllocateVx(int, ic);
+        mesh->n = nullptr;
+        mesh->s = nullptr;
+        mesh->uv = nullptr;
+        
+        memcpy(mesh->p, P, sizeof(Point3f) * mesh->nVertices);
+        memcpy(mesh->indices, _indices, sizeof(int) * ic);
+        
+        if(UV){
+            mesh->uv = cudaAllocateVx(Point2f, mesh->nVertices);
+            memcpy(mesh->uv, UV, sizeof(Point2f) * mesh->nVertices);
+        }
+        
+        if(S){
+            mesh->s = cudaAllocateVx(vec3f, mesh->nVertices);
+            memcpy(mesh->s, S, sizeof(vec3f) * mesh->nVertices);
+        }
+        
+        if(N){
+            mesh->n = cudaAllocateVx(Normal3f, mesh->nVertices);
+            memcpy(mesh->n, N, sizeof(Normal3f) * mesh->nVertices);
+        }
+        
+    }
+    
+    return mesh;
+}
 
 __host__ bool LoadObjData(const char *obj, ParsedMesh **data){
     bool rv = false;

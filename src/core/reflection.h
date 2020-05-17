@@ -54,7 +54,7 @@ class BxDF{
     public:
     BxDFType type;
     BxDFImpl impl;
-    
+    int is_valid;
     Spectrum S, T;
     Fresnel fresnel;
     
@@ -63,8 +63,10 @@ class BxDF{
     
     MicrofacetDistribution mDist;
     
-    __bidevice__ BxDF(){}
-    __bidevice__ BxDF(BxDFImpl impl) : impl(impl), type(BxDFType(0)){}
+    __bidevice__ BxDF(){is_valid = 1;}
+    __bidevice__ BxDF(BxDFImpl impl) : impl(impl), type(BxDFType(0)){is_valid=1;}
+    
+    __bidevice__ void Invalidate(){is_valid = 0;}
     
     __bidevice__ void Init_LambertianReflection(const Spectrum &R){
         type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
