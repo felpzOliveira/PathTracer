@@ -107,6 +107,10 @@ __bidevice__ Transform Scale(Float x, Float y, Float z) {
     return Transform(m, minv);
 }
 
+__bidevice__ Transform Scale(Float u){
+    return Scale(u, u, u);
+}
+
 __bidevice__ Transform RotateX(Float theta) {
     Float sinTheta = std::sin(Radians(theta));
     Float cosTheta = std::cos(Radians(theta));

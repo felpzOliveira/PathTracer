@@ -9,6 +9,7 @@
 #include <material.h>
 #include <util.h>
 #include <scene.h>
+#include <ppm.h>
 
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
@@ -52,14 +53,14 @@ __bidevice__ Spectrum GetSky(vec3f dir){
     return Spectrum(0);
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
-    return (1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0);
+    return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0))*1;
 }
 
 __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
     Spectrum out(0.f);
     Spectrum curr(1.f);
     
-    int maxi = 50;
+    int maxi = 10;
     int i = 0;
     for(i = 0; i < maxi; i++){
         SurfaceInteraction isect;
@@ -92,7 +93,7 @@ __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
     return out;
 }
 
-__global__ void Render(Image *image, Aggregator *scene, int ns){
+__global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     
@@ -100,14 +101,6 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     int height = image->height;
     
     if(i < width && j < height){
-        Float aspect = ((Float)width)/((Float)height);
-        
-        Camera camera(Point3f(0.f, 20.f, -40.f), Point3f(0.0f,10.f,0.f), 
-                      vec3f(0.f,1.f,0.f), 30.f, aspect);
-        
-        //Camera camera(Point3f(13,2,3), Point3f(0.0f,0.f,-1.f), 
-        //vec3f(0.f,1.f,0.f), 20.f, aspect, 0.3);
-        
         int pixel_index = j * width + i;
         Pixel *pixel = &image->pixels[pixel_index];
         curandState state = pixel->state;
@@ -119,7 +112,7 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
             
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             
-            Ray ray = camera.SpawnRay(u, v, sample);
+            Ray ray = camera->SpawnRay(u, v, sample);
             out += Li(ray, scene, pixel);
             pixel->samples ++;
         }
@@ -128,45 +121,107 @@ __global__ void Render(Image *image, Aggregator *scene, int ns){
     }
 }
 
-void HostSetupScene(){
-    int indices[] = {0, 1, 2, 2, 3, 0};
-    Point3f p[4];
-    p[0] = Point3f(-1000, -0.1, -100); p[1] = Point3f(1000, -0.1, -100);
-    p[2] = Point3f(1000, -0.1, 100); p[3] = Point3f(-1000, -0.1, 100);
-    MeshDescriptor ground = MakeMesh(ParsedMeshFromData(Translate(10,0,-10), 
-                                                        2, indices, 4, p, 0, 0, 0, 1));
-    MaterialDescriptor matYellow = MakeMatteMaterial(Spectrum(0.7f, 0.7f, 0.0f));
-    InsertPrimitive(ground, matYellow);
+void DragonScene(Camera *camera, Float aspect){
+    AssertA(!!camera, "Invalid camera pointer");
     
-#if 0
-    SphereDescriptor sphere2 = MakeSphere(Translate(10,5.f,-1.f), 5);
-    MaterialDescriptor matBlue = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
-                                                     Spectrum(0.6f), 0.03);
-    InsertPrimitive(sphere2, matBlue);
-#endif
+    camera->Config(Point3f(53.f, 48.f, -43.f), 
+                   Point3f(-10.12833, 5.15341, 5.16229),
+                   vec3f(0.f,1.f,0.f), 40.f, aspect);
     
-    SphereDescriptor glassSphere = MakeSphere(Translate(10.f, 5.f, -1.f), 5);
-    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 2.5);
-    InsertPrimitive(glassSphere, matGlass);
+    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
+                                                  Spectrum(.7, .7, .7), 0.1);
+    MaterialDescriptor yellow = MakeMatteMaterial(Spectrum(.7,.7,.0));
+    MaterialDescriptor white  = MakeMatteMaterial(Spectrum(0.87, 0.87, 0.87));
+    MaterialDescriptor orange = MakeMatteMaterial(Spectrum(0.98, 0.56, 0.0));
+    MaterialDescriptor red    = MakeMatteMaterial(Spectrum(0.86, 0.2, 0.1));
+    MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
+                                                    Spectrum(0.6f), 0.03);
+    MaterialDescriptor greenGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1),
+                                                      1.5, 0.05, 0.05);
     
-    Transform r = Translate(0, 25, 0) * RotateX(90) * RotateZ(30);
-    RectDescriptor rect = MakeRectangle(r, 30, 30);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(4));
+    Transform er = Translate(0, -1.29, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
+    InsertPrimitive(bottomWall, yellow);
+    
+    Transform rl = Translate(0, 60, 0) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(rl, 200, 200);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890));
     InsertPrimitive(rect, matEm);
     
-#if 1
-    ParsedMesh *buddaMesh;
-    LoadObjData("/home/felpz/Documents/budda.obj", &buddaMesh);
-    buddaMesh->toWorld = Scale(20,20,20);
+    ParsedMesh *dragonMesh;
+    LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &dragonMesh);
+    dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
+    MeshDescriptor dragon = MakeMesh(dragonMesh);
+    InsertPrimitive(dragon, greenGlass);
+}
+
+void CornellBoxScene(Camera *camera, Float aspect){
+    AssertA(!!camera, "Invalid camera pointer");
     
-    MeshDescriptor budda = MakeMesh(buddaMesh);
-    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),
-                                                     Spectrum(0.31, 0.64, 0.32), 1.5);
-    //Spectrum(1), 1.5, 0.02, 0.02);
+    camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,15.f,0.f), 
+                   vec3f(0.f,1.f,0.f), 30.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
                                                   Spectrum(0), Spectrum(0), 0.001, 
                                                   0.001, Spectrum(1), 1.5f);
+    
+    MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
+    MaterialDescriptor green = MakeMatteMaterial(Spectrum(.12, .45, .15));
+    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
+    
+    Transform lr = Translate(30, 25, 0) * RotateY(-90);
+    RectDescriptor leftWall = MakeRectangle(lr, 200, 50);
+    InsertPrimitive(leftWall, green);
+    
+    Transform rr = Translate(-30, 25, 0) * RotateY(90);
+    RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
+    InsertPrimitive(rightWall, red);
+    
+    Transform br = Translate(0, 25, 20);
+    RectDescriptor backWall = MakeRectangle(br, 200, 50);
+    InsertPrimitive(backWall, white);
+    
+    Transform tr = Translate(0, 50, 0) * RotateX(90);
+    RectDescriptor topWall = MakeRectangle(tr, 60, 200);
+    InsertPrimitive(topWall, white);
+    
+    Transform er = Translate(0, 0, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 400, 400);
+    InsertPrimitive(bottomWall, white);
+    
+    MaterialDescriptor mirror = MakeMirrorMaterial(Spectrum(0.98));
+    
+    SphereDescriptor glassSphere = MakeSphere(Translate(-13, 8.f, -25), 8);
+    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 
+                                                    1.5,0.01,0.01);
+    InsertPrimitive(glassSphere, matGlass);
+    
+    Transform sbt = Translate(-13,4,-25) * RotateY(-30);
+    BoxDescriptor box = MakeBox(sbt, 8,8,8); //cornell is 14,14,14
+    //InsertPrimitive(box, white);
+    
+    Transform bbt = Translate(10,18,0) * RotateY(25);
+    BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
+    InsertPrimitive(bigBox, mirror);
+    
+    Transform r = Translate(0, 50, 0) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, 60, 60);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 2);
+    
+    InsertPrimitive(rect, matEm);
+    
+    
+#if 0
+    ParsedMesh *buddaMesh;
+    LoadObjData("/home/felpz/Documents/budda.obj", &buddaMesh);
+    Float s = 40;
+    buddaMesh->toWorld = Translate(10,0,-5) * Scale(s,s,s);
+    
+    MeshDescriptor budda = MakeMesh(buddaMesh);
+    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),
+                                                     Spectrum(0.31, 0.64, 0.32), 
+                                                     0.02, 0.02, 1.5);
+    //Spectrum(1), 1.5, 0.02, 0.02);
     
     InsertPrimitive(budda, matGlass2);
 #endif
@@ -177,9 +232,9 @@ void render(Image *image){
     int ty = 8;
     int nx = image->width;
     int ny = image->height;
-    int it = 500;
+    int it = 10000;
     unsigned long long seed = time(0);
-    
+    Float aspect = (Float)nx / (Float)ny;
     dim3 blocks(nx/tx+1, ny/ty+1);
     dim3 threads(tx,ty);
     
@@ -190,10 +245,12 @@ void render(Image *image){
     cudaDeviceAssert();
     std::cout << "OK" << std::endl;
     
+    Camera *camera = cudaAllocateVx(Camera, 1);
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    HostSetupScene();
+    CornellBoxScene(camera, aspect);
+    //DragonScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;
@@ -202,9 +259,9 @@ void render(Image *image){
     
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){
-        Render<<<blocks, threads>>>(image, scene, 1);
+        Render<<<blocks, threads>>>(image, scene, camera, 1);
         cudaDeviceAssert();
-        graphy_display_pixels(image);
+        graphy_display_pixels(image, i);
         //if(i == 0) getchar();
         std::cout << "\rIteration: " << i << std::flush;
     }
@@ -216,21 +273,31 @@ void render(Image *image){
     
     cudaFree(scene->handles);//TODO: This needs to transverse the tree
     cudaFree(scene);
+    cudaFree(camera);
 }
 
 int main(int argc, char **argv){
-    cudaInitEx();
-    
-    Float aspect_ratio = 16.0 / 9.0;
-    const int image_width = 1366;
-    const int image_height = (int)((Float)image_width / aspect_ratio);
-    
-    Image *image = CreateImage(image_width, image_height);
-    
-    render(image);
-    
-    ImageWrite(image, "output.png", 1.f, ToneMapAlgorithm::Exponential);
-    ImageFree(image);
-    cudaDeviceReset();
-    return 0;
+    if(argc > 1){
+        if(argc != 3){
+            printf("Converter is: %s <INPUT_PPM_FILE> <OUTPUT_PNG_FILE>\n", argv[0]);
+        }else{
+            ConvertPPMtoPNG(argv[1], argv[2]);
+        }
+        return 0;
+    }else{
+        cudaInitEx();
+        
+        Float aspect_ratio = 16.0 / 9.0;
+        const int image_width = 800;
+        const int image_height = (int)((Float)image_width / aspect_ratio);
+        
+        Image *image = CreateImage(image_width, image_height);
+        
+        render(image);
+        
+        ImageWrite(image, "output.png", 1.f, ToneMapAlgorithm::Exponential);
+        ImageFree(image);
+        cudaDeviceReset();
+        return 0;
+    }
 }

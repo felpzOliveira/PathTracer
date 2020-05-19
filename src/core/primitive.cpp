@@ -19,8 +19,9 @@ __bidevice__ bool Primitive::Intersect(const Ray &ray, SurfaceInteraction *isect
     return PrimitiveIntersect(this, ray, isect);
 }
 
-__bidevice__ GeometricEmitterPrimitive::GeometricEmitterPrimitive(Shape *_shape, Spectrum _L)
-: Primitive(_shape), L(_L) {}
+__bidevice__ GeometricEmitterPrimitive::GeometricEmitterPrimitive(Shape *_shape, 
+                                                                  Spectrum _L, Float power)
+: Primitive(_shape), L(_L), power(power) {}
 
 __bidevice__ GeometricPrimitive::GeometricPrimitive(Shape *_shape, Material *material)
 : Primitive(_shape), material(material) {}
@@ -313,6 +314,7 @@ __bidevice__ void MakeSceneTable(Aggregator *scene, int id){
     if(id < scene->head){
         Primitive *pri = scene->primitives[id];
         Shape *shape = pri->shape;
+        AssertA(shape, "No shape in kernel");
         scene->handles[id].bound = shape->GetBounds();
         scene->handles[id].handle = id;
     }
@@ -336,7 +338,7 @@ __host__ void Aggregator::Wrap(){
     
     size_t pThreads = 64;
     size_t pBlocks = (head + pThreads - 1)/pThreads;
-    BuildSceneTable<<<pBlocks,pThreads>>>(this);
+    BuildSceneTable<<<pBlocks, pThreads>>>(this);
     cudaDeviceAssert();
     
     printf("Wrapping primitives...");

@@ -43,9 +43,10 @@ class GeometricPrimitive : public Primitive{
 class GeometricEmitterPrimitive : public Primitive{
     public:
     Spectrum L;
+    Float power;
     
     __bidevice__ GeometricEmitterPrimitive() : Primitive(nullptr){}
-    __bidevice__ GeometricEmitterPrimitive(Shape *shape, Spectrum L);
+    __bidevice__ GeometricEmitterPrimitive(Shape *shape, Spectrum L, Float power=1);
     __bidevice__ virtual 
         void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si,
                                         TransportMode mode, bool mLobes) const override;
@@ -84,7 +85,7 @@ class Aggregator{
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, int nTris, int *_indices,
                                int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
                                Point2f *UV);
-    __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=1);
+    __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=0);
     __host__ void ReserveMeshes(int n);
     __host__ void Wrap();
     

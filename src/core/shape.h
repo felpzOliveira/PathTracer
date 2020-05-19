@@ -6,7 +6,7 @@
 #include <util.h>
 
 enum ShapeType{
-    SPHERE, RECTANGLE, MESH
+    SPHERE, RECTANGLE, BOX, MESH
 };
 
 #define MAX_STACK_SIZE 256
@@ -76,7 +76,8 @@ class Sphere : public Shape{
                                             Float *pdf) const override;
 };
 
-//NOTE: Unit rectangle in XY plane
+//NOTE: Unit rectangle in XY plane, also its intersect method must be final
+//      so that cuda can correctly define Box stack requirements
 class Rectangle : public Shape{
     public:
     Float sizex, sizey;
@@ -85,12 +86,36 @@ class Rectangle : public Shape{
     {type = ShapeType::RECTANGLE;}
     
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
-                                        SurfaceInteraction *isect) const override;
+                                        SurfaceInteraction *isect) const override final;
     __bidevice__ virtual Bounds3f GetBounds() const override;
     __bidevice__ virtual Float Area() const override;
     __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const;
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const override;
+};
+
+class Box : public Shape{
+    public:
+    Rectangle **rects;
+    Float sizex, sizey, sizez;
+    __bidevice__ Box(const Transform &toWorld, Float sizex, Float sizey, Float sizez);
+    
+    __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
+                                        SurfaceInteraction *isect) const override;
+    __bidevice__ virtual Bounds3f GetBounds() const override;
+    __bidevice__ virtual Float Area() const override;
+    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const{
+        UMETHOD();
+        *pdf = 0;
+        return Interaction();
+    }
+    
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override{
+        UMETHOD();
+        *pdf = 0;
+        return Interaction();
+    }
 };
 
 typedef struct{
@@ -147,6 +172,8 @@ class Mesh: public Shape{
                                         SurfaceInteraction *, Float *) const;
     __bidevice__ bool IntersectTriangle(const Ray &r, SurfaceInteraction * isect,
                                         int triNum, Float *tHit) const;
+    __bidevice__ bool IntersectTriangleLow(const Ray &r, SurfaceInteraction * isect,
+                                           int triNum, Float *tHit) const;
     
     __bidevice__ void GetUVs(Point2f uv[3], int nTri) const;
 };

@@ -47,6 +47,15 @@ __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius){
     return desc;
 }
 
+__host__ BoxDescriptor MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez){
+    BoxDescriptor desc;
+    desc.toWorld = toWorld;
+    desc.sizez = sizez;
+    desc.sizex = sizex;
+    desc.sizey = sizey;
+    return desc;
+}
+
 __host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float sizey){
     RectDescriptor desc;
     desc.toWorld = toWorld;
@@ -154,6 +163,14 @@ __host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat){
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat){
+    PrimitiveDescriptor desc;
+    desc.shapeType = ShapeType::BOX;
+    desc.mat = mat;
+    desc.boxDesc = shape;
+    hPrimitives.push_back(desc);
+}
+
 __host__ void InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat){
     PrimitiveDescriptor desc;
     desc.shapeType = ShapeType::RECTANGLE;
@@ -180,6 +197,9 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     }else if(pri->shapeType == ShapeType::RECTANGLE){
         shape = new Rectangle(pri->rectDesc.toWorld, 
                               pri->rectDesc.sizex, pri->rectDesc.sizey);
+    }else if(pri->shapeType == ShapeType::BOX){
+        shape = new Box(pri->boxDesc.toWorld, pri->boxDesc.sizex,
+                        pri->boxDesc.sizey, pri->boxDesc.sizez);
     }
     
     return shape;
@@ -262,7 +282,8 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         hostScene->primitives = cudaAllocateVx(PrimitiveDescriptor, hPrimitives.size());
         memcpy(hostScene->primitives, hPrimitives.data(), size);
         hostScene->nprimitives = hPrimitives.size();
-        scene->ReserveMeshes(meshesIds);
+        if(meshesIds > 0)
+            scene->ReserveMeshes(meshesIds);
         
         MakeSceneGPU<<<1,1>>>(scene, hostScene);
         cudaDeviceAssert();

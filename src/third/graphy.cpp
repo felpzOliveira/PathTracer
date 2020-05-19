@@ -3,8 +3,14 @@
 #include <gr_opengl.hpp>
 #include <dlfcn.h>
 #include <iostream>
+#include <thread>
+#include <camera.h>
+#include <ppm.h>
 
 #define GraphyPath "/home/felpz/Documents/Graphics/build/libgraphy.so"
+#define BACKUP_SAVE "temp.ppm"
+#define BACKUP_AT_EACH 10
+#define USE_THREADS 0
 
 static float *vals;
 static gr_display *display = nullptr;
@@ -49,18 +55,38 @@ void graphy_initialize(Image *image){
     }
 }
 
-void graphy_display_pixels(Image *image){
+void ProcessWritePixel(float pixel[3], float *out){
+    out[0] = pixel[0]; out[1] = pixel[1]; out[2] = pixel[2];
+}
+
+void threaded_save_tmp_image(int width, int height){
+    if(!PPMWriteFloat(vals, width, height, BACKUP_SAVE, ProcessWritePixel))
+        printf(" * Failed to save backup\n");
+}
+
+void graphy_display_pixels(Image *image, int count){
     if(graphy_ok == 0) graphy_initialize(image);
     
-    if(graphy_ok > 0){
-        int it = 0;
+    int it = 0;
+    int save = ((count % BACKUP_AT_EACH) == 0 && count > 0) ? 1 : 0;
+    if(save || graphy_ok > 0){
         for(int k = 0; k < image->pixels_count; k++){
             Pixel *pixel = &image->pixels[k];
             Float invNS = 1.0f / (Float)(pixel->samples);
-            Spectrum we = pixel->we * invNS;
+            Spectrum we = ExponentialMap(pixel->we * invNS, 1.f);
             vals[it++] = we[0]; vals[it++] = we[1]; vals[it++] = we[2];
         }
         
-        graphy_render_pixels(vals, image->width, image->height, display);
+        if(save){
+            if(USE_THREADS){
+                std::thread(threaded_save_tmp_image, image->width, image->height).detach();
+            }else{
+                threaded_save_tmp_image(image->width, image->height);
+            }
+        }
+        
+        if(graphy_ok > 0){
+            graphy_render_pixels(vals, image->width, image->height, display);
+        }
     }
 }

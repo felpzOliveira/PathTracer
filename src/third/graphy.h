@@ -11,4 +11,4 @@
 * so every time you call this a new texture is generated making this call
 * slow. However because we are currently Path Tracing this time is not relevant.
 */
-void graphy_display_pixels(Image *image);
+void graphy_display_pixels(Image *image, int count);

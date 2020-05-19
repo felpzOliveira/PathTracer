@@ -2,6 +2,8 @@
 #include <cutil.h>
 #include <stdio.h>
 #include <geometry.h>
+#include <miniz.h>
+#include <ppm.h>
 
 #define UMETHOD() printf("Warning: Invocation of uninplemented method [ %s ]", __FUNCTION__)
 
@@ -34,6 +36,28 @@ bool QuickSort(T *arr, int elements, C compare){
     }
     
     return true;
+}
+
+inline __host__ void ConvertPPMtoPNG(const char *path, const char *out){
+    unsigned char *values = nullptr;
+    int width = 0, height = 0;
+    if(!PPMRead(path, &values, width, height)){
+        printf("Failed to get values for %s\n", path);
+    }else{
+        size_t png_data_size = 0;
+        void *png_data = nullptr;
+        
+        png_data = tdefl_write_image_to_png_file_in_memory_ex(values, width, height, 3,
+                                                              &png_data_size, 6, MZ_TRUE);
+        if(!png_data){
+            printf("Failed to get PNG\n");
+        }else{
+            FILE *fp = fopen(out, "wb");
+            fwrite(png_data, 1, png_data_size, fp);
+            fclose(fp);
+            printf("Done\n");
+        }
+    }
 }
 
 inline __bidevice__ void PrintBinary(unsigned int n){

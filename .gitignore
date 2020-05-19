@@ -1,3 +1,4 @@
 main
 *.png
 *.o
+*.ppm

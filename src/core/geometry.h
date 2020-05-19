@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define Assert(x) __assert_check((x), #x, __FILE__, __LINE__)
+#define Assert(x) __assert_check((x), #x, __FILE__, __LINE__, NULL)
+#define AssertA(x, msg) __assert_check((x), #x, __FILE__, __LINE__, msg)
 #define Infinity FLT_MAX
 #define __vec3_strfmtA(v) "%s = [%g %g %g]"
 #define __vec3_strfmt(v) "[%g %g %g]"
@@ -35,11 +36,15 @@ enum TransportMode{
 };
 
 inline __bidevice__ void __assert_check(bool v, const char *name, 
-                                        const char *filename, int line)
+                                        const char *filename, int line,
+                                        const char *msg)
 {
     if(!v){
         int* ptr = nullptr;
-        printf("Assert: %s (%s:%d)\n", name, filename, line);
+        if(!msg)
+            printf("Assert: %s (%s:%d) : (None)\n", name, filename, line);
+        else
+            printf("Assert: %s (%s:%d) : (%s)\n", name, filename, line, msg);
         *ptr = 10;
     }
 }

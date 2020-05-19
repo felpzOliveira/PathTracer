@@ -110,8 +110,8 @@ __host__ Image *CreateImage(int res_x, int res_y){
     return image;
 }
 
-__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
-                            Float aspect, Float aperture, Float focus_dist)
+__bidevice__ void Camera::Config(Point3f eye, Point3f at, vec3f up, Float fov, 
+                                 Float aspect, Float aperture, Float focus_dist)
 {
     position = eye;
     lensRadius = aperture / 2;
@@ -129,8 +129,8 @@ __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov,
     vertical   = 2.f * half_height * focus_dist * v;
 }
 
-__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
-                            Float aspect, Float aperture)
+__bidevice__ void Camera::Config(Point3f eye, Point3f at, vec3f up, Float fov, 
+                                 Float aspect, Float aperture)
 {
     Float focus_dist = (eye - at).Length();
     position = eye;
@@ -149,7 +149,7 @@ __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov,
     vertical   = 2.f * half_height * focus_dist * v;
 }
 
-__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
+__bidevice__ void Camera::Config(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
     position = eye;
     Float theta = Radians(fov);
     Float half_height = tan(theta/2.f);
@@ -162,6 +162,22 @@ __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float 
     lower_left = position - half_width * u - half_height * v - w;
     horizontal = 2.f * half_width * u;
     vertical   = 2.f * half_height * v;
+}
+
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                            Float aspect, Float aperture, Float focus_dist)
+{
+    Config(eye, at, up, fov, aspect, aperture, focus_dist);
+}
+
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
+                            Float aspect, Float aperture)
+{
+    Config(eye, at, up, fov, aspect, aperture);
+}
+
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
+    Config(eye, at, up, fov, aspect);
 }
 
 __bidevice__ Ray Camera::SpawnRay(Float s, Float t, Point2f disk){

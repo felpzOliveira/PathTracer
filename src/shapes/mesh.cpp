@@ -73,7 +73,7 @@ __bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
 }
 
 __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
-    if(uv && 0){//TODO: Does this need to query indices?
+    if(uv){
         int i0 = indices[3 * triNum + 0];
         int i1 = indices[3 * triNum + 1];
         int i2 = indices[3 * triNum + 2];
@@ -85,6 +85,52 @@ __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
         st[1] = Point2f(1, 0);
         st[2] = Point2f(1, 1);
     }
+}
+
+__bidevice__ bool Mesh::IntersectTriangleLow(const Ray &ray, SurfaceInteraction * isect,
+                                             int triNum, Float *tHit) const
+{
+    int i0 = indices[3 * triNum + 0];
+    int i1 = indices[3 * triNum + 1];
+    int i2 = indices[3 * triNum + 2];
+    Point3f p0 = p[i0];
+    Point3f p1 = p[i1];
+    Point3f p2 = p[i2];
+    vec3f v0v1 = p1 - p0;
+    vec3f v0v2 = p2 - p0;
+    vec3f N = Normalize(Cross(v0v1, v0v2));
+    if(Dot(N, ray.d) > 0) N = -N;
+    
+    Float u = 0, v = 0;
+    vec3f pvec = Cross(ray.d, v0v2);
+    Float det = Dot(v0v1, pvec);
+    if(IsZero(det)) return false;
+    
+    Float invDet = 1 / det;
+    vec3f tvec = ray.o - p0;
+    u = Dot(tvec, pvec) * invDet;
+    if(u < 0 || u > 1) return false;
+    
+    vec3f qvec = Cross(tvec, v0v1);
+    v = Dot(ray.d, qvec) * invDet;
+    if(v < 0 || v + u > 1) return false;
+    
+    Float t = Dot(v0v2, qvec) * invDet;
+    if(t < 0 || t > ray.tMax) return false;
+    
+    vec3f dpdu, dpdv;
+    CoordinateSystem(N, &dpdu, &dpdv);
+    
+    Point3f pHit = ray(t);
+    vec3f pError = gamma(9) * Abs((vec3f)pHit);
+    
+    *isect = SurfaceInteraction(pHit, pError, Point2f(u,v), -ray.d, dpdu, dpdv,
+                                Normal3f(0, 0, 0), Normal3f(0, 0, 0), ray.time,
+                                this, triNum);
+    isect->n = Normal3f(Normalize(N));
+    
+    *tHit = t;
+    return true;
 }
 
 __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * isect,
@@ -358,12 +404,10 @@ __global__ void GetMeshData(MeshData *data, Mesh *mesh){
 }
 
 __global__ void MeshSetHandles(Mesh *mesh, PrimitiveHandle *handles, Node *bvhNode){
+    AssertA(mesh && handles, "Invalid mesh/handle pointers");
     if(threadIdx.x == 0 && blockIdx.x == 0){
-        mesh->handles = new PrimitiveHandle[mesh->nTriangles];
+        mesh->handles = handles;
         mesh->bvh = bvhNode;
-        for(int i = 0; i < mesh->nTriangles; i++){
-            mesh->handles[i] = handles[i];
-        }
     }
 }
 
@@ -385,11 +429,13 @@ __host__ void WrapMesh(Mesh *mesh){
     int max_depth = 12;
     int totalNodes = 0;
     Node *bvh = CreateBVH(handles, data->nTriangles, 0, max_depth, &totalNodes);
-    printf("OK [ Build BVH with %d nodes ]\n", totalNodes);
+    Point3f pMin = bvh->bound.pMin;
+    Point3f pMax = bvh->bound.pMax;
+    printf("OK [ Build BVH with %d nodes, bounds: " v3fA(pMin) ", " v3fA(pMax) " ] \n",
+           totalNodes, v3aA(pMin), v3aA(pMax));
     
     MeshSetHandles<<<1, 1>>>(mesh, handles, bvh);
     cudaDeviceAssert();
     
     cudaFree(data);
-    cudaFree(handles);
 }

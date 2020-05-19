@@ -5,7 +5,7 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
 {
     Point3f pHit;
     vec3f oErr, dErr;
-    Ray ray = (WorldToObject)(r, &oErr, &dErr);
+    Ray ray = WorldToObject(r, &oErr, &dErr);
     
     Float t = (-ray.o.z) / ray.d.z;
     if(t < 0 || t > ray.tMax) return false;
