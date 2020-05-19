@@ -159,7 +159,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(!!camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,15.f,0.f), 
-                   vec3f(0.f,1.f,0.f), 30.f, aspect);
+                   vec3f(0.f,1.f,0.f), 40.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
                                                   Spectrum(0), Spectrum(0), 0.001, 
@@ -194,7 +194,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
     SphereDescriptor glassSphere = MakeSphere(Translate(-13, 8.f, -25), 8);
     MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 
                                                     1.5,0.01,0.01);
-    InsertPrimitive(glassSphere, matGlass);
+    InsertPrimitive(glassSphere, matUber);
     
     Transform sbt = Translate(-13,4,-25) * RotateY(-30);
     BoxDescriptor box = MakeBox(sbt, 8,8,8); //cornell is 14,14,14
@@ -202,14 +202,16 @@ void CornellBoxScene(Camera *camera, Float aspect){
     
     Transform bbt = Translate(10,18,0) * RotateY(25);
     BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
-    InsertPrimitive(bigBox, mirror);
+    InsertPrimitive(bigBox, white);
     
     Transform r = Translate(0, 50, 0) * RotateX(90);
     RectDescriptor rect = MakeRectangle(r, 60, 60);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 2);
+    //InsertPrimitive(rect, matEm);
     
-    InsertPrimitive(rect, matEm);
-    
+    //Test for sampling
+    SphereDescriptor lightSphere = MakeSphere(Translate(-15,30,-15), 5);
+    InsertPrimitive(lightSphere, matEm);
     
 #if 0
     ParsedMesh *buddaMesh;
@@ -221,8 +223,6 @@ void CornellBoxScene(Camera *camera, Float aspect){
     MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),
                                                      Spectrum(0.31, 0.64, 0.32), 
                                                      0.02, 0.02, 1.5);
-    //Spectrum(1), 1.5, 0.02, 0.02);
-    
     InsertPrimitive(budda, matGlass2);
 #endif
 }
