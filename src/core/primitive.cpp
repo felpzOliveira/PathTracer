@@ -2,6 +2,7 @@
 #include <material.h>
 #include <util.h>
 #include <camera.h>
+#include <light.h>
 
 __bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
                                      SurfaceInteraction *isect)
@@ -106,6 +107,21 @@ __bidevice__ void Aggregator::Insert(Primitive *pri, int is_light){
     head++;
 }
 
+__bidevice__ void Aggregator::SetLights(){
+    if(lightCounter > 0){
+        lights = new DiffuseAreaLight*[lightCounter];
+        for(int i = 0; i < lightCounter; i++){
+            Primitive *pri = primitives[lightList[i]];
+            GeometricEmitterPrimitive *gPri = (GeometricEmitterPrimitive *)pri;
+            
+            lights[i] = new DiffuseAreaLight(gPri->shape->ObjectToWorld, 
+                                             gPri->L, 1, gPri->shape);
+        }
+        
+        printf(" * Created %d DiffuseLights\n", lightCounter);
+    }
+}
+
 __bidevice__ bool Aggregator::IntersectNode(Node *node, const Ray &r, 
                                             SurfaceInteraction * isect) const
 {
@@ -137,8 +153,10 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     
     if(hit_bound && node->is_leaf){
         hit_tests += node->n;
-        if(hit_tests > pixel->max_transverse_tests) 
-            pixel->max_transverse_tests = hit_tests;
+        if(pixel){
+            if(hit_tests > pixel->max_transverse_tests) 
+                pixel->max_transverse_tests = hit_tests;
+        }
         
         return IntersectNode(node, r, isect);
     }
@@ -198,8 +216,10 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
         *isect = tmp;
     }
     
-    if(pixel->max_transverse_tests < hit_tests)
-        pixel->max_transverse_tests = hit_tests;
+    if(pixel){
+        if(pixel->max_transverse_tests < hit_tests)
+            pixel->max_transverse_tests = hit_tests;
+    }
     
     return hit_anything;
 }
@@ -208,6 +228,14 @@ __bidevice__ void Aggregator::Release(){
     for(int i = 0; i < head; i++){
         Primitive *pri = primitives[i];
         pri->Release();
+    }
+    
+    if(lightCounter > 0){
+        for(int i = 0; i < lightCounter; i++){
+            delete lights[i];
+        }
+        
+        delete[] lights;
     }
     
     delete[] primitives;

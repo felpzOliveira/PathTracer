@@ -276,6 +276,13 @@ __global__ void MakeSceneGPU(Aggregator *scene, SceneDescription *description){
     }
 }
 
+__global__ void MakeDiffuseLights(Aggregator *scene){
+    if(threadIdx.x == 0 && blockIdx.x == 0){
+        Assert(scene);
+        scene->SetLights();
+    }
+}
+
 __host__ void PrepareSceneForRendering(Aggregator *scene){
     if(hostScene){
         size_t size = sizeof(PrimitiveDescriptor) * hPrimitives.size();
@@ -291,6 +298,9 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         scene->Wrap();
         
         printf(" * Scene contains %d light(s)\n", scene->lightCounter);
+        
+        MakeDiffuseLights<<<1,1>>>(scene);
+        cudaDeviceAssert();
         
     }else{
         printf("Invalid scene, you need to call BeginScene once\n");

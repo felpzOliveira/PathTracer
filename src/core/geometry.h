@@ -1177,10 +1177,18 @@ vec3f CosineSampleHemisphere(const Point2f &u){
 }
 
 inline __bidevice__
+Float CosineHemispherePdf(Float cosTheta){ return cosTheta * InvPi; }
+
+inline __bidevice__
 vec3f SampleSphere(const Point2f &u){
     Float usqrt = 2 * std::sqrt(u[1] * (1 - u[1]));
     Float utheta = 2 * Pi * u[0];
     return vec3f(std::cos(utheta) * usqrt, std::sin(utheta) * usqrt, 1 - 2*u[1]);
+}
+
+inline __bidevice__
+Float UniformConePdf(Float cosThetaMax){
+    return 1 / (2 * Pi * (1 - cosThetaMax));
 }
 
 //Centered at +Z

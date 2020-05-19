@@ -41,8 +41,12 @@ class Shape{
                                         SurfaceInteraction *isect) const = 0;
     
     __bidevice__ virtual Float Area() const = 0;
+    
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const = 0;
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const = 0;
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const;
+    __bidevice__ virtual Float Pdf(const Interaction &) const{ return 1 / Area(); }
 };
 
 class Sphere : public Shape{
@@ -71,9 +75,12 @@ class Sphere : public Shape{
     
     __bidevice__ virtual Bounds3f GetBounds() const override;
     __bidevice__ virtual Float Area() const override;
-    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const;
+    
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const override;
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
 };
 
 //NOTE: Unit rectangle in XY plane, also its intersect method must be final
@@ -89,9 +96,14 @@ class Rectangle : public Shape{
                                         SurfaceInteraction *isect) const override final;
     __bidevice__ virtual Bounds3f GetBounds() const override;
     __bidevice__ virtual Float Area() const override;
-    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const;
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const override;
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
+        UMETHOD();
+        return 0.f;
+    }
 };
 
 class Box : public Shape{
@@ -104,17 +116,24 @@ class Box : public Shape{
                                         SurfaceInteraction *isect) const override;
     __bidevice__ virtual Bounds3f GetBounds() const override;
     __bidevice__ virtual Float Area() const override;
-    __bidevice__ Interaction Sample(const Point2f &u, Float *pdf) const{
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const override{
         UMETHOD();
         *pdf = 0;
         return Interaction();
     }
     
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
-                                            Float *pdf) const override{
+                                            Float *pdf) const override
+    {
         UMETHOD();
         *pdf = 0;
         return Interaction();
+    }
+    
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
+        UMETHOD();
+        return 0.f;
     }
 };
 
@@ -159,12 +178,24 @@ class Mesh: public Shape{
         return 1;
     }
     
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const{
+        UMETHOD();
+        *pdf = 0;
+        return Interaction();
+    }
+    
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const override
     {
         UMETHOD();
         *pdf = 0;
         return Interaction();
+    }
+    
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
+        UMETHOD();
+        return 0.f;
     }
     
     private:

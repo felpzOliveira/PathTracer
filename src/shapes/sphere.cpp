@@ -1,5 +1,16 @@
 #include <shape.h>
 
+Float Shape::Pdf(const Interaction &ref, const vec3f &wi) const{
+    Ray ray = ref.SpawnRay(wi);
+    Float tHit;
+    SurfaceInteraction isectLight;
+    if(!Intersect(ray, &tHit, &isectLight)) return 0;
+    
+    Float pdf = DistanceSquared(ref.p, isectLight.p) / (AbsDot(isectLight.n, -wi) * Area());
+    if(std::isinf(pdf)) pdf = 0.f;
+    return pdf;
+}
+
 __bidevice__ Bounds3f Sphere::GetBounds() const{
     return (ObjectToWorld)(Bounds3f(Point3f(-radius, -radius, zMin),
                                     Point3f(radius, radius, zMax)));
@@ -7,6 +18,18 @@ __bidevice__ Bounds3f Sphere::GetBounds() const{
 
 __bidevice__ Float Sphere::Area() const{
     return phiMax * radius * (zMax - zMin);
+}
+
+__bidevice__ Float Sphere::Pdf(const Interaction &ref, const vec3f &wi) const{
+    Point3f pCenter = ObjectToWorld(Point3f(0, 0, 0));
+    Point3f pOrigin = OffsetRayOrigin(ref.p, ref.pError, ref.n, pCenter - ref.p);
+    if (DistanceSquared(pOrigin, pCenter) <= radius * radius)
+        return Shape::Pdf(ref, wi);
+    
+    // Compute general sphere PDF
+    Float sinThetaMax2 = radius * radius / DistanceSquared(ref.p, pCenter);
+    Float cosThetaMax = std::sqrt(Max((Float)0, 1 - sinThetaMax2));
+    return UniformConePdf(cosThetaMax);
 }
 
 __bidevice__ Interaction Sphere::Sample(const Point2f &u, Float *pdf) const{
