@@ -48,6 +48,8 @@ class SurfaceInteraction : public Interaction{
                                     const Normal3f &dndu, const Normal3f &dndv, Float time,
                                     const Shape *sh, int faceIndex = 0);
     
+    __bidevice__ Spectrum Le(const vec3f &w) const;
+    
     __bidevice__ void ComputeDifferentials(const RayDifferential &r) const{}
     
     __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, const RayDifferential &r, 

@@ -12,8 +12,8 @@ Float Shape::Pdf(const Interaction &ref, const vec3f &wi) const{
 }
 
 __bidevice__ Bounds3f Sphere::GetBounds() const{
-    return (ObjectToWorld)(Bounds3f(Point3f(-radius, -radius, zMin),
-                                    Point3f(radius, radius, zMax)));
+    return ObjectToWorld(Bounds3f(Point3f(-radius, -radius, zMin),
+                                  Point3f(radius, radius, zMax)));
 }
 
 __bidevice__ Float Sphere::Area() const{

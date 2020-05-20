@@ -10,6 +10,7 @@
 #include <util.h>
 #include <scene.h>
 #include <ppm.h>
+#include <light.h>
 
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
@@ -54,6 +55,99 @@ __bidevice__ Spectrum GetSky(vec3f dir){
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
     return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0))*1;
+}
+
+__device__ Spectrum DirectLi(Ray ray, Aggregator *scene, Pixel *pixel){
+    Spectrum L(0.f);
+    SurfaceInteraction isect;
+    
+    if(!scene->Intersect(ray, &isect, pixel)) {
+        for(int i = 0; i < scene->lightCounter; i++){
+            DiffuseAreaLight *light = scene->lights[i];
+            L += light->Le(ray);
+        }
+    }else{
+        BSDF bsdf(isect);
+        isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
+        vec3f wo = isect.wo;
+        L += isect.Le(wo);
+        
+        if(scene->lightCounter > 0){
+            Point2f u2(rand_float(&pixel->state), rand_float(&pixel->state));
+            Point3f u3(rand_float(&pixel->state), rand_float(&pixel->state), 
+                       rand_float(&pixel->state));
+            
+            L += scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+        }
+    }
+    
+    return L;
+}
+
+__device__ Spectrum SampledLi(Ray r, Aggregator *scene, Pixel *pixel){
+    Spectrum L(0.f), beta(1.f);
+    RayDifferential ray(r);
+    bool specularBounce = false;
+    int bounces;
+    int max_bounces = 5;
+    Float rrThreshold = 1;
+    
+    for(bounces = 0; ; bounces++){
+        SurfaceInteraction isect;
+        bool foundIntersection = scene->Intersect(ray, &isect, pixel);
+        if(bounces == 0 || specularBounce){
+            if(foundIntersection){
+                L += beta * isect.Le(-ray.d);
+            }else{
+                for(int i = 0; i < scene->lightCounter; i++){
+                    DiffuseAreaLight *light = scene->lights[i];
+                    L += light->Le(ray);
+                }
+            }
+        }
+        
+        if(!foundIntersection || bounces >= max_bounces) break;
+        BSDF bsdf(isect);
+        
+        isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
+        if(bsdf.nBxDFs == 0){
+            ray = isect.SpawnRay(ray.d);
+            bounces--;
+            continue;
+        }
+        
+        if(bsdf.NumComponents(BxDFType(BSDF_ALL & ~BSDF_SPECULAR)) > 0){
+            Point2f u2(rand_float(&pixel->state), rand_float(&pixel->state));
+            Point3f u3(rand_float(&pixel->state), rand_float(&pixel->state), 
+                       rand_float(&pixel->state));
+            Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+            L += Ld;
+        }
+        
+        Float pdf = 0.f;
+        Point2f u(rand_float(&pixel->state), rand_float(&pixel->state));
+        vec3f wi, wo = -ray.d;
+        BxDFType flags;
+        
+        Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL, &flags);
+        
+        if(f.IsBlack() || IsZero(pdf)) break;
+        
+        beta *= f * AbsDot(wi, ToVec3(isect.n)) / pdf;
+        specularBounce = (flags & BSDF_SPECULAR) != 0;
+        
+        ray = isect.SpawnRay(wi);
+        
+        Spectrum rrBeta = beta;
+        if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
+            Float q = Max((Float).05, 1 - MaxComponent(rrBeta));
+            Float u = rand_float(&pixel->state);
+            if (u < q) break;
+            beta = beta / (1 - q);
+        }
+    }
+    
+    return L;
 }
 
 __device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
@@ -113,7 +207,9 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             
             Ray ray = camera->SpawnRay(u, v, sample);
-            out += Li(ray, scene, pixel);
+            //out += Li(ray, scene, pixel);
+            //out += DirectLi(ray, scene, pixel);
+            out += SampledLi(ray, scene, pixel);
             pixel->samples ++;
         }
         
@@ -146,7 +242,10 @@ void DragonScene(Camera *camera, Float aspect){
     Transform rl = Translate(0, 60, 0) * RotateX(90);
     RectDescriptor rect = MakeRectangle(rl, 200, 200);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890));
-    InsertPrimitive(rect, matEm);
+    //InsertPrimitive(rect, matEm);
+    
+    SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
+    InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *dragonMesh;
     LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &dragonMesh);
@@ -192,9 +291,8 @@ void CornellBoxScene(Camera *camera, Float aspect){
     MaterialDescriptor mirror = MakeMirrorMaterial(Spectrum(0.98));
     
     SphereDescriptor glassSphere = MakeSphere(Translate(-13, 8.f, -25), 8);
-    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 
-                                                    1.5,0.01,0.01);
-    InsertPrimitive(glassSphere, matUber);
+    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 1.5);
+    InsertPrimitive(glassSphere, matGlass);
     
     Transform sbt = Translate(-13,4,-25) * RotateY(-30);
     BoxDescriptor box = MakeBox(sbt, 8,8,8); //cornell is 14,14,14
@@ -204,14 +302,17 @@ void CornellBoxScene(Camera *camera, Float aspect){
     BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
     InsertPrimitive(bigBox, white);
     
-    Transform r = Translate(0, 50, 0) * RotateX(90);
-    RectDescriptor rect = MakeRectangle(r, 60, 60);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 2);
+    Transform r = Translate(0, 49, -10) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, 30, 30);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
     //InsertPrimitive(rect, matEm);
     
     //Test for sampling
-    SphereDescriptor lightSphere = MakeSphere(Translate(-15,30,-15), 5);
+    SphereDescriptor lightSphere = MakeSphere(Translate(0,45,0), 5);
     InsertPrimitive(lightSphere, matEm);
+    
+    DiskDescriptor disk = MakeDisk(r, 0, 10, 0, 360);
+    //InsertPrimitive(disk, matEm);
     
 #if 0
     ParsedMesh *buddaMesh;
@@ -249,8 +350,8 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    CornellBoxScene(camera, aspect);
-    //DragonScene(camera, aspect);
+    //CornellBoxScene(camera, aspect);
+    DragonScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;
@@ -288,7 +389,7 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 800;
+        const int image_width = 1366;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);

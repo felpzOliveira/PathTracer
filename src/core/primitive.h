@@ -20,6 +20,7 @@ class Primitive{
         const = 0;
     __bidevice__ virtual void PrintSelf() const = 0;
     __bidevice__ virtual Spectrum Le() const{ return Spectrum(0.f); }
+    __bidevice__ virtual DiffuseAreaLight *GetLight() const = 0;
 };
 
 class GeometricPrimitive : public Primitive{
@@ -38,12 +39,15 @@ class GeometricPrimitive : public Primitive{
         PrintShape(shape);
         printf(" ) \n");
     }
+    
+    __bidevice__ virtual DiffuseAreaLight *GetLight() const override{ return nullptr; }
 };
 
 class GeometricEmitterPrimitive : public Primitive{
     public:
     Spectrum L;
     Float power;
+    DiffuseAreaLight *light;
     
     __bidevice__ GeometricEmitterPrimitive() : Primitive(nullptr){}
     __bidevice__ GeometricEmitterPrimitive(Shape *shape, Spectrum L, Float power=1);
@@ -59,6 +63,7 @@ class GeometricEmitterPrimitive : public Primitive{
         printf(" [ " v3fA(L) " ] ) \n", v3aA(L));
     }
     
+    __bidevice__ virtual DiffuseAreaLight *GetLight() const override{ return light; }
 };
 
 class Aggregator{
@@ -85,13 +90,18 @@ class Aggregator{
     __bidevice__ void Release();
     __bidevice__ void PrintHandle(int which=-1);
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, int nTris, int *_indices,
-                               int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
-                               Point2f *UV);
+                               int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=0);
     __bidevice__ void SetLights();
+    __bidevice__ Spectrum UniformSampleOneLight(const Interaction &it, BSDF *bsdf,
+                                                Point2f u2, Point3f u3) const;
+    
     __host__ void ReserveMeshes(int n);
     __host__ void Wrap();
     
     private:
     __bidevice__ bool IntersectNode(Node *node, const Ray &r, SurfaceInteraction *) const;
+    __bidevice__ Spectrum EstimateDirect(const Interaction &it,  BSDF *bsdf,
+                                         const Point2f &uScattering, DiffuseAreaLight *light,  
+                                         const Point2f &uLight, bool specular = false) const;
 };

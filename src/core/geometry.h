@@ -1180,6 +1180,12 @@ inline __bidevice__
 Float CosineHemispherePdf(Float cosTheta){ return cosTheta * InvPi; }
 
 inline __bidevice__
+Float PowerHeuristic(int nf, Float fPdf, int ng, Float gPdf){
+    Float f = nf * fPdf, g = ng * gPdf;
+    return (f * f) / (f * f + g * g);
+}
+
+inline __bidevice__
 vec3f SampleSphere(const Point2f &u){
     Float usqrt = 2 * std::sqrt(u[1] * (1 - u[1]));
     Float utheta = 2 * Pi * u[0];

@@ -37,20 +37,25 @@ __bidevice__ Float Rectangle::Area() const{
     return sizex * sizey;
 }
 
+__bidevice__ Float Rectangle::Pdf(const Interaction &ref, const vec3f &wi) const{
+    return Shape::Pdf(ref, wi);
+}
+
 __bidevice__ Interaction Rectangle::Sample(const Point2f &u, Float *pdf) const{
-    //TODO
-    UMETHOD();
+    Float hx = sizex/2;
+    Float hy = sizey/2;
+    //TODO: Need to uniform sample the rectangle
+    Point3f pObj(-hx + u[0] * sizex, -hy + u[1] * sizey, 0);
     Interaction it;
-    *pdf = 0;
+    it.n = Normalize(ObjectToWorld(Normal3f(0,0,1)));
+    vec3f pObjError = gamma(5) * Abs(ToVec3(pObj));
+    it.p = ObjectToWorld(pObj, pObjError, &it.pError);
+    *pdf = 1 / Area();
     return it;
 }
 
 __bidevice__ Interaction Rectangle::Sample(const Interaction &ref, const Point2f &u,
                                            Float *pdf) const
 {
-    //TODO
-    UMETHOD();
-    Interaction it;
-    *pdf = 0;
-    return it;
+    return Sample(u, pdf);
 }

@@ -29,6 +29,11 @@ typedef struct{
 }BoxDescriptor;
 
 typedef struct{
+    Transform toWorld;
+    Float height, radius, innerRadius, phiMax;
+}DiskDescriptor;
+
+typedef struct{
     int is_emissive;
     MaterialType type;
     Spectrum svals[16];
@@ -42,6 +47,7 @@ typedef struct{
     MeshDescriptor meshDesc;
     RectDescriptor rectDesc;
     BoxDescriptor boxDesc;
+    DiskDescriptor diskDesc;
     MaterialDescriptor mat;
 }PrimitiveDescriptor;
 
@@ -50,6 +56,8 @@ __host__ SphereDescriptor    MakeSphere(Transform toWorld, Float radius);
 __host__ RectDescriptor      MakeRectangle(Transform toWorld, Float sizex, Float sizey);
 __host__ MeshDescriptor      MakeMesh(ParsedMesh *mesh);
 __host__ BoxDescriptor       MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez);
+__host__ DiskDescriptor      MakeDisk(Transform toWorld, Float height, Float radius, 
+                                      Float innerRadius, Float phiMax);
 
 __host__ MaterialDescriptor  MakeMatteMaterial(Spectrum kd, Float sigma=0);
 __host__ MaterialDescriptor  MakeMirrorMaterial(Spectrum kr);
@@ -70,4 +78,5 @@ __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDes
 __host__ void                InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat);
+__host__ void                InsertPrimitive(DiskDescriptor shape, MaterialDescriptor mat);
 __host__ void                PrepareSceneForRendering(Aggregator *scene);

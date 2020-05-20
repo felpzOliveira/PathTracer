@@ -6,7 +6,7 @@
 #include <util.h>
 
 enum ShapeType{
-    SPHERE, RECTANGLE, BOX, MESH
+    SPHERE, RECTANGLE, DISK, BOX, MESH
 };
 
 #define MAX_STACK_SIZE 256
@@ -83,6 +83,27 @@ class Sphere : public Shape{
     __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
 };
 
+class Disk : public Shape{
+    public:
+    const Float height, radius, innerRadius, phiMax;
+    __bidevice__ Disk(const Transform toWorld, Float height, Float radius, 
+                      Float innerRadius, Float phiMax)
+        : Shape(toWorld), height(height), radius(radius), innerRadius(innerRadius),
+    phiMax(Radians(Clamp(phiMax, 0, 360))) {type = ShapeType::DISK;}
+    
+    __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
+                                        SurfaceInteraction *isect) const override;
+    
+    __bidevice__ virtual Bounds3f GetBounds() const override;
+    __bidevice__ virtual Float Area() const override;
+    
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const override;
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
+};
+
 //NOTE: Unit rectangle in XY plane, also its intersect method must be final
 //      so that cuda can correctly define Box stack requirements
 class Rectangle : public Shape{
@@ -100,10 +121,7 @@ class Rectangle : public Shape{
     __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
                                             Float *pdf) const override;
     __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
-    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
-        UMETHOD();
-        return 0.f;
-    }
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override;
 };
 
 class Box : public Shape{

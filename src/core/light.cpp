@@ -2,7 +2,7 @@
 #include <primitive.h>
 #include <geometry.h>
 
-__bidevice__ bool VisibilityTester::Unoccluded(Aggregator *scene) const{
+__bidevice__ bool VisibilityTester::Unoccluded(const Aggregator *scene) const{
     SurfaceInteraction tmp;
     return !scene->Intersect(p0.SpawnRayTo(p1), &tmp);
 }
@@ -11,8 +11,11 @@ __bidevice__ DiffuseAreaLight::DiffuseAreaLight(const Transform &LightToWorld,
                                                 const Spectrum &Le, int nSamples, 
                                                 Shape *shape, bool twoSided)
 :flags((int)LightFlags::Area), nSamples(Max(1, nSamples)), LightToWorld(LightToWorld),
-WorldToLight(Inverse(LightToWorld)) , Lemit(Lemit), shape(shape),
-twoSided(twoSided), area(shape->Area()) {}
+WorldToLight(Inverse(LightToWorld)) , Lemit(Le), shape(shape),
+twoSided(twoSided), area(shape->Area()) 
+{
+    printf(v3fA(Lemit) "\n", v3aA(Lemit));
+}
 
 __bidevice__ Spectrum DiffuseAreaLight::Sample_Li(const Interaction &ref, const Point2f &u,
                                                   vec3f *wi, Float *pdf, 

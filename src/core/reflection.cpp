@@ -469,7 +469,7 @@ __bidevice__ Spectrum BSDF::Sample_f(const vec3f &woWorld, vec3f *wiWorld, const
 
 
 __bidevice__ Spectrum BSDF::f(const vec3f &woW, const vec3f &wiW, BxDFType flags) const{
-    return 0;
+    if(nBxDFs == 0) return 0;
     vec3f wi = WorldToLocal(wiW), wo = WorldToLocal(woW);
     if(IsZero(wo.z)) return 0.;
     

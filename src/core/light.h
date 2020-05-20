@@ -23,7 +23,7 @@ class VisibilityTester {
     __bidevice__ VisibilityTester(const Interaction &p0, const Interaction &p1): p0(p0), p1(p1) {}
     __bidevice__ const Interaction &P0() const { return p0; }
     __bidevice__ const Interaction &P1() const { return p1; }
-    __bidevice__ bool Unoccluded(Aggregator *scene) const;
+    __bidevice__ bool Unoccluded(const Aggregator *scene) const;
 };
 
 class DiffuseAreaLight{
@@ -41,9 +41,7 @@ class DiffuseAreaLight{
     
     __bidevice__ Spectrum Le(const RayDifferential &r) const{ return Spectrum(0.f); }
     
-    __bidevice__ Spectrum L(const Interaction &intr, 
-                            const vec3f &w) const
-    {
+    __bidevice__ Spectrum L(const Interaction &intr, const vec3f &w) const{
         return (twoSided || Dot(ToVec3(intr.n), w) > 0) ? Lemit : Spectrum(0.f);
     }
     

@@ -66,6 +66,18 @@ __host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float size
     return desc;
 }
 
+__host__ DiskDescriptor MakeDisk(Transform toWorld, Float height, Float radius, 
+                                 Float innerRadius, Float phiMax)
+{
+    DiskDescriptor desc;
+    desc.toWorld = toWorld;
+    desc.height = height;
+    desc.radius = radius;
+    desc.innerRadius = innerRadius;
+    desc.phiMax = phiMax;
+    return desc;
+}
+
 __host__ MeshDescriptor MakeMesh(ParsedMesh *mesh){
     MeshDescriptor desc;
     desc.mesh = mesh;
@@ -187,6 +199,14 @@ __host__ void InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat){
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(DiskDescriptor shape, MaterialDescriptor mat){
+    PrimitiveDescriptor desc;
+    desc.shapeType = ShapeType::DISK;
+    desc.mat = mat;
+    desc.diskDesc = shape;
+    hPrimitives.push_back(desc);
+}
+
 __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     Shape *shape = nullptr;
     
@@ -200,6 +220,10 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     }else if(pri->shapeType == ShapeType::BOX){
         shape = new Box(pri->boxDesc.toWorld, pri->boxDesc.sizex,
                         pri->boxDesc.sizey, pri->boxDesc.sizez);
+    }else if(pri->shapeType == ShapeType::DISK){
+        shape = new Disk(pri->diskDesc.toWorld, pri->diskDesc.height,
+                         pri->diskDesc.radius, pri->diskDesc.innerRadius,
+                         pri->diskDesc.phiMax);
     }
     
     return shape;

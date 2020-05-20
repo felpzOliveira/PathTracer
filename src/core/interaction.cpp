@@ -1,5 +1,6 @@
 #include <interaction.h>
 #include <primitive.h>
+#include <light.h>
 
 __bidevice__ 
 SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
@@ -18,4 +19,16 @@ __bidevice__ void SurfaceInteraction::ComputeScatteringFunctions(BSDF *bsdf,
 {
     ComputeDifferentials(r);
     primitive->ComputeScatteringFunctions(bsdf, this, mode, mLobes);
+}
+
+__bidevice__ Spectrum SurfaceInteraction::Le(const vec3f &w) const{
+    DiffuseAreaLight *light = primitive->GetLight();
+    if(light){
+        Spectrum s = light->L(*this, w);
+        if(s.IsBlack()){
+            //printf("Black Spectrum\n");
+        }
+    }
+    
+    return light ? light->L(*this, w) : Spectrum(0.f);
 }
