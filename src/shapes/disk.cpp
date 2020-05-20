@@ -52,7 +52,7 @@ __bidevice__ Interaction Disk::Sample(const Point2f &u, Float *pdf) const{
     Point3f pObj(pd.x * radius, pd.y * radius, height);
     Interaction it;
     it.n = Normalize(ObjectToWorld(Normal3f(0, 0, 1)));
-    //if (reverseOrientation) it.n *= -1;
+    if(reverseOrientation) it.n *= -1;
     it.p = ObjectToWorld(pObj, vec3f(0, 0, 0), &it.pError);
     *pdf = 1 / Area();
     return it;
@@ -61,7 +61,18 @@ __bidevice__ Interaction Disk::Sample(const Point2f &u, Float *pdf) const{
 __bidevice__ Interaction Disk::Sample(const Interaction &ref, const Point2f &u,
                                       Float *pdf) const
 {
-    return Sample(u, pdf);
+    Interaction intr = Sample(u, pdf);
+    vec3f wi = intr.p - ref.p;
+    wi = Normalize(wi);
+    if(IsZero(wi.LengthSquared())){
+        *pdf = 0;
+    }else{
+        wi = Normalize(wi);
+        *pdf *= DistanceSquared(ref.p, intr.p) / AbsDot(intr.n, -wi);
+    }
+    
+    if (std::isinf(*pdf)) *pdf = 0.f;
+    return intr;
 }
 
 __bidevice__ Float Disk::Pdf(const Interaction &ref, const vec3f &wi) const{

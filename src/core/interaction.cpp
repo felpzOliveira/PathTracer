@@ -10,7 +10,14 @@ SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
                                        Float time, const Shape *sh, int faceIndex)
 : Interaction(p, Normal3f(Normalize(Cross(dpdu, dpdv))), pError, wo, time),
 uv(uv), dpdu(dpdu), dpdv(dpdv), dndu(dndu), dndv(dndv), 
-shape(shape), faceIndex(faceIndex){}
+shape(sh), faceIndex(faceIndex)
+{
+    if(shape){
+        if(shape->reverseOrientation ^ shape->transformSwapsHandedness){
+            n *= -1;
+        }
+    }
+}
 
 __bidevice__ void SurfaceInteraction::ComputeScatteringFunctions(BSDF *bsdf, 
                                                                  const RayDifferential &r, 

@@ -1,7 +1,8 @@
 #include <shape.h>
 
-__bidevice__ Box::Box(const Transform &toWorld, Float sizex, Float sizey, Float sizez)
-: Shape(toWorld), sizex(sizex), sizey(sizey), sizez(sizez)
+__bidevice__ Box::Box(const Transform &toWorld, Float sizex, Float sizey, Float sizez,
+                      bool reverseOrientation)
+: Shape(toWorld, reverseOrientation), sizex(sizex), sizey(sizey), sizez(sizez)
 {
     type = ShapeType::BOX;
     rects = new Rectangle*[6];
@@ -17,12 +18,12 @@ __bidevice__ Box::Box(const Transform &toWorld, Float sizex, Float sizey, Float 
     Transform bot   = Translate(0,-hy,0) * RotateX(-90);
     Transform front = Translate(0,0,hz);
     Transform back  = Translate(0,0,-hz);
-    rects[0] = new Rectangle(left, sizez, sizey);
-    rects[1] = new Rectangle(right, sizez, sizey);
-    rects[2] = new Rectangle(top, sizex, sizez);
-    rects[3] = new Rectangle(bot, sizex, sizez);
-    rects[4] = new Rectangle(front, sizex, sizey);
-    rects[5] = new Rectangle(back, sizex, sizey);
+    rects[0] = new Rectangle(left, sizez, sizey, reverseOrientation);
+    rects[1] = new Rectangle(right, sizez, sizey, reverseOrientation);
+    rects[2] = new Rectangle(top, sizex, sizez, reverseOrientation);
+    rects[3] = new Rectangle(bot, sizex, sizez, reverseOrientation);
+    rects[4] = new Rectangle(front, sizex, sizey, reverseOrientation);
+    rects[5] = new Rectangle(back, sizex, sizey, reverseOrientation);
 }
 
 __bidevice__ bool Box::Intersect(const Ray &r, Float *tHit,

@@ -37,7 +37,7 @@ class DiffuseAreaLight{
     const Transform LightToWorld, WorldToLight;
     
     __bidevice__ DiffuseAreaLight(const Transform &LightToWorld, const Spectrum &Le,
-                                  int nSamples, Shape *shape, bool twoSided = true);
+                                  int nSamples, Shape *shape, bool twoSided = false);
     
     __bidevice__ Spectrum Le(const RayDifferential &r) const{ return Spectrum(0.f); }
     

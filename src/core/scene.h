@@ -9,6 +9,7 @@
 typedef struct{
     Transform toWorld;
     Float radius;
+    bool reverseOrientation;
     int id;
 }SphereDescriptor;
 
@@ -20,17 +21,20 @@ typedef struct{
 typedef struct{
     Float sizex, sizey;
     Transform toWorld;
+    bool reverseOrientation;
     int id;
 }RectDescriptor;
 
 typedef struct{
     Transform toWorld;
     Float sizex, sizey, sizez;
+    bool reverseOrientation;
 }BoxDescriptor;
 
 typedef struct{
     Transform toWorld;
     Float height, radius, innerRadius, phiMax;
+    bool reverseOrientation;
 }DiskDescriptor;
 
 typedef struct{
@@ -52,12 +56,16 @@ typedef struct{
 }PrimitiveDescriptor;
 
 __host__ void                BeginScene(Aggregator *scene);
-__host__ SphereDescriptor    MakeSphere(Transform toWorld, Float radius);
-__host__ RectDescriptor      MakeRectangle(Transform toWorld, Float sizex, Float sizey);
+__host__ SphereDescriptor    MakeSphere(Transform toWorld, Float radius, 
+                                        bool reverseOrientation=false);
+__host__ RectDescriptor      MakeRectangle(Transform toWorld, Float sizex, Float sizey, 
+                                           bool reverseOrientation=false);
 __host__ MeshDescriptor      MakeMesh(ParsedMesh *mesh);
-__host__ BoxDescriptor       MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez);
+__host__ BoxDescriptor       MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez, 
+                                     bool reverseOrientation=false);
 __host__ DiskDescriptor      MakeDisk(Transform toWorld, Float height, Float radius, 
-                                      Float innerRadius, Float phiMax);
+                                      Float innerRadius, Float phiMax, 
+                                      bool reverseOrientation=false);
 
 __host__ MaterialDescriptor  MakeMatteMaterial(Spectrum kd, Float sigma=0);
 __host__ MaterialDescriptor  MakeMirrorMaterial(Spectrum kr);

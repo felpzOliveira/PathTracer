@@ -21,9 +21,9 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     Normal3f dndu(0), dndv(0);
     
     vec3f pError = gamma(5) * Abs((vec3f)pHit);
-    *isect = (ObjectToWorld)(SurfaceInteraction(pHit, pError, Point2f(u, v),
-                                                -ray.d, dpdu, dpdv, dndu, dndv,
-                                                ray.time, this));
+    *isect = ObjectToWorld(SurfaceInteraction(pHit, pError, Point2f(u, v),
+                                              -ray.d, dpdu, dpdv, dndu, dndv,
+                                              ray.time, this));
     *tHit = t;
     return true;
 }
@@ -44,12 +44,11 @@ __bidevice__ Float Rectangle::Pdf(const Interaction &ref, const vec3f &wi) const
 __bidevice__ Interaction Rectangle::Sample(const Point2f &u, Float *pdf) const{
     Float hx = sizex/2;
     Float hy = sizey/2;
-    //TODO: Need to uniform sample the rectangle
     Point3f pObj(-hx + u[0] * sizex, -hy + u[1] * sizey, 0);
     Interaction it;
     it.n = Normalize(ObjectToWorld(Normal3f(0,0,1)));
-    vec3f pObjError = gamma(5) * Abs(ToVec3(pObj));
-    it.p = ObjectToWorld(pObj, pObjError, &it.pError);
+    if(reverseOrientation) it.n *= -1;
+    it.p = ObjectToWorld(pObj, vec3f(0,0,0), &it.pError);
     *pdf = 1 / Area();
     return it;
 }
@@ -57,5 +56,16 @@ __bidevice__ Interaction Rectangle::Sample(const Point2f &u, Float *pdf) const{
 __bidevice__ Interaction Rectangle::Sample(const Interaction &ref, const Point2f &u,
                                            Float *pdf) const
 {
-    return Sample(u, pdf);
+    Interaction intr = Sample(u, pdf);
+    vec3f wi = intr.p - ref.p;
+    wi = Normalize(wi);
+    if(IsZero(wi.LengthSquared())){
+        *pdf = 0;
+    }else{
+        wi = Normalize(wi);
+        *pdf *= DistanceSquared(ref.p, intr.p) / AbsDot(intr.n, -wi);
+    }
+    
+    if (std::isinf(*pdf)) *pdf = 0.f;
+    return intr;
 }

@@ -51,17 +51,21 @@ __global__ void ReleaseScene(Aggregator *scene){
 }
 
 __bidevice__ Spectrum GetSky(vec3f dir){
-    return Spectrum(0);
+    //return Spectrum(0);
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
-    return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0))*1;
+    return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0));
 }
 
-__device__ Spectrum DirectLi(Ray ray, Aggregator *scene, Pixel *pixel){
+/*
+* 1 bounce Direct lighting. This is mostly debug code used for checking
+* if direct lighting is working.
+*/
+__device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
     Spectrum L(0.f);
     SurfaceInteraction isect;
-    
-    if(!scene->Intersect(ray, &isect, pixel)) {
+    curandState *state = &pixel->state;
+    if(!scene->Intersect(ray, &isect, pixel)){
         for(int i = 0; i < scene->lightCounter; i++){
             DiffuseAreaLight *light = scene->lights[i];
             L += light->Le(ray);
@@ -73,9 +77,8 @@ __device__ Spectrum DirectLi(Ray ray, Aggregator *scene, Pixel *pixel){
         L += isect.Le(wo);
         
         if(scene->lightCounter > 0){
-            Point2f u2(rand_float(&pixel->state), rand_float(&pixel->state));
-            Point3f u3(rand_float(&pixel->state), rand_float(&pixel->state), 
-                       rand_float(&pixel->state));
+            Point2f u2(rand_float(state), rand_float(state));
+            Point3f u3(rand_float(state), rand_float(state), rand_float(state));
             
             L += scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
         }
@@ -84,14 +87,21 @@ __device__ Spectrum DirectLi(Ray ray, Aggregator *scene, Pixel *pixel){
     return L;
 }
 
-__device__ Spectrum SampledLi(Ray r, Aggregator *scene, Pixel *pixel){
+/*
+* Sampled Path Tracer. Performs light sampling at each intersection that is
+* not specular, for large scenes with small lights this is the one you want,
+* each ray needs to hit the scene 3 times so it might be slower than Brute-Force
+* for some scenes, but overall converges faster.
+*/
+__device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
     Spectrum L(0.f), beta(1.f);
     RayDifferential ray(r);
     bool specularBounce = false;
     int bounces;
-    int max_bounces = 5;
+    int max_bounces = 10;
     Float rrThreshold = 1;
     
+    curandState *state = &pixel->state;
     for(bounces = 0; ; bounces++){
         SurfaceInteraction isect;
         bool foundIntersection = scene->Intersect(ray, &isect, pixel);
@@ -106,26 +116,27 @@ __device__ Spectrum SampledLi(Ray r, Aggregator *scene, Pixel *pixel){
             }
         }
         
-        if(!foundIntersection || bounces >= max_bounces) break;
+        if(!foundIntersection || bounces >= max_bounces){ break; }
+        
         BSDF bsdf(isect);
         
         isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
         if(bsdf.nBxDFs == 0){
+            /* This is nice for medium, too bad we don't support them (yet!) */
             ray = isect.SpawnRay(ray.d);
             bounces--;
             continue;
         }
         
         if(bsdf.NumComponents(BxDFType(BSDF_ALL & ~BSDF_SPECULAR)) > 0){
-            Point2f u2(rand_float(&pixel->state), rand_float(&pixel->state));
-            Point3f u3(rand_float(&pixel->state), rand_float(&pixel->state), 
-                       rand_float(&pixel->state));
+            Point2f u2(rand_float(state), rand_float(state));
+            Point3f u3(rand_float(state), rand_float(state), rand_float(state));
             Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
             L += Ld;
         }
         
         Float pdf = 0.f;
-        Point2f u(rand_float(&pixel->state), rand_float(&pixel->state));
+        Point2f u(rand_float(state), rand_float(state));
         vec3f wi, wo = -ray.d;
         BxDFType flags;
         
@@ -141,7 +152,7 @@ __device__ Spectrum SampledLi(Ray r, Aggregator *scene, Pixel *pixel){
         Spectrum rrBeta = beta;
         if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
             Float q = Max((Float).05, 1 - MaxComponent(rrBeta));
-            Float u = rand_float(&pixel->state);
+            Float u = rand_float(state);
             if (u < q) break;
             beta = beta / (1 - q);
         }
@@ -150,41 +161,56 @@ __device__ Spectrum SampledLi(Ray r, Aggregator *scene, Pixel *pixel){
     return L;
 }
 
-__device__ Spectrum Li(Ray ray, Aggregator *scene, Pixel *pixel){
-    Spectrum out(0.f);
-    Spectrum curr(1.f);
-    
-    int maxi = 10;
-    int i = 0;
-    for(i = 0; i < maxi; i++){
+
+/*
+* Brute force Path Tracer. It is actually faster than performing light sampling
+* if your scene has many secondary light effects and a decent light source such
+* as sky or big lights. 
+*/
+__device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
+    Spectrum L(0.f);
+    Spectrum beta(1.f);
+    Float rrThreshold = 1;
+    int max_bounces = 10;
+    int bounces = 0;
+    curandState *state = &pixel->state;
+    for(bounces = 0; bounces < max_bounces; bounces++){
         SurfaceInteraction isect;
         
         if(scene->Intersect(ray, &isect, pixel)){
             BSDF bsdf(isect);
             
             Float pdf = 0.f;
-            Point2f u(rand_float(&pixel->state), rand_float(&pixel->state));
+            Point2f u(rand_float(state), rand_float(state));
             vec3f wi, wo = -ray.d;
             
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
-            Spectrum L = isect.primitive->Le();
-            out += curr * L;
+            Spectrum Le = isect.primitive->Le();
+            L += beta * Le;
             
             Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL);
             if(IsZero(pdf)) break;
             
-            curr = curr * f * AbsDot(wi, ToVec3(isect.n)) / pdf;
+            beta *= f * AbsDot(wi, ToVec3(isect.n)) / pdf;
             ray = isect.SpawnRay(wi);
             pixel->hits += 1;
+            
+            Spectrum rrBeta = beta;
+            if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
+                Float q = Max((Float).05, 1 - MaxComponent(rrBeta));
+                Float u = rand_float(state);
+                if (u < q) break;
+                beta = beta / (1 - q);
+            }
         }else{
-            out += curr * GetSky(ray.d);
+            L += beta * GetSky(ray.d);
             pixel->misses += 1;
             break;
         }
     }
     
-    if(i == maxi-1) return Spectrum(0.f);
-    return out;
+    if(bounces == max_bounces-1) return Spectrum(0.f);
+    return L;
 }
 
 __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
@@ -207,9 +233,9 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             
             Ray ray = camera->SpawnRay(u, v, sample);
-            //out += Li(ray, scene, pixel);
-            //out += DirectLi(ray, scene, pixel);
-            out += SampledLi(ray, scene, pixel);
+            //out += Li_Direct(ray, scene, pixel);
+            //out += Li_Path(ray, scene, pixel);
+            out += Li_PathSampled(ray, scene, pixel);
             pixel->samples ++;
         }
         
@@ -242,10 +268,10 @@ void DragonScene(Camera *camera, Float aspect){
     Transform rl = Translate(0, 60, 0) * RotateX(90);
     RectDescriptor rect = MakeRectangle(rl, 200, 200);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890));
-    //InsertPrimitive(rect, matEm);
+    InsertPrimitive(rect, matEm);
     
     SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
-    InsertPrimitive(lightSphere, matEm);
+    //InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *dragonMesh;
     LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &dragonMesh);
@@ -276,8 +302,8 @@ void CornellBoxScene(Camera *camera, Float aspect){
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
     InsertPrimitive(rightWall, red);
     
-    Transform br = Translate(0, 25, 20);
-    RectDescriptor backWall = MakeRectangle(br, 200, 50);
+    Transform br = Translate(0, 25, 23);
+    RectDescriptor backWall = MakeRectangle(br, 200, 70);
     InsertPrimitive(backWall, white);
     
     Transform tr = Translate(0, 50, 0) * RotateX(90);
@@ -305,11 +331,11 @@ void CornellBoxScene(Camera *camera, Float aspect){
     Transform r = Translate(0, 49, -10) * RotateX(90);
     RectDescriptor rect = MakeRectangle(r, 30, 30);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
-    //InsertPrimitive(rect, matEm);
+    InsertPrimitive(rect, matEm);
     
     //Test for sampling
     SphereDescriptor lightSphere = MakeSphere(Translate(0,45,0), 5);
-    InsertPrimitive(lightSphere, matEm);
+    //InsertPrimitive(lightSphere, matEm);
     
     DiskDescriptor disk = MakeDisk(r, 0, 10, 0, 360);
     //InsertPrimitive(disk, matEm);
@@ -350,8 +376,8 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    //CornellBoxScene(camera, aspect);
-    DragonScene(camera, aspect);
+    CornellBoxScene(camera, aspect);
+    //DragonScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;
@@ -363,7 +389,7 @@ void render(Image *image){
         Render<<<blocks, threads>>>(image, scene, camera, 1);
         cudaDeviceAssert();
         graphy_display_pixels(image, i);
-        //if(i == 0) getchar();
+        if(i == 0) getchar();
         std::cout << "\rIteration: " << i << std::flush;
     }
     
@@ -389,7 +415,7 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 1366;
+        const int image_width = 800;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);

@@ -38,36 +38,46 @@ __host__ void BeginScene(Aggregator *scene){
     meshesIds = 0;
 }
 
-__host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius){
+__host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius,
+                                     bool reverseOrientation)
+{
     SphereDescriptor desc;
     desc.toWorld = toWorld;
     desc.radius = radius;
     desc.id = spheresIds;
+    desc.reverseOrientation = reverseOrientation;
     spheresIds++;
     return desc;
 }
 
-__host__ BoxDescriptor MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez){
+__host__ BoxDescriptor MakeBox(Transform toWorld, Float sizex, Float sizey, Float sizez,
+                               bool reverseOrientation)
+{
     BoxDescriptor desc;
     desc.toWorld = toWorld;
     desc.sizez = sizez;
     desc.sizex = sizex;
     desc.sizey = sizey;
+    desc.reverseOrientation = reverseOrientation;
     return desc;
 }
 
-__host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float sizey){
+__host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float sizey,
+                                      bool reverseOrientation)
+{
     RectDescriptor desc;
     desc.toWorld = toWorld;
     desc.sizex = sizex;
     desc.sizey = sizey;
     desc.id = rectsIds;
+    desc.reverseOrientation = reverseOrientation;
     rectsIds++;
     return desc;
 }
 
 __host__ DiskDescriptor MakeDisk(Transform toWorld, Float height, Float radius, 
-                                 Float innerRadius, Float phiMax)
+                                 Float innerRadius, Float phiMax,
+                                 bool reverseOrientation)
 {
     DiskDescriptor desc;
     desc.toWorld = toWorld;
@@ -75,6 +85,7 @@ __host__ DiskDescriptor MakeDisk(Transform toWorld, Float height, Float radius,
     desc.radius = radius;
     desc.innerRadius = innerRadius;
     desc.phiMax = phiMax;
+    desc.reverseOrientation = reverseOrientation;
     return desc;
 }
 
@@ -211,19 +222,22 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     Shape *shape = nullptr;
     
     if(pri->shapeType == ShapeType::SPHERE){
-        shape = new Sphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius);
+        shape = new Sphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius,
+                           pri->sphereDesc.reverseOrientation);
     }else if(pri->shapeType == ShapeType::MESH){
         shape = scene->AddMesh(pri->meshDesc.mesh->toWorld, pri->meshDesc.mesh);
     }else if(pri->shapeType == ShapeType::RECTANGLE){
         shape = new Rectangle(pri->rectDesc.toWorld, 
-                              pri->rectDesc.sizex, pri->rectDesc.sizey);
+                              pri->rectDesc.sizex, pri->rectDesc.sizey,
+                              pri->rectDesc.reverseOrientation);
     }else if(pri->shapeType == ShapeType::BOX){
         shape = new Box(pri->boxDesc.toWorld, pri->boxDesc.sizex,
-                        pri->boxDesc.sizey, pri->boxDesc.sizez);
+                        pri->boxDesc.sizey, pri->boxDesc.sizez,
+                        pri->boxDesc.reverseOrientation);
     }else if(pri->shapeType == ShapeType::DISK){
         shape = new Disk(pri->diskDesc.toWorld, pri->diskDesc.height,
                          pri->diskDesc.radius, pri->diskDesc.innerRadius,
-                         pri->diskDesc.phiMax);
+                         pri->diskDesc.phiMax, pri->diskDesc.reverseOrientation);
     }
     
     return shape;

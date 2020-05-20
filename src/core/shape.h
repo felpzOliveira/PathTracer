@@ -32,8 +32,13 @@ class Shape{
     public:
     ShapeType type;
     Transform ObjectToWorld, WorldToObject;
-    __bidevice__ Shape(const Transform &toWorld) :
-    ObjectToWorld(toWorld), WorldToObject(Inverse(toWorld))
+    bool reverseOrientation;
+    bool transformSwapsHandedness;
+    
+    __bidevice__ Shape(const Transform &toWorld, bool reverseOrientation=false) :
+    ObjectToWorld(toWorld), WorldToObject(Inverse(toWorld)),
+    reverseOrientation(reverseOrientation),
+    transformSwapsHandedness(ObjectToWorld.SwapsHandedness())
     {}
     
     __bidevice__ virtual Bounds3f GetBounds() const{ return Bounds3f(); }
@@ -56,16 +61,17 @@ class Sphere : public Shape{
     Float zMin, zMax;
     
     __bidevice__ Sphere(const Transform &toWorld, Float radius, 
-                        Float zMin, Float zMax, Float phiMax) : 
-    Shape(toWorld), radius(radius),
+                        Float zMin, Float zMax, Float phiMax,
+                        bool reverseOrientation) : 
+    Shape(toWorld, reverseOrientation), radius(radius),
     zMin(Clamp(Min(zMin, zMax), -radius, radius)),
     zMax(Clamp(Max(zMin, zMax), -radius, radius)),
     thetaMin(std::acos(Clamp(Min(zMin, zMax) / radius, -1, 1))),
     thetaMax(std::acos(Clamp(Max(zMin, zMax) / radius, -1, 1))),
-    phiMax(Radians(Clamp(phiMax, 0, 360))) {type = ShapeType::SPHERE;}
+    phiMax(Radians(Clamp(phiMax, 0, 360))){type = ShapeType::SPHERE;}
     
-    __bidevice__ Sphere(const Transform &toWorld, Float radius) :
-    Shape(toWorld), radius(radius),
+    __bidevice__ Sphere(const Transform &toWorld, Float radius, bool reverseOrientation) :
+    Shape(toWorld, reverseOrientation), radius(radius),
     zMin(-radius), zMax(radius), 
     thetaMin(std::acos(-1.f)), thetaMax(std::acos(1.f)),
     phiMax(Radians(360)){type = ShapeType::SPHERE;}
@@ -87,9 +93,9 @@ class Disk : public Shape{
     public:
     const Float height, radius, innerRadius, phiMax;
     __bidevice__ Disk(const Transform toWorld, Float height, Float radius, 
-                      Float innerRadius, Float phiMax)
-        : Shape(toWorld), height(height), radius(radius), innerRadius(innerRadius),
-    phiMax(Radians(Clamp(phiMax, 0, 360))) {type = ShapeType::DISK;}
+                      Float innerRadius, Float phiMax, bool reverseOrientation)
+        : Shape(toWorld, reverseOrientation), height(height), radius(radius), 
+    innerRadius(innerRadius),phiMax(Radians(Clamp(phiMax, 0, 360))) {type = ShapeType::DISK;}
     
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
                                         SurfaceInteraction *isect) const override;
@@ -109,8 +115,9 @@ class Disk : public Shape{
 class Rectangle : public Shape{
     public:
     Float sizex, sizey;
-    __bidevice__ Rectangle(const Transform &toWorld, Float sizex, Float sizey)
-        : Shape(toWorld), sizex(Max(0, sizex)), sizey(Max(0, sizey))
+    __bidevice__ Rectangle(const Transform &toWorld, Float sizex, Float sizey,
+                           bool reverseOrientation)
+        : Shape(toWorld, reverseOrientation), sizex(Max(0, sizex)), sizey(Max(0, sizey))
     {type = ShapeType::RECTANGLE;}
     
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
@@ -128,7 +135,8 @@ class Box : public Shape{
     public:
     Rectangle **rects;
     Float sizex, sizey, sizez;
-    __bidevice__ Box(const Transform &toWorld, Float sizex, Float sizey, Float sizez);
+    __bidevice__ Box(const Transform &toWorld, Float sizex, Float sizey, Float sizez,
+                     bool reverseOrientation);
     
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
                                         SurfaceInteraction *isect) const override;

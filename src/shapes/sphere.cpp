@@ -36,7 +36,7 @@ __bidevice__ Interaction Sphere::Sample(const Point2f &u, Float *pdf) const{
     Point3f pObj = Point3f(0) + radius * SampleSphere(u);
     Interaction it;
     it.n = Normalize(ObjectToWorld(Normal3f(pObj.x, pObj.y, pObj.z)));
-    //if(reverseOrientation) it.n *= -1;
+    if(reverseOrientation) it.n *= -1;
     
     pObj *= radius / Distance(pObj, Point3f(0, 0, 0));
     vec3f pObjError = gamma(5) * Abs(ToVec3(pObj));
@@ -95,7 +95,7 @@ __bidevice__ Interaction Sphere::Sample(const Interaction &ref, const Point2f &u
     it.p = pWorld;
     it.pError = gamma(5) * Abs((vec3f)pWorld);
     it.n = Normal3f(nWorld);
-    //if (reverseOrientation) it.n *= -1;
+    if(reverseOrientation) it.n *= -1;
     *pdf = 1 / (2 * Pi * (1 - cosThetaMax));
     return it;
 }
