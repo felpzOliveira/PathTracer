@@ -12,6 +12,8 @@
 #include <ppm.h>
 #include <light.h>
 
+#define DEFAULT_MESH_FOLDER "/home/felpz/Documents/models/"
+
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
 }
@@ -270,18 +272,97 @@ void DragonScene(Camera *camera, Float aspect){
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890));
     InsertPrimitive(rect, matEm);
     
-    SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
+    //SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
     //InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *dragonMesh;
-    LoadObjData("/home/felpz/Documents/dragon_aligned.obj", &dragonMesh);
+    LoadObjData(DEFAULT_MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
     dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
     MeshDescriptor dragon = MakeMesh(dragonMesh);
     InsertPrimitive(dragon, greenGlass);
 }
 
+void BoxesScene(Camera *camera, Float aspect){
+    AssertA(camera, "Invalid camera pointer");
+    camera->Config(Point3f(478, 278, -600), Point3f(-70, 298, 0),
+                   //camera->Config(Point3f(1000, 278, 0), Point3f(-70, 298, 0),
+                   vec3f(0, 1, 0), 40.f, aspect);
+    
+    MaterialDescriptor matGreenFloor = MakeMatteMaterial(Spectrum(0.48, 0.83, 0.53));
+    const int boxes_per_side = 20;
+    for(int i = 0; i < boxes_per_side; i++){
+        for(int j = 0; j < boxes_per_side; j++){
+            Float w = 100.0;
+            Float x0 = -1000.0 + i*w;
+            Float z0 = -1000.0 + j*w;
+            Float y0 = 0.0;
+            Float x1 = x0 + w;
+            Float y1 = 1.f + 101 * rand_float();
+            Float z1 = z0 + w;
+            Point3f c((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);
+            
+            Transform model = Translate(ToVec3(c));
+            BoxDescriptor box = MakeBox(model, Absf(x0-x1), Absf(y0-y1), Absf(z0-z1));
+            InsertPrimitive(box, matGreenFloor);
+        }
+    }
+    
+    MaterialDescriptor matWhite = MakeMatteMaterial(Spectrum(.73));
+    int ns = 1000;
+    for(int j = 0; j < ns; j++){
+        vec3f p(165*rand_float()-120, 165*rand_float() + 250, 165*rand_float()-100);
+        SphereDescriptor sph = MakeSphere(Translate(p), 10);
+        InsertPrimitive(sph, matWhite);
+    }
+    
+    MaterialDescriptor mirror = MakeMirrorMaterial(Spectrum(0.98));
+    MaterialDescriptor red = MakePlasticMaterial(Spectrum(0.87,0.23,0.16), Spectrum(0.9), 0.3);
+    Transform tBox = Translate(300,300,0);
+    BoxDescriptor box = MakeBox(tBox, 100, 100, 100);
+    //InsertPrimitive(box, red);
+    
+    Transform tDisk = Translate(200, 300, 0) * RotateZ(20) * RotateX(-23);
+    Float diskRadius = 90;
+    DiskDescriptor disk = MakeDisk(tDisk, 0, diskRadius, 0, 360);
+    InsertPrimitive(disk, mirror);
+    DiskDescriptor diskBorder = MakeDisk(tDisk, 0, diskRadius+10, diskRadius, 360);
+    InsertPrimitive(diskBorder, red);
+    
+    MaterialDescriptor matBlue = MakeMatteMaterial(Spectrum(0.1,0.1,0.4));
+    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
+    MaterialDescriptor matLucy = MakePlasticMaterial(Spectrum(0.98, 0.56, 0.), 
+                                                     Spectrum(0.9), 0.1);
+    
+    vec3f center(120,160,-35);
+    Float baseRadius = 70;
+    SphereDescriptor glassSphere = MakeSphere(Translate(center), baseRadius+0.1);
+    InsertPrimitive(glassSphere, matGlass);
+    SphereDescriptor blueSphere = MakeSphere(Translate(center), baseRadius);
+    InsertPrimitive(blueSphere, matBlue);
+    
+    SphereDescriptor cSphere = MakeSphere(Translate(50, 150, -150), 50);
+    InsertPrimitive(cSphere, matGlass);
+    
+    ParsedMesh *winged;
+    LoadObjData(DEFAULT_MESH_FOLDER "winged.obj", &winged);
+    winged->toWorld = Translate(-100,100,-200) * RotateY(65);
+    MeshDescriptor wingedDesc = MakeMesh(winged);
+    InsertPrimitive(wingedDesc, matLucy);
+    
+    ParsedMesh *budda;
+    LoadObjData(DEFAULT_MESH_FOLDER "budda.obj", &budda);
+    budda->toWorld = Translate(160, 20, -270) * Scale(100) * RotateY(180);
+    MeshDescriptor buddaDesc = MakeMesh(budda);
+    InsertPrimitive(buddaDesc, red);
+    
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(7));
+    Transform lightModel = Translate(0,554,0) * RotateX(90);
+    RectDescriptor light = MakeRectangle(lightModel, 300, 265);
+    InsertPrimitive(light, matEm);
+}
+
 void CornellBoxScene(Camera *camera, Float aspect){
-    AssertA(!!camera, "Invalid camera pointer");
+    AssertA(camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,15.f,0.f), 
                    vec3f(0.f,1.f,0.f), 40.f, aspect);
@@ -342,7 +423,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
     
 #if 0
     ParsedMesh *buddaMesh;
-    LoadObjData("/home/felpz/Documents/budda.obj", &buddaMesh);
+    LoadObjData(DEFAULT_MESH_FOLDER "budda.obj", &buddaMesh);
     Float s = 40;
     buddaMesh->toWorld = Translate(10,0,-5) * Scale(s,s,s);
     
@@ -376,8 +457,9 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    CornellBoxScene(camera, aspect);
+    //CornellBoxScene(camera, aspect);
     //DragonScene(camera, aspect);
+    BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;
@@ -389,7 +471,7 @@ void render(Image *image){
         Render<<<blocks, threads>>>(image, scene, camera, 1);
         cudaDeviceAssert();
         graphy_display_pixels(image, i);
-        if(i == 0) getchar();
+        //if(i == 0) getchar();
         std::cout << "\rIteration: " << i << std::flush;
     }
     
@@ -415,7 +497,7 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 800;
+        const int image_width = 1366;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);

@@ -69,22 +69,4 @@ void cudaPrintMemoryTaken(void);
 
 void cudaSafeExit(void);
 
-/*
-* A simple managed class for dynamic allocating stuff on the GPU
-* for people who still want to use OO in the GPU.
-*/
-class Managed{
-    public:
-    void *operator new(size_t len){
-        void *ptr = cudaAllocate(len);
-        global_memory.allocated += len;
-        return ptr;
-    }
-    
-    void operator delete(void *ptr){
-        cudaFree(ptr);
-    }
-    
-};
-
 #endif

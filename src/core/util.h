@@ -60,6 +60,12 @@ inline __host__ void ConvertPPMtoPNG(const char *path, const char *out){
     }
 }
 
+
+inline __host__ Float rand_float(){
+    return rand() / (RAND_MAX + 1.f);
+}
+
+
 inline __bidevice__ void PrintBinary(unsigned int n){
     char arr[64], rev[64];
     int i = 0, it = 0, r;

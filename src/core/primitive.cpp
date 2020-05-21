@@ -386,10 +386,6 @@ __host__ void NodeSetItens(Node *node, int n){
     node->handles = cudaAllocateVx(PrimitiveHandle, n);
 }
 
-__host__ Float rand_float(){
-    return rand() / (RAND_MAX + 1.f);
-}
-
 __host__ Node *CreateBVH(PrimitiveHandle *handles,int n, int depth, 
                          int max_depth, int *totalNodes)
 {
