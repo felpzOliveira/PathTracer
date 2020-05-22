@@ -1,5 +1,5 @@
 # Toy-Tracer
-This is my personal Path Tracer code. I'm writing this as I read PBRT, trying my best to adapt to run with CUDA for speedup and learning.
+This is my personal Path Tracer code. I'm writing this as I read PBRT, trying my best to adapt to run with CUDA for speedup and learning purposes.
 It is actually going really good, have almost the full Path Tracer with light sampling working, I'm still missing the medium
 interface which I hope to implement soon, PBRT has some really good-looking images based on mediums so this is a must.
 
