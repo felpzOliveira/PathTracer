@@ -64,7 +64,7 @@ void threaded_save_tmp_image(int width, int height){
         printf(" * Failed to save backup\n");
 }
 
-void graphy_display_pixels(Image *image, int count){
+void graphy_display_pixels(Image *image, int count, int filter){
     if(graphy_ok == 0) graphy_initialize(image);
     
     int it = 0;
@@ -72,8 +72,12 @@ void graphy_display_pixels(Image *image, int count){
     if(save || graphy_ok > 0){
         for(int k = 0; k < image->pixels_count; k++){
             Pixel *pixel = &image->pixels[k];
-            Float invNS = 1.0f / (Float)(pixel->samples);
-            Spectrum we = ExponentialMap(pixel->we * invNS, 1.f);
+            Spectrum we = pixel->we;
+            if(filter){
+                Float invNS = 1.0f / (Float)(pixel->samples);
+                we = ExponentialMap(pixel->we * invNS, 1.f);
+            }
+            
             vals[it++] = we[0]; vals[it++] = we[1]; vals[it++] = we[2];
         }
         

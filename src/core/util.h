@@ -5,7 +5,7 @@
 #include <miniz.h>
 #include <ppm.h>
 
-#define UMETHOD() printf("Warning: Invocation of uninplemented method [ %s ]", __FUNCTION__)
+#define UMETHOD() printf("Warning: Invocation of unimplemented method [ %s ]", __FUNCTION__)
 
 template<typename T, class C> inline __bidevice__
 bool QuickSort(T *arr, int elements, C compare){
@@ -65,37 +65,3 @@ inline __host__ Float rand_float(){
     return rand() / (RAND_MAX + 1.f);
 }
 
-
-inline __bidevice__ void PrintBinary(unsigned int n){
-    char arr[64], rev[64];
-    int i = 0, it = 0, r;
-    while(n != 0){
-        r = n % 2;
-        arr[i++] = r + '0';
-        n /= 2;
-    }
-    
-    while(i--){
-        rev[it++] = arr[i];
-    }
-    
-    rev[it++] = 0;
-    printf("%s\n", rev);
-}
-
-inline __bidevice__ unsigned int LeftShift3(unsigned int x){
-    Assert(x <= (1 << 10));
-    if(x == (1 << 10)) --x;
-    x = (x | (x << 16)) & 0x30000ff;
-    x = (x | (x << 8)) & 0x300f00f;
-    x = (x | (x << 4)) & 0x30c30c3;
-    x = (x | (x << 2)) & 0x9249249;
-    return x;
-}
-
-inline __bidevice__ unsigned int MortonCode3D(Float x, Float y, Float z){
-    Assert(x >= 0);
-    Assert(y >= 0);
-    Assert(z >= 0);
-    return (LeftShift3(z) << 2) | (LeftShift3(y) << 1) | LeftShift3(x);
-}

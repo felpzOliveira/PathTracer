@@ -11,6 +11,7 @@
 #include <scene.h>
 #include <ppm.h>
 #include <light.h>
+#include <image_util.h>
 
 #define DEFAULT_MESH_FOLDER "/home/felpz/Documents/models/"
 

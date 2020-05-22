@@ -8,7 +8,13 @@
 // so we will have to combine these
 
 enum TextureType{
-    Constant,
+    ConstantTexture, ImageTexture
+};
+
+struct TextureImage{
+    unsigned char *data;
+    int width, height;
+    int is_valid;
 };
 
 class Texture{
@@ -16,24 +22,30 @@ class Texture{
     TextureType type;
     Spectrum C;
     
+    TextureImage *imagePtr;
+    
     __bidevice__ Texture(){}
-    __bidevice__ Texture(const Spectrum &t){
-        Init_ConstantTexture(t);
-    }
+    __bidevice__ Texture(const Spectrum &t){ Init_ConstantTexture(t); }
     
     //NOTE: When we do add support for images, this might be usefull
     __bidevice__ void operator=(const Texture &t){
         C = t.C;
         type = t.type;
+        imagePtr = t.imagePtr;
     }
     
     __bidevice__ Spectrum Evaluate(SurfaceInteraction *si) const;
+    
     __bidevice__ void Init_ConstantTexture(Spectrum K);
+    __bidevice__ void Init_ImageTexture(TextureImage *imageptr);
     
     private:
     __bidevice__ Spectrum EvaluateConstant(SurfaceInteraction *si) const;
+    __bidevice__ Spectrum EvaluateImage(SurfaceInteraction *si) const;
 };
 
+
+__host__ TextureImage *CreateTextureImage(const char *path);
 
 enum MaterialType{
     Matte, Mirror, Glass, Metal, Translucent, Plastic, Uber

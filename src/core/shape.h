@@ -182,7 +182,6 @@ class Mesh: public Shape{
     Normal3f *n;
     vec3f *s;
     Point2f *uv;
-    
     PrimitiveHandle *handles;
     Node *bvh;
     
@@ -248,6 +247,10 @@ inline __bidevice__ void PrintShape(Shape *shape){
     }else if(shape->type == ShapeType::RECTANGLE){
         Rectangle *rect = (Rectangle *)shape;
         printf("Rectangle [ %g x %g ]", rect->sizex, rect->sizey);
+    }else if(shape->type == ShapeType::DISK){
+        Disk *disk = (Disk *)shape;
+        printf("Disk [ radius: %g , innerRadius: %g , phiMax: %g ]",
+               disk->radius, disk->innerRadius, disk->phiMax);
     }else{
         printf("None");
     }

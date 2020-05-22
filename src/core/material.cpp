@@ -1,4 +1,22 @@
 #include <material.h>
+#include <cutil.h>
+#include <image_util.h>
+
+__host__ TextureImage *CreateTextureImage(const char *path){
+    int nx = 0, ny = 0, nn = 0;
+    TextureImage *tImage = cudaAllocateVx(TextureImage, 1);
+    unsigned char *ptr = ReadImage(path, nx, ny, nn);
+    Assert(ptr && nx > 0 && ny > 0 && nn == 3);
+    
+    tImage->data = cudaAllocateVx(unsigned char, nn * nx * ny);
+    tImage->width = nx;
+    tImage->height = ny;
+    memcpy(tImage->data, ptr, nn * nx * ny);
+    tImage->is_valid = 1;
+    free(ptr);
+    return tImage;
+}
+
 __bidevice__ Float FrDieletric(Float cosThetaI, Float etaI, Float etaT){
     cosThetaI = Clamp(cosThetaI, -1, 1);
     // Potentially swap indices of refraction
@@ -122,17 +140,31 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
 
 __bidevice__ void Texture::Init_ConstantTexture(Spectrum K){
     C = K;
-    type = TextureType::Constant;
+    type = TextureType::ConstantTexture;
+}
+
+__bidevice__ void Texture::Init_ImageTexture(TextureImage *imageptr){
+    imagePtr = imageptr;
+    type = TextureType::ImageTexture;
 }
 
 __bidevice__ Spectrum Texture::EvaluateConstant(SurfaceInteraction *si) const{
     return C;
 }
 
+__bidevice__ Spectrum Texture::EvaluateImage(SurfaceInteraction *si) const{
+    //TODO: Sample image
+    return Spectrum(0.f);
+}
+
 __bidevice__ Spectrum Texture::Evaluate(SurfaceInteraction *si) const{
     switch(type){
-        case TextureType::Constant:{
+        case TextureType::ConstantTexture:{
             return EvaluateConstant(si);
+        } break;
+        
+        case TextureType::ImageTexture:{
+            return EvaluateImage(si);
         } break;
         
         default:{
