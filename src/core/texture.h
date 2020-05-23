@@ -10,6 +10,8 @@ struct ImageData{
     unsigned char *data;
     int width, height;
     int is_valid;
+    
+    __bidevice__ Float GetAspectRatio(){ return (Float)(width) / (Float)(height); }
 };
 
 inline __bidevice__ 

@@ -365,8 +365,8 @@ void BoxesScene(Camera *camera, Float aspect){
 void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 18.f, -33.f), Point3f(0.0f,22.f,0.f), 
-                   vec3f(0.f,1.f,0.f), 40.f, aspect);
+    camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,22.f,0.f), 
+                   vec3f(0.f,1.f,0.f), 33.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
                                                   Spectrum(0), Spectrum(0), 0.001, 
@@ -380,17 +380,24 @@ void CornellBoxScene(Camera *camera, Float aspect){
     RectDescriptor leftWall = MakeRectangle(lr, 200, 50);
     InsertPrimitive(leftWall, green);
     
-    ImageData *data = LoadTextureImageData("/home/felpz/Downloads/desert.png");
-    TextureDescriptor desert = MakeTexture(data);
-    MaterialDescriptor redtex = MakeMatteMaterial(desert);
+    //ImageData *data = LoadTextureImageData("/home/felpz/Downloads/desert.png");
+    //TextureDescriptor desert = MakeTexture(data);
+    //MaterialDescriptor redtex = MakeMatteMaterial(desert);
+    
+    ParsedMesh *fridgeMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "fridge.obj", &fridgeMesh);
+    Float s = 20;
+    fridgeMesh->toWorld = Translate(0,0,-5) * Scale(s,s,s) * RotateY(140);
+    MeshDescriptor fridge = MakeMesh(fridgeMesh);
+    InsertPrimitive(fridge, white);
     
     Transform rr = Translate(-30, 25, 0) * RotateY(90);
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
     InsertPrimitive(rightWall, red);
     
-    Transform br = Translate(0, 25, 23);
-    RectDescriptor backWall = MakeRectangle(br, 60, 33.75);
-    InsertPrimitive(backWall, redtex);
+    Transform br = Translate(0, 25, 13);
+    RectDescriptor backWall = MakeRectangle(br, 60, 50);
+    InsertPrimitive(backWall, white);
     
     Transform tr = Translate(0, 50, 0) * RotateX(90);
     RectDescriptor topWall = MakeRectangle(tr, 60, 200);
@@ -414,9 +421,9 @@ void CornellBoxScene(Camera *camera, Float aspect){
     BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
     //InsertPrimitive(bigBox, white);
     
-    Transform r = Translate(0, 49, -10) * RotateX(90);
-    RectDescriptor rect = MakeRectangle(r, 30, 30);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
+    Transform r = Translate(0, 49.99, -10) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, 20, 20);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
     InsertPrimitive(rect, matEm);
     
     //Test for sampling
@@ -433,9 +440,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
     buddaMesh->toWorld = Translate(10,0,-5) * Scale(s,s,s);
     
     MeshDescriptor budda = MakeMesh(buddaMesh);
-    MaterialDescriptor matGlass2 = MakeGlassMaterial(Spectrum(1),
-                                                     Spectrum(0.31, 0.64, 0.32), 
-                                                     0.02, 0.02, 1.5);
+    
     InsertPrimitive(budda, matGlass2);
 #endif
 }
@@ -490,6 +495,7 @@ void render(Image *image){
     cudaFree(camera);
 }
 
+#include <mtl.h>
 int main(int argc, char **argv){
     if(argc > 1){
         if(argc != 3){
@@ -499,10 +505,15 @@ int main(int argc, char **argv){
         }
         return 0;
     }else{
+        
+        //std::vector<MTL *> materials;
+        //MTLParse("/home/felpz/Downloads/Spectral_Demon_by_Dommk/demon.mtl", &materials);
+        //exit(0);
+        
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 1366;
+        const int image_width = 800;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);
