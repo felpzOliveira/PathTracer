@@ -49,6 +49,17 @@ inline __bidevice__ void __assert_check(bool v, const char *name,
     }
 }
 
+inline __bidevice__ Float GammaCorrect(Float value){
+    if(value <= 0.0031308f) return 12.92f * value;
+    return 1.055f * std::pow(value, (Float)(1.f / 2.4f)) - 0.055f;
+}
+
+
+inline __bidevice__ Float InverseGammaCorrect(Float value){
+    if(value <= 0.04045f) return value * 1.f / 12.92f;
+    return std::pow((value + 0.055f) * 1.f / 1.055f, (Float)2.4f);
+}
+
 inline __bidevice__ Float Max(Float a, Float b){ return a > b ? a : b; }
 inline __bidevice__ Float Min(Float a, Float b){ return a < b ? a : b; }
 inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
@@ -1240,4 +1251,14 @@ inline __bidevice__ bool Refract(const vec3f &wi, const Normal3f &n, Float eta, 
     Float cosThetaT = std::sqrt(1 - sin2ThetaT);
     *wt = eta * -wi + (eta * cosThetaI - cosThetaT) * ToVec3(n);
     return true;
+}
+
+
+inline __bidevice__ Spectrum GammaCorrect(Spectrum value){
+    Spectrum e;
+    for(int i = 0; i < 3; i++){
+        e[i] = GammaCorrect(value[i]);
+    }
+    
+    return e;
 }

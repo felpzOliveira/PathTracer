@@ -12,6 +12,12 @@ struct ImageData{
     int is_valid;
 };
 
+inline __bidevice__ 
+void convertIn(const Spectrum &from, Spectrum *to, Float scale, bool gamma){
+    for (int i = 0; i < 3; ++i)
+        (*to)[i] = scale * (gamma ? InverseGammaCorrect(from[i]): from[i]);
+}
+
 template<typename T> class Texture{
     public:
     __bidevice__ virtual T Evaluate(SurfaceInteraction *) const = 0;
@@ -47,7 +53,9 @@ template<typename T> class TextureImage : public Texture<T>{
         Float r = image->data[3*i + 3*image->width*j+0] / 255.f;
         Float g = image->data[3*i + 3*image->width*j+1] / 255.f;
         Float b = image->data[3*i + 3*image->width*j+2] / 255.f;
-        return ConvertOut(Spectrum(r, g, b), T(0));
+        Spectrum rgb(r, g, b);
+        convertIn(rgb, &rgb, 1.f, true);
+        return ConvertOut(rgb, T(0));
     }
     
     __bidevice__ virtual void Release() override{}

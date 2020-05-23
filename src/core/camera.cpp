@@ -8,7 +8,7 @@
 __bidevice__ Spectrum ReinhardMap(Spectrum value, Float exposure){
     (void)exposure;
     value = (value / (value + 1.f));
-    value = Pow(value, 1. / gamma);
+    value = GammaCorrect(value);
     return value;
 }
 
@@ -24,13 +24,13 @@ __bidevice__ Spectrum NaughtyDogMap(Spectrum value, Float exposure){
     value = ((value * (A*value+C*B)+D*E)/(value*(A*value+B)+D*F))-E/F;
     float white = ((W*(A*W+C*B)+D*E)/(W*(A*W+B)+D*F))-E/F;
     value = value / white;
-    value = Pow(value, 1. / gamma);
+    value = GammaCorrect(value);
     return value;
 }
 
 __bidevice__ Spectrum ExponentialMap(Spectrum value, Float exposure){
     value = (Spectrum(1.f) - Exp(-value * exposure));
-    value = Pow(value, 1. / gamma);
+    value = GammaCorrect(value);
     return value;
 }
 
