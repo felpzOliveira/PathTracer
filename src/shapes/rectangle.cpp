@@ -14,8 +14,9 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     pHit = ray(t);
     if(pHit.x < -hx || pHit.x > hx || pHit.y < -hy || pHit.y > hy) return false;
     
-    Float u = (pHit.x - hx)/sizex;
-    Float v = (pHit.y - hy)/sizey;
+    Float u = Absf((pHit.x - hx)/sizex);
+    Float v = Absf((pHit.y - hy)/sizey);
+    //printf("UV: %g %g\n", u, v);
     vec3f dpdu(1, 0, 0);
     vec3f dpdv(0, 1, 0);
     Normal3f dndu(0), dndv(0);

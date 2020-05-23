@@ -2,9 +2,9 @@
 #include <cutil.h>
 #include <image_util.h>
 
-__host__ TextureImage *CreateTextureImage(const char *path){
+__host__ ImageData *LoadTextureImageData(const char *path){
     int nx = 0, ny = 0, nn = 0;
-    TextureImage *tImage = cudaAllocateVx(TextureImage, 1);
+    ImageData *tImage = cudaAllocateVx(ImageData, 1);
     unsigned char *ptr = ReadImage(path, nx, ny, nn);
     Assert(ptr && nx > 0 && ny > 0 && nn == 3);
     
@@ -100,6 +100,69 @@ __bidevice__ void Fresnel::Init_Dieletric(Float _etaI, Float _etaT){
     etaT = _etaT;
 }
 
+__bidevice__ const char * GetMaterialName(MaterialType type){
+    switch(type){
+        case MaterialType::Matte: return "Matte";
+        case MaterialType::Mirror: return "Mirror";
+        case MaterialType::Plastic: return "Plastic";
+        case MaterialType::Uber: return "Uber";
+        case MaterialType::Glass: return "Glass";
+        case MaterialType::Metal: return "Metal";
+        case MaterialType::Translucent: return "Translucent";
+        default: return "(None)";
+    }
+}
+
+__bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                       TransportMode mode, bool mLobes) const
+{
+    if(material){
+        switch(type){
+            case MaterialType::Matte:{
+                MatteMaterial *matte = (MatteMaterial *) material;
+                matte->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Mirror:{
+                MirrorMaterial *mirror = (MirrorMaterial *) material;
+                mirror->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Glass:{
+                GlassMaterial *glass = (GlassMaterial *) material;
+                glass->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Metal:{
+                MetalMaterial *metal = (MetalMaterial *) material;
+                metal->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Translucent:{
+                TranslucentMaterial *transl = (TranslucentMaterial *) material;
+                transl->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Plastic:{
+                PlasticMaterial *plastic = (PlasticMaterial *) material;
+                plastic->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            case MaterialType::Uber:{
+                UberMaterial *uber = (UberMaterial *) material;
+                uber->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
+            } break;
+            
+            default:{
+                printf("Unknown material type\n");
+            }
+        }
+    }else{
+        printf("Invalid pointer in Material::Evaluate for %s\n", GetMaterialName(type));
+    }
+}
+
+#if 0
 __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
                                                        TransportMode mode, bool mLobes) const
 {
@@ -173,3 +236,5 @@ __bidevice__ Spectrum Texture::Evaluate(SurfaceInteraction *si) const{
         }
     }
 }
+
+#endif

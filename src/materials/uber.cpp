@@ -1,41 +1,26 @@
 #include <material.h>
 
-__bidevice__ void Material::Init_Uber(Texture kd, Texture ks, Texture kr, Texture kt,
-                                      Texture roughu, Texture roughv, Texture op, Texture eta)
-{
-    K = kd;
-    I = ks;
-    Kr = kr;
-    Kt = kt;
-    uRough = roughu;
-    vRough = roughv;
-    index = eta;
-    sigma = op;
-    type = MaterialType::Uber;
-}
+__bidevice__ UberMaterial::UberMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                                        Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                                        Texture<Float> *urough, Texture<Float> *vrough,
+                                        Texture<Spectrum> *op, Texture<Float> *eta,
+                                        Texture<Float> *bump)
+: bumpMap(bump), Kd(kd), Ks(ks), Kr(kr), Kt(kt), uRough(urough), 
+vRough(vrough), opacity(op), eta(eta){ has_bump = 1; }
 
-__bidevice__ void Material::Init_Uber(Spectrum kd, Spectrum ks, Spectrum kr, Spectrum kt,
-                                      Float roughu, Float roughv, Spectrum op, Float eta)
-{
-    K.Init_ConstantTexture(kd);
-    I.Init_ConstantTexture(ks);
-    Kr.Init_ConstantTexture(kr);
-    Kt.Init_ConstantTexture(kt);
-    uRough.Init_ConstantTexture(Spectrum(roughu));
-    vRough.Init_ConstantTexture(Spectrum(roughv));
-    index.Init_ConstantTexture(Spectrum(eta));
-    sigma.Init_ConstantTexture(op);
-    type = MaterialType::Uber;
-}
+__bidevice__ UberMaterial::UberMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                                        Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                                        Texture<Float> *urough, Texture<Float> *vrough,
+                                        Texture<Spectrum> *op, Texture<Float> *eta)
+: Kd(kd), Ks(ks), Kr(kr), Kt(kt), uRough(urough), bumpMap(nullptr),
+vRough(vrough), opacity(op), eta(eta){ has_bump = 0; }
 
-__bidevice__ void Material::ComputeScatteringFunctionsUber(BSDF *bsdf,
-                                                           SurfaceInteraction *si, 
+__bidevice__ void UberMaterial::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
                                                            TransportMode mode, 
-                                                           bool mLobes) const
+                                                           bool mLobes)  const
 {
-    Float e = index.Evaluate(si)[0];
-    Spectrum op = sigma.Evaluate(si);
-    
+    Float e = eta->Evaluate(si);
+    Spectrum op = opacity->Evaluate(si);
     Spectrum t = (-op + Spectrum(1.f));
     if(!t.IsBlack()){
         BxDF bxdf(BxDFImpl::SpecularTransmission);
@@ -43,26 +28,26 @@ __bidevice__ void Material::ComputeScatteringFunctionsUber(BSDF *bsdf,
         bsdf->Push(&bxdf);
     }
     
-    Spectrum kd = op * K.Evaluate(si);
+    Spectrum kd = op * Kd->Evaluate(si);
     if(!kd.IsBlack()){
         BxDF bxdf(BxDFImpl::LambertianReflection);
         bxdf.Init_LambertianReflection(kd);
         bsdf->Push(&bxdf);
     }
     
-    Spectrum ks = op * I.Evaluate(si);
+    Spectrum ks = op * Ks->Evaluate(si);
     if(!ks.IsBlack()){
         Fresnel fresnel;
         fresnel.Init_Dieletric(1.f, e);
-        Float roughu = uRough.Evaluate(si)[0];
-        Float roughv = vRough.Evaluate(si)[0];
+        Float roughu = uRough->Evaluate(si);
+        Float roughv = vRough->Evaluate(si);
         
         BxDF bxdf(BxDFImpl::MicrofacetReflection);
         bxdf.Init_MicrofacetReflection(ks, roughu, roughv, &fresnel, mode);
         bsdf->Push(&bxdf);
     }
     
-    Spectrum kr = op * Kr.Evaluate(si);
+    Spectrum kr = op * Kr->Evaluate(si);
     if(!kr.IsBlack()){
         Fresnel fresnel;
         fresnel.Init_Dieletric(1.f, e);
@@ -71,7 +56,7 @@ __bidevice__ void Material::ComputeScatteringFunctionsUber(BSDF *bsdf,
         bsdf->Push(&bxdf);
     }
     
-    Spectrum kt = op * Kt.Evaluate(si);
+    Spectrum kt = op * Kt->Evaluate(si);
     if(!kt.IsBlack()){
         BxDF bxdf(BxDFImpl::SpecularTransmission);
         bxdf.Init_SpecularTransmission(kt, 1.f, e, mode);

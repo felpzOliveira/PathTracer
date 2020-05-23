@@ -1,24 +1,18 @@
 #include <material.h>
 
-__bidevice__ void Material::Init_Matte(Texture _Kd, Texture _sigma){
-    K = _Kd;
-    sigma = _sigma;
-    type = MaterialType::Matte;
-}
+__bidevice__ MatteMaterial::MatteMaterial(Texture<Spectrum> *kd, Texture<Float> *sig, 
+                                          Texture<Float> *bump)
+: bumpMap(bump), Kd(kd), sigma(sig){ has_bump = 1; }
 
-__bidevice__ void Material::Init_Matte(Spectrum kd, Float _sigma){
-    K.Init_ConstantTexture(kd);
-    sigma.Init_ConstantTexture(Spectrum(_sigma));
-    type = MaterialType::Matte;
-}
+__bidevice__ MatteMaterial::MatteMaterial(Texture<Spectrum> *kd, Texture<Float> *sig)
+: Kd(kd), bumpMap(nullptr), sigma(sig){ has_bump = 0; }
 
-__bidevice__ void Material::ComputeScatteringFunctionsMatte(BSDF *bsdf, 
-                                                            SurfaceInteraction *si, 
-                                                            TransportMode mode, 
-                                                            bool mLobes) const
+__bidevice__ 
+void MatteMaterial::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                               TransportMode mode, bool mLobes) const
 {
-    Spectrum kd = K.Evaluate(si);
-    Float sig = sigma.Evaluate(si)[0];
+    Spectrum kd = Kd->Evaluate(si);
+    Float sig = sigma->Evaluate(si);
     if(!kd.IsBlack()){
         if(IsZero(sig)){
             BxDF bxdf(BxDFImpl::LambertianReflection);

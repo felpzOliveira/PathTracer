@@ -1,28 +1,34 @@
 #include <material.h>
 
-__bidevice__ void Material::Init_Translucent(Spectrum kd, Spectrum ks, Float rough,
-                                             Spectrum refl, Spectrum trans)
-{
-    K.Init_ConstantTexture(kd);
-    Kt.Init_ConstantTexture(refl);
-    I.Init_ConstantTexture(ks);
-    T.Init_ConstantTexture(trans);
-    uRough.Init_ConstantTexture(rough);
-    type = MaterialType::Translucent;
-}
+__bidevice__ TranslucentMaterial::TranslucentMaterial(Texture<Spectrum> *kd, 
+                                                      Texture<Spectrum> *ks,
+                                                      Texture<Spectrum> *refl, 
+                                                      Texture<Spectrum> *trans,
+                                                      Texture<Float> *rough, 
+                                                      Texture<Float> *bump)
+: bumpMap(bump), Kd(kd), Ks(ks), reflect(refl), transmit(trans), roughness(rough)
+{ has_bump = 1; }
 
+__bidevice__ TranslucentMaterial::TranslucentMaterial(Texture<Spectrum> *kd, 
+                                                      Texture<Spectrum> *ks,
+                                                      Texture<Spectrum> *refl, 
+                                                      Texture<Spectrum> *trans,
+                                                      Texture<Float> *rough)
+: Kd(kd), Ks(ks), reflect(refl), transmit(trans), bumpMap(nullptr), 
+roughness(rough){ has_bump = 0; }
 
-__bidevice__ void Material::ComputeScatteringFunctionsTranslucent(BSDF *bsdf, 
+__bidevice__ void TranslucentMaterial::ComputeScatteringFunctions(BSDF *bsdf, 
                                                                   SurfaceInteraction *si, 
                                                                   TransportMode mode, 
-                                                                  bool mLobes) const
+                                                                  bool mLobes)  const
 {
-    Spectrum r = Kt.Evaluate(si);
-    Spectrum t = T.Evaluate(si);
     Float eta = 1.5f;
+    
+    Spectrum r = reflect->Evaluate(si);
+    Spectrum t = transmit->Evaluate(si);
     if(r.IsBlack() && t.IsBlack()) return;
     
-    Spectrum kd = K.Evaluate(si);
+    Spectrum kd = Kd->Evaluate(si);
     if(!kd.IsBlack()){
         if(!r.IsBlack()){
             BxDF lRefl(BxDFImpl::LambertianReflection);
@@ -38,9 +44,9 @@ __bidevice__ void Material::ComputeScatteringFunctionsTranslucent(BSDF *bsdf,
         }
     }
     
-    Spectrum ks = I.Evaluate(si);
+    Spectrum ks = Ks->Evaluate(si);
     if(!ks.IsBlack() && (!r.IsBlack() || !t.IsBlack())){
-        Float rough = uRough.Evaluate(si)[0];
+        Float rough = roughness->Evaluate(si);
         if(!r.IsBlack()){
             Fresnel fresnel;
             fresnel.Init_Dieletric(1.f, eta);
@@ -49,7 +55,7 @@ __bidevice__ void Material::ComputeScatteringFunctionsTranslucent(BSDF *bsdf,
             bsdf->Push(&mRefl);
         }
         
-        if(!t.IsBlack()){
+        if (!t.IsBlack()){
             BxDF mTran(BxDFImpl::MicrofacetTransmission);
             mTran.Init_MicrofacetTransmission(t * ks, 1.f, eta, rough, rough, mode);
             bsdf->Push(&mTran);

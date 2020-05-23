@@ -5,24 +5,22 @@
 #include <iostream>
 #include <shape.h>
 #include <primitive.h>
+#include <texture.h>
 
 typedef struct{
     Transform toWorld;
     Float radius;
     bool reverseOrientation;
-    int id;
 }SphereDescriptor;
 
 typedef struct{
     ParsedMesh *mesh;
-    int id;
 }MeshDescriptor;
 
 typedef struct{
     Float sizex, sizey;
     Transform toWorld;
     bool reverseOrientation;
-    int id;
 }RectDescriptor;
 
 typedef struct{
@@ -38,11 +36,16 @@ typedef struct{
 }DiskDescriptor;
 
 typedef struct{
+    Spectrum spec_val; //0
+    Float fval; //1
+    ImageData *image; //2
+    int type;
+}TextureDescriptor;
+
+typedef struct{
     int is_emissive;
     MaterialType type;
-    Spectrum svals[16];
-    Float fvals[16];
-    int id;
+    TextureDescriptor textures[16];
 }MaterialDescriptor;
 
 typedef struct{
@@ -67,9 +70,15 @@ __host__ DiskDescriptor      MakeDisk(Transform toWorld, Float height, Float rad
                                       Float innerRadius, Float phiMax, 
                                       bool reverseOrientation=false);
 
+__host__ TextureDescriptor   MakeTexture(Spectrum value);
+__host__ TextureDescriptor   MakeTexture(Float value);
+__host__ TextureDescriptor   MakeTexture(ImageData *data);
+
 __host__ MaterialDescriptor  MakeMatteMaterial(Spectrum kd, Float sigma=0);
+__host__ MaterialDescriptor  MakeMatteMaterial(TextureDescriptor kd, Float sigma=0);
 __host__ MaterialDescriptor  MakeMirrorMaterial(Spectrum kr);
-__host__ MaterialDescriptor  MakeMetalMaterial(Spectrum kr, Float etaI, Float etaT, Float k);
+__host__ MaterialDescriptor  MakeMetalMaterial(Spectrum kr, Spectrum k, 
+                                               Float etaI, Float etaT);
 __host__ MaterialDescriptor  MakeGlassMaterial(Spectrum kr, Spectrum kt, Float index,
                                                Float uRough=0, Float vRough=0);
 

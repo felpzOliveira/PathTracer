@@ -3,11 +3,8 @@
 #include <vector>
 
 std::vector<PrimitiveDescriptor> hPrimitives;
-int spheresIds = 0;
-int meshesIds = 0;
-int matId = 0;
-int rectsIds = 0;
 
+int any_mesh = 0;
 typedef struct{
     SphereDescriptor *spheres;
     int nspheres;
@@ -34,8 +31,27 @@ __host__ void BeginScene(Aggregator *scene){
     hostScene->nprimitives = 0;
     hostScene->nspheres = 0;
     hostScene->nmeshes = 0;
-    spheresIds = 0;
-    meshesIds = 0;
+}
+
+__host__ TextureDescriptor MakeTexture(Spectrum value){
+    TextureDescriptor desc;
+    desc.type = 0;
+    desc.spec_val = value;
+    return desc;
+}
+
+__host__ TextureDescriptor MakeTexture(Float value){
+    TextureDescriptor desc;
+    desc.type = 1;
+    desc.fval = value;
+    return desc;
+}
+
+__host__ TextureDescriptor MakeTexture(ImageData *data){
+    TextureDescriptor desc;
+    desc.type = 2;
+    desc.image = data;
+    return desc;
 }
 
 __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius,
@@ -44,9 +60,7 @@ __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius,
     SphereDescriptor desc;
     desc.toWorld = toWorld;
     desc.radius = radius;
-    desc.id = spheresIds;
     desc.reverseOrientation = reverseOrientation;
-    spheresIds++;
     return desc;
 }
 
@@ -69,9 +83,7 @@ __host__ RectDescriptor MakeRectangle(Transform toWorld, Float sizex, Float size
     desc.toWorld = toWorld;
     desc.sizex = sizex;
     desc.sizey = sizey;
-    desc.id = rectsIds;
     desc.reverseOrientation = reverseOrientation;
-    rectsIds++;
     return desc;
 }
 
@@ -92,19 +104,26 @@ __host__ DiskDescriptor MakeDisk(Transform toWorld, Float height, Float radius,
 __host__ MeshDescriptor MakeMesh(ParsedMesh *mesh){
     MeshDescriptor desc;
     desc.mesh = mesh;
-    desc.id = meshesIds;
-    meshesIds++;
+    any_mesh += 1;
     return desc;
 }
 
 __host__ MaterialDescriptor MakeMatteMaterial(Spectrum kd, Float sigma){
     MaterialDescriptor desc;
+    TextureDescriptor tkd, ts;
     desc.type = MaterialType::Matte;
     desc.is_emissive = 0;
-    desc.svals[0] = kd;
-    desc.fvals[0] = sigma;
-    desc.id = matId;
-    matId++;
+    desc.textures[0] = MakeTexture(kd);
+    desc.textures[1] = MakeTexture(sigma);
+    return desc;
+}
+
+__host__ MaterialDescriptor MakeMatteMaterial(TextureDescriptor kd, Float sigma){
+    MaterialDescriptor desc;
+    desc.type = MaterialType::Matte;
+    desc.is_emissive = 0;
+    desc.textures[0] = kd;
+    desc.textures[1] = MakeTexture(sigma);
     return desc;
 }
 
@@ -112,20 +131,21 @@ __host__ MaterialDescriptor MakeMirrorMaterial(Spectrum kr){
     MaterialDescriptor desc;
     desc.type = MaterialType::Mirror;
     desc.is_emissive = 0;
-    desc.svals[0] = kr;
-    desc.id = matId;
-    matId++;
+    desc.textures[0] = MakeTexture(kr);
     return desc;
 }
 
-__host__ MaterialDescriptor MakeMetalMaterial(Spectrum kr, Float etaI, Float etaT, Float k){
+__host__ MaterialDescriptor MakeMetalMaterial(Spectrum kr, Spectrum k, 
+                                              Float etaI, Float etaT)
+{
     MaterialDescriptor desc;
+    int i = 0;
     desc.type = MaterialType::Metal;
     desc.is_emissive = 0;
-    desc.svals[0] = kr;
-    desc.fvals[0] = etaI; desc.fvals[1] = etaT; desc.fvals[2] = k;
-    desc.id = matId;
-    matId++;
+    desc.textures[i++] = MakeTexture(kr);
+    desc.textures[i++] = MakeTexture(k);
+    desc.textures[i++] = MakeTexture(etaI);
+    desc.textures[i++] = MakeTexture(etaT);
     return desc;
 }
 
@@ -133,23 +153,25 @@ __host__ MaterialDescriptor MakeGlassMaterial(Spectrum kr, Spectrum kt, Float in
                                               Float uRough, Float vRough)
 {
     MaterialDescriptor desc;
+    int i = 0;
     desc.type = MaterialType::Glass;
     desc.is_emissive = 0;
-    desc.svals[0] = kr; desc.svals[1] = kt;
-    desc.fvals[0] = uRough; desc.fvals[1] = vRough; desc.fvals[2] = index;
-    desc.id = matId;
-    matId++;
+    desc.textures[i++] = MakeTexture(kr);
+    desc.textures[i++] = MakeTexture(kt);
+    desc.textures[i++] = MakeTexture(uRough);
+    desc.textures[i++] = MakeTexture(vRough);
+    desc.textures[i++] = MakeTexture(index);
     return desc;
 }
 
 __host__ MaterialDescriptor MakePlasticMaterial(Spectrum kd, Spectrum ks, Float rough){
     MaterialDescriptor desc;
+    int i = 0;
     desc.type = MaterialType::Plastic;
     desc.is_emissive = 0;
-    desc.svals[0] = kd; desc.svals[1] = ks;
-    desc.fvals[0] = rough;
-    desc.id = matId;
-    matId++;
+    desc.textures[i++] = MakeTexture(kd);
+    desc.textures[i++] = MakeTexture(ks);
+    desc.textures[i++] = MakeTexture(rough);
     return desc;
 }
 
@@ -158,23 +180,25 @@ __host__ MaterialDescriptor MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum 
                                              Spectrum op, Float eta)
 {
     MaterialDescriptor desc;
+    int i = 0;
     desc.type = MaterialType::Uber;
     desc.is_emissive = 0;
-    desc.svals[0] = kd; desc.svals[1] = ks; desc.svals[2] = kr; 
-    desc.svals[3] = kt; desc.svals[4] = op;
-    
-    desc.fvals[0] = uRough; desc.fvals[1] = vRough; desc.fvals[2] = eta;
-    desc.id = matId;
-    matId++;
+    desc.textures[i++] = MakeTexture(kd);
+    desc.textures[i++] = MakeTexture(ks);
+    desc.textures[i++] = MakeTexture(kr);
+    desc.textures[i++] = MakeTexture(kt);
+    desc.textures[i++] = MakeTexture(uRough);
+    desc.textures[i++] = MakeTexture(vRough);
+    desc.textures[i++] = MakeTexture(op);
+    desc.textures[i++] = MakeTexture(eta);
     return desc;
 }
 
 __host__ MaterialDescriptor MakeEmissive(Spectrum L){
     MaterialDescriptor desc;
+    int i = 0;
     desc.is_emissive = 1;
-    desc.svals[0] = L;
-    desc.id = matId;
-    matId++;
+    desc.textures[i++] = MakeTexture(L);
     return desc;
 }
 
@@ -243,34 +267,71 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     return shape;
 }
 
+__bidevice__ Texture<Float> *FloatTexture(TextureDescriptor *desc){
+    if(desc->type == 0){
+        printf("Warning: Clamp of Spectrum for texture generation\n");
+        return ConstantTexture<Float>(desc->spec_val[0]);
+    }else if(desc->type == 1){
+        return ConstantTexture<Float>(desc->fval);
+    }else{
+        return ImageTexture<Float>(desc->image);
+    }
+}
+
+__bidevice__ Texture<Spectrum> *SpectrumTexture(TextureDescriptor *desc){
+    if(desc->type == 0){
+        return ConstantTexture<Spectrum>(desc->spec_val);
+    }else if(desc->type == 1){
+        return ConstantTexture<Spectrum>(desc->fval);
+    }else{
+        return ImageTexture<Spectrum>(desc->image);
+    }
+}
+
 __bidevice__ Material *MakeMaterial(PrimitiveDescriptor *pri){
-    Material *material = new Material();
     MaterialDescriptor *mat = &pri->mat;
+    Material *material = new Material(mat->type);
     switch(mat->type){
         case MaterialType::Matte:{
-            material->Init_Matte(mat->svals[0], mat->fvals[0]);
+            material->Set(new MatteMaterial(SpectrumTexture(&mat->textures[0]),
+                                            FloatTexture(&mat->textures[1])));
         } break;
         
         case MaterialType::Mirror:{
-            material->Init_Mirror(mat->svals[0]);
+            material->Set(new MirrorMaterial(SpectrumTexture(&mat->textures[0])));
         } break;
         
         case MaterialType::Glass:{
-            material->Init_Glass(mat->svals[0], mat->svals[1], mat->fvals[0],
-                                 mat->fvals[1], mat->fvals[2]);
+            material->Set(new GlassMaterial(SpectrumTexture(&mat->textures[0]),
+                                            SpectrumTexture(&mat->textures[1]),
+                                            FloatTexture(&mat->textures[2]),
+                                            FloatTexture(&mat->textures[3]),
+                                            FloatTexture(&mat->textures[4])));
         } break;
         
         case MaterialType::Metal:{
-            material->Init_Metal(mat->svals[0], mat->fvals[0], mat->fvals[1], mat->fvals[2]);
+            material->Set(new MetalMaterial(SpectrumTexture(&mat->textures[0]),
+                                            SpectrumTexture(&mat->textures[1]),
+                                            FloatTexture(&mat->textures[2]),
+                                            FloatTexture(&mat->textures[3]),
+                                            FloatTexture(&mat->textures[4])));
         } break;
         
         case MaterialType::Plastic:{
-            material->Init_Plastic(mat->svals[0], mat->svals[1], mat->fvals[0]);
+            material->Set(new PlasticMaterial(SpectrumTexture(&mat->textures[0]),
+                                              SpectrumTexture(&mat->textures[1]),
+                                              FloatTexture(&mat->textures[2])));
         } break;
         
         case MaterialType::Uber:{
-            material->Init_Uber(mat->svals[0], mat->svals[1], mat->svals[2], mat->svals[3],
-                                mat->fvals[0], mat->fvals[1], mat->svals[4], mat->fvals[2]);
+            material->Set(new UberMaterial(SpectrumTexture(&mat->textures[0]),
+                                           SpectrumTexture(&mat->textures[1]),
+                                           SpectrumTexture(&mat->textures[2]),
+                                           SpectrumTexture(&mat->textures[3]),
+                                           FloatTexture(&mat->textures[4]),
+                                           FloatTexture(&mat->textures[5]),
+                                           SpectrumTexture(&mat->textures[6]),
+                                           FloatTexture(&mat->textures[7])));
         } break;
         
         default:{
@@ -299,7 +360,8 @@ __global__ void MakeSceneGPU(Aggregator *scene, SceneDescription *description){
             }
             
             if(pri->mat.is_emissive){
-                primitive = new GeometricEmitterPrimitive(shape, pri->mat.svals[0]);
+                primitive = new GeometricEmitterPrimitive(shape, 
+                                                          pri->mat.textures[0].spec_val);
             }else{
                 Material *mat = MakeMaterial(pri);
                 if(!mat){
@@ -327,8 +389,8 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         hostScene->primitives = cudaAllocateVx(PrimitiveDescriptor, hPrimitives.size());
         memcpy(hostScene->primitives, hPrimitives.data(), size);
         hostScene->nprimitives = hPrimitives.size();
-        if(meshesIds > 0)
-            scene->ReserveMeshes(meshesIds);
+        if(any_mesh > 0)
+            scene->ReserveMeshes(any_mesh);
         
         MakeSceneGPU<<<1,1>>>(scene, hostScene);
         cudaDeviceAssert();

@@ -1,25 +1,20 @@
 #include <material.h>
 
-__bidevice__ void Material::Init_Mirror(Texture Kr){
-    K = Kr;
-    type = MaterialType::Mirror;
-}
+__bidevice__ MirrorMaterial::MirrorMaterial(Texture<Spectrum> *kr, Texture<Float> *bump)
+: bumpMap(bump), Kr(kr){ has_bump = 1; }
 
-__bidevice__ void Material::Init_Mirror(Spectrum kr){
-    K.Init_ConstantTexture(kr);
-    type = MaterialType::Mirror;
-}
+__bidevice__ MirrorMaterial::MirrorMaterial(Texture<Spectrum> *kr) : 
+Kr(kr), bumpMap(nullptr){ has_bump = 0; }
 
-__bidevice__ void Material::ComputeScatteringFunctionsMirror(BSDF *bsdf, 
-                                                             SurfaceInteraction *si, 
+__bidevice__ void MirrorMaterial::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
                                                              TransportMode mode, 
-                                                             bool mLobes) const
+                                                             bool mLobes)  const
 {
-    Spectrum Kr = K.Evaluate(si);
-    if(!Kr.IsBlack()){
+    Spectrum kr = Kr->Evaluate(si);
+    if(!kr.IsBlack()){
         BxDF bxdf(BxDFImpl::SpecularReflection);
         Fresnel fr; //no op by default
-        bxdf.Init_SpecularReflection(Kr, &fr);
+        bxdf.Init_SpecularReflection(kr, &fr);
         bsdf->Push(&bxdf);
     }
 }

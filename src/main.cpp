@@ -365,7 +365,7 @@ void BoxesScene(Camera *camera, Float aspect){
 void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,15.f,0.f), 
+    camera->Config(Point3f(0.f, 18.f, -33.f), Point3f(0.0f,22.f,0.f), 
                    vec3f(0.f,1.f,0.f), 40.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
@@ -380,13 +380,17 @@ void CornellBoxScene(Camera *camera, Float aspect){
     RectDescriptor leftWall = MakeRectangle(lr, 200, 50);
     InsertPrimitive(leftWall, green);
     
+    ImageData *data = LoadTextureImageData("/home/felpz/Downloads/desert.png");
+    TextureDescriptor desert = MakeTexture(data);
+    MaterialDescriptor redtex = MakeMatteMaterial(desert);
+    
     Transform rr = Translate(-30, 25, 0) * RotateY(90);
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
     InsertPrimitive(rightWall, red);
     
     Transform br = Translate(0, 25, 23);
-    RectDescriptor backWall = MakeRectangle(br, 200, 70);
-    InsertPrimitive(backWall, white);
+    RectDescriptor backWall = MakeRectangle(br, 60, 33.75);
+    InsertPrimitive(backWall, redtex);
     
     Transform tr = Translate(0, 50, 0) * RotateX(90);
     RectDescriptor topWall = MakeRectangle(tr, 60, 200);
@@ -408,11 +412,11 @@ void CornellBoxScene(Camera *camera, Float aspect){
     
     Transform bbt = Translate(10,18,0) * RotateY(25);
     BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
-    InsertPrimitive(bigBox, white);
+    //InsertPrimitive(bigBox, white);
     
     Transform r = Translate(0, 49, -10) * RotateX(90);
     RectDescriptor rect = MakeRectangle(r, 30, 30);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
     InsertPrimitive(rect, matEm);
     
     //Test for sampling
@@ -458,9 +462,9 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    //CornellBoxScene(camera, aspect);
+    CornellBoxScene(camera, aspect);
     //DragonScene(camera, aspect);
-    BoxesScene(camera, aspect);
+    //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;

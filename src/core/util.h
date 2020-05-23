@@ -5,7 +5,7 @@
 #include <miniz.h>
 #include <ppm.h>
 
-#define UMETHOD() printf("Warning: Invocation of unimplemented method [ %s ]", __FUNCTION__)
+#define UMETHOD() printf("Warning: Invocation of unimplemented method [ %s ]\n", __FUNCTION__)
 
 template<typename T, class C> inline __bidevice__
 bool QuickSort(T *arr, int elements, C compare){

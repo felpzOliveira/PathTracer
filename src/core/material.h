@@ -3,110 +3,180 @@
 #include <geometry.h>
 #include <interaction.h>
 #include <reflection.h>
+#include <texture.h>
 
-//NOTE: Cuda is generating incorrect stack size for some inheritance objects
-// so we will have to combine these
-
-enum TextureType{
-    ConstantTexture, ImageTexture
-};
-
-struct TextureImage{
-    unsigned char *data;
-    int width, height;
-    int is_valid;
-};
-
-class Texture{
+class MatteMaterial{
     public:
-    TextureType type;
-    Spectrum C;
+    Texture<Spectrum> *Kd;
+    Texture<Float> *sigma;
+    Texture<Float> *bumpMap;
+    int has_bump;
     
-    TextureImage *imagePtr;
+    __bidevice__ MatteMaterial(Texture<Spectrum> *kd, Texture<Float> *sig, 
+                               Texture<Float> *bump);
+    __bidevice__ MatteMaterial(Texture<Spectrum> *kd, Texture<Float> *sig);
     
-    __bidevice__ Texture(){}
-    __bidevice__ Texture(const Spectrum &t){ Init_ConstantTexture(t); }
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
     
-    //NOTE: When we do add support for images, this might be usefull
-    __bidevice__ void operator=(const Texture &t){
-        C = t.C;
-        type = t.type;
-        imagePtr = t.imagePtr;
+    __bidevice__ ~MatteMaterial(){
+        TexPtrClean(Kd); TexPtrClean(sigma); TexPtrClean(bumpMap);
+    }
+};
+
+class PlasticMaterial{
+    public:
+    Texture<Spectrum> *Kd, *Ks;
+    Texture<Float> *roughness;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    
+    __bidevice__ PlasticMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks, 
+                                 Texture<Float> *rough, Texture<Float> *bump);
+    
+    __bidevice__ PlasticMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks, 
+                                 Texture<Float> *rough);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
+    
+    __bidevice__ ~PlasticMaterial(){
+        TexPtrClean(Kd); TexPtrClean(Ks); TexPtrClean(roughness); TexPtrClean(bumpMap);
     }
     
-    __bidevice__ Spectrum Evaluate(SurfaceInteraction *si) const;
+};
+
+class MirrorMaterial{
+    public:
+    Texture<Spectrum> *Kr;
+    Texture<Float> *bumpMap;
+    int has_bump;
     
-    __bidevice__ void Init_ConstantTexture(Spectrum K);
-    __bidevice__ void Init_ImageTexture(TextureImage *imageptr);
+    __bidevice__ MirrorMaterial(Texture<Spectrum> *kr, Texture<Float> *bump);
+    __bidevice__ MirrorMaterial(Texture<Spectrum> *kr);
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
     
-    private:
-    __bidevice__ Spectrum EvaluateConstant(SurfaceInteraction *si) const;
-    __bidevice__ Spectrum EvaluateImage(SurfaceInteraction *si) const;
+    __bidevice__ ~MirrorMaterial(){
+        TexPtrClean(Kr); TexPtrClean(bumpMap);
+    }
+};
+
+class MetalMaterial{
+    public:
+    Texture<Spectrum> *eta, *k;
+    Texture<Float> *uRough, *vRough;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    
+    __bidevice__ MetalMaterial(Texture<Spectrum> *eta, Texture<Spectrum> *k, 
+                               Texture<Float> *urough, Texture<Float> *vrough,
+                               Texture<Float> *bump);
+    
+    __bidevice__ MetalMaterial(Texture<Spectrum> *eta, Texture<Spectrum> *k, 
+                               Texture<Float> *urough, Texture<Float> *vrough);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
+    
+    __bidevice__ ~MetalMaterial(){
+        TexPtrClean(eta); TexPtrClean(k);
+        TexPtrClean(uRough); TexPtrClean(vRough);
+        TexPtrClean(bumpMap);
+    }
+};
+
+class GlassMaterial{
+    public:
+    Texture<Spectrum> *Kr, *Kt;
+    Texture<Float> *uRough, *vRough, *index;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    
+    __bidevice__ GlassMaterial(Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                               Texture<Float> *urough, Texture<Float> *vrough,
+                               Texture<Float> *index, Texture<Float> *bump);
+    
+    __bidevice__ GlassMaterial(Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                               Texture<Float> *urough, Texture<Float> *vrough,
+                               Texture<Float> *index);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
+    
+    __bidevice__ ~GlassMaterial(){
+        TexPtrClean(Kr); TexPtrClean(Kt);
+        TexPtrClean(vRough); TexPtrClean(uRough);
+        TexPtrClean(bumpMap); TexPtrClean(index);
+    }
+};
+
+class UberMaterial{
+    public:
+    Texture<Spectrum> *Kd, *Ks, *Kr, *Kt, *opacity;
+    Texture<Float> *uRough, *vRough, *eta;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    
+    __bidevice__ UberMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                              Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                              Texture<Float> *urough, Texture<Float> *vrough,
+                              Texture<Spectrum> *op, Texture<Float> *eta,
+                              Texture<Float> *bump);
+    
+    __bidevice__ UberMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                              Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                              Texture<Float> *urough, Texture<Float> *vrough,
+                              Texture<Spectrum> *op, Texture<Float> *eta);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
+    __bidevice__ ~UberMaterial(){
+        TexPtrClean(Kr); TexPtrClean(Kt);
+        TexPtrClean(vRough); TexPtrClean(uRough);
+        TexPtrClean(bumpMap); TexPtrClean(eta);
+        TexPtrClean(Kd); TexPtrClean(Ks);
+        TexPtrClean(opacity);
+    }
+};
+
+class TranslucentMaterial{
+    public:
+    Texture<Spectrum> *Kd, *Ks, *reflect, *transmit;
+    Texture<Float> *roughness;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    
+    __bidevice__ TranslucentMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                                     Texture<Spectrum> *refl, Texture<Spectrum> *trans,
+                                     Texture<Float> *rough, Texture<Float> *bump);
+    
+    __bidevice__ TranslucentMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *ks,
+                                     Texture<Spectrum> *refl, Texture<Spectrum> *trans,
+                                     Texture<Float> *rough);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes) const;
+    
+    __bidevice__ ~TranslucentMaterial(){
+        TexPtrClean(Kd); TexPtrClean(Ks);
+        TexPtrClean(roughness); TexPtrClean(bumpMap);
+        TexPtrClean(reflect); TexPtrClean(transmit);
+    }
 };
 
 
-__host__ TextureImage *CreateTextureImage(const char *path);
-
 enum MaterialType{
-    Matte, Mirror, Glass, Metal, Translucent, Plastic, Uber
+    Matte=1, Mirror, Glass, Metal, Translucent, Plastic, Uber
 };
 
 class Material{
     public:
     MaterialType type;
-    Texture K, sigma;
-    
-    Texture Kt, uRough, vRough, index;
-    
-    Texture Kr, I, T;
-    
-    __bidevice__ Material(){}
+    void *material;
+    __bidevice__ Material(MaterialType tp){ type = tp; material = nullptr; }
+    __bidevice__ Material(){ material = nullptr; type = MaterialType(0); }
+    __bidevice__ void Set(void *ptr) { material = ptr; }
     __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
                                                  TransportMode mode, bool mLobes) const;
-    
-    __bidevice__ void Init_Matte(Texture Kd, Texture sigma);
-    __bidevice__ void Init_Matte(Spectrum kd, Float sigma=0);
-    
-    __bidevice__ void Init_Mirror(Texture Kr);
-    __bidevice__ void Init_Mirror(Spectrum kr);
-    
-    __bidevice__ void Init_Metal(Texture R, Texture etaI, Texture etaT, Texture k);
-    __bidevice__ void Init_Metal(Spectrum R, Float etaI, Float etaT, Float k);
-    
-    __bidevice__ void Init_Plastic(Spectrum kd, Spectrum ks, Float rough);
-    __bidevice__ void Init_Plastic(Texture kd, Texture ks, Texture rough);
-    
-    
-    __bidevice__ void Init_Glass(Texture Kr, Texture Kt, Texture uRough,
-                                 Texture vRough, Texture index);
-    
-    __bidevice__ void Init_Glass(Spectrum Kr, Spectrum Kt, Float uRough,
-                                 Float vRough, Float index);
-    
-    __bidevice__ void Init_Glass(Spectrum Kr, Spectrum Kt, Float index);
-    
-    __bidevice__ void Init_Translucent(Spectrum kd, Spectrum ks, Float rough,
-                                       Spectrum refl, Spectrum trans);
-    
-    __bidevice__ void Init_Uber(Texture kd, Texture ks, Texture kr, Texture kt,
-                                Texture roughu, Texture roughv, Texture op, Texture eta);
-    
-    __bidevice__ void Init_Uber(Spectrum kd, Spectrum ks, Spectrum kr, Spectrum kt,
-                                Float roughu, Float roughv, Spectrum op, Float eta);
-    
-    private:
-    __bidevice__ void ComputeScatteringFunctionsMatte(BSDF *bsdf, SurfaceInteraction *si, 
-                                                      TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsMirror(BSDF *bsdf, SurfaceInteraction *si, 
-                                                       TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsGlass(BSDF *bsdf, SurfaceInteraction *si, 
-                                                      TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsMetal(BSDF *bsdf, SurfaceInteraction *si, 
-                                                      TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsTranslucent(BSDF *bsdf, SurfaceInteraction *si, 
-                                                            TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsPlastic(BSDF *bsdf, SurfaceInteraction *si, 
-                                                        TransportMode mode, bool mLobes) const;
-    __bidevice__ void ComputeScatteringFunctionsUber(BSDF *bsdf, SurfaceInteraction *si, 
-                                                     TransportMode mode, bool mLobes) const;
 };
