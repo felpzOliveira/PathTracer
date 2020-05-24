@@ -97,3 +97,5 @@ __host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescr
 __host__ void                InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(DiskDescriptor shape, MaterialDescriptor mat);
 __host__ void                PrepareSceneForRendering(Aggregator *scene);
+
+__bidevice__ Spectrum        SpectrumFromURGB(Float r, Float g, Float b);

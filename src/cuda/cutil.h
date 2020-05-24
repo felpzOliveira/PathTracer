@@ -69,4 +69,7 @@ void cudaPrintMemoryTaken(void);
 
 void cudaSafeExit(void);
 
+/* Simple utility for time checking */
+double to_cpu_time(clock_t start, clock_t end);
+
 #endif

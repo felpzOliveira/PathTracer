@@ -66,7 +66,7 @@ int cudaInit(){
         
         void *ptr = NULL;
         
-        clock_t start = clock();       
+        clock_t start = clock();
         CUCHECK(cudaMalloc(&ptr, 1));
         clock_t mid = clock();
         

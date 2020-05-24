@@ -12,6 +12,8 @@
 #include <ppm.h>
 #include <light.h>
 #include <image_util.h>
+#include <mtl.h>
+#include <obj_loader.h>
 
 #define DEFAULT_MESH_FOLDER "/home/felpz/Documents/models/"
 
@@ -362,11 +364,161 @@ void BoxesScene(Camera *camera, Float aspect){
     InsertPrimitive(light, matEm);
 }
 
+void CornellRandomScene(Camera *camera, Float aspect){
+    camera->Config(Point3f(-14, 5, -30), Point3f(-5, 8.0f, 0.0f),
+                   vec3f(0,1,0), 42, aspect);
+    
+    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
+    MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
+    ImageData *desert = LoadTextureImageData("/home/felpz/Downloads/desert.png");
+    ImageData *grid = LoadTextureImageData("/home/felpz/Downloads/desert_grid.png");
+    
+    TextureDescriptor deserttex = MakeTexture(desert);
+    MaterialDescriptor desertMat = MakeMatteMaterial(deserttex);
+    
+    TextureDescriptor gridtex = MakeTexture(grid);
+    MaterialDescriptor gridMat = MakeMatteMaterial(gridtex);
+    
+    Float height = 20;
+    Float width  = height * desert->GetAspectRatio();
+    
+    Transform backT = Translate(0, height/2, -4) * RotateY(0);
+    RectDescriptor backWall = MakeRectangle(backT, width, height);
+    InsertPrimitive(backWall, desertMat);
+    
+    Transform rightT = Translate(-width/2, height/2, 0) * RotateY(90);
+    RectDescriptor rightWall = MakeRectangle(rightT, width+20, height);
+    InsertPrimitive(rightWall, gridMat);
+    
+    Transform leftT = Translate(width/2, height/2, 0) * RotateY(90);
+    RectDescriptor leftWall = MakeRectangle(leftT, width+20, height);
+    InsertPrimitive(leftWall, gridMat);
+    
+    Transform bottomT = Translate(0, 0, -height/2) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+100);
+    InsertPrimitive(bottomWall, white);
+    
+    Transform topT = Translate(0, height, -height/2) * RotateX(90);
+    RectDescriptor topWall = MakeRectangle(topT, width, height+100);
+    InsertPrimitive(topWall, white);
+    
+    ParsedMesh *tableMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "table.obj", &tableMesh);
+    tableMesh->toWorld = Translate(-10, -0.3, -12) * Scale(0.06) * RotateY(-10);
+    MeshDescriptor table = MakeMesh(tableMesh);
+    MaterialDescriptor tableMat = MakeMatteMaterial(SpectrumFromURGB(106,75,53),30);
+    InsertPrimitive(table, tableMat);
+    
+    Transform stuffT = Translate(-0.5, 3, -13) * Scale(0.02) * RotateY(230);
+    ParsedMesh *stuffedGrayMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "stuff_gray.obj", &stuffedGrayMesh);
+    stuffedGrayMesh->toWorld = stuffT;
+    MeshDescriptor stuffGray = MakeMesh(stuffedGrayMesh);
+    MaterialDescriptor grayMat = MakePlasticMaterial(SpectrumFromURGB(244,244,244),
+                                                     Spectrum(0.9), 40);
+    InsertPrimitive(stuffGray, grayMat);
+    
+    ParsedMesh *stuffedWhiteMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "stuff_white.obj", &stuffedWhiteMesh);
+    stuffedWhiteMesh->toWorld = stuffT;
+    MeshDescriptor stuffWhite = MakeMesh(stuffedWhiteMesh);
+    MaterialDescriptor whiteMat = MakePlasticMaterial(SpectrumFromURGB(90,90,90),
+                                                      Spectrum(0.9), 40);
+    InsertPrimitive(stuffWhite, whiteMat);
+    
+    ParsedMesh *stuffedBlackMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "stuff_black.obj", &stuffedBlackMesh);
+    stuffedBlackMesh->toWorld = stuffT;
+    MeshDescriptor stuffBlack = MakeMesh(stuffedBlackMesh);
+    MaterialDescriptor blackMat = MakePlasticMaterial(SpectrumFromURGB(10,10,10),
+                                                      Spectrum(0.9), 40);
+    InsertPrimitive(stuffBlack, blackMat);
+    
+    ParsedMesh *chairMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "chair.obj", &chairMesh);
+    chairMesh->toWorld = Translate(-11,-0.3,-8) * Scale(0.06) * RotateY(135);
+    MeshDescriptor chair = MakeMesh(chairMesh);
+    MaterialDescriptor chairMat = MakeGlassMaterial(Spectrum(0.99), 
+                                                    SpectrumFromURGB(152,251,152), 1.5);
+    InsertPrimitive(chair, chairMat);
+    
+    ParsedMesh *sofaMesh;
+    LoadObjData(DEFAULT_MESH_FOLDER "sofa.obj", &sofaMesh);
+    sofaMesh->toWorld = Translate(0,-0.3,-12) * Scale(0.06);
+    MeshDescriptor sofa = MakeMesh(sofaMesh);
+    MaterialDescriptor sofaMat = MakePlasticMaterial(SpectrumFromURGB(255,222,173)*0.8, 
+                                                     Spectrum(0.3500), 0.03);
+    InsertPrimitive(sofa, sofaMat);
+    
+    struct box{
+        vec3f p;
+        Float len;
+    };
+    
+    std::vector<box> boxes;
+    
+    Transform bt = Translate(-10,4.6,-13);
+    for(int i = 0; i < 40; i++){
+        Float rad = rand_float() * 0.2 + 0.2;
+        Float x = -15.2 + rand_float() * 10;
+        Float z = -14.0 + rand_float() * 6;
+        Float y = 4.64 + rad;
+        
+        vec3f p(x, y, z);
+        bool insert = true;
+        for(int k = 0; k < boxes.size(); k++){
+            Float l = (p - boxes[i].p).Length();
+            if(l < boxes[i].len + rad){
+                insert = false;
+                break;
+            }
+        }
+        
+        if(insert){
+            box b;
+            b.p = p;
+            b.len = rad;
+            boxes.push_back(b);
+            Float f = rand_float();
+            MaterialDescriptor mdesc;
+            Spectrum rngSpec(rand_float(), rand_float(), rand_float());
+            if(f < 0.3){
+                mdesc = MakeMatteMaterial(rngSpec, rand_float() * 50);
+            }else if(f < 0.4){
+                mdesc = MakeMirrorMaterial(rngSpec);
+            }else if(f < 0.7){
+                mdesc = MakeGlassMaterial(rngSpec, Spectrum(0.99), 1.5,
+                                          rand_float() * 0.02, rand_float() * 0.02);
+            }else if(f < 0.8){
+                Spectrum kd(rand_float() * 0.05, rand_float() * 0.05, rand_float() * 0.05); 
+                mdesc = MakeUberMaterial(kd, rngSpec * 0.8, Spectrum(0), Spectrum(0),
+                                         0.001, 0.001, Spectrum(1), 1.5);
+            }else{
+                mdesc = MakeMetalMaterial(rngSpec, Spectrum(0.56), 1.f, 1.5f);
+            }
+            
+            if(rand_float() < 0.5){
+                SphereDescriptor desc = MakeSphere(Translate(x, y, z), rad);
+                InsertPrimitive(desc, mdesc);
+            }else{
+                Transform t = Translate(x, y, z) * RotateY(-60 + rand_float() * 120);
+                BoxDescriptor desc = MakeBox(t, 2*rad, 2*rad, 2*rad);
+                InsertPrimitive(desc, mdesc);
+            }
+        }
+    }
+    
+    Transform r = Translate(0, height - 0.001, -30) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, height*0.8, width*0.5);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
+    InsertPrimitive(rect, matEm);
+}
+
 void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 18.f, -103.f), Point3f(0.0f,22.f,0.f), 
-                   vec3f(0.f,1.f,0.f), 33.f, aspect);
+    camera->Config(Point3f(0.f, 18.f, -60.f), Point3f(0.0f,22.f,0.f), 
+                   vec3f(0.f,1.f,0.f), 45.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
                                                   Spectrum(0), Spectrum(0), 0.001, 
@@ -384,12 +536,32 @@ void CornellBoxScene(Camera *camera, Float aspect){
     //TextureDescriptor desert = MakeTexture(data);
     //MaterialDescriptor redtex = MakeMatteMaterial(desert);
     
-    ParsedMesh *fridgeMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "fridge.obj", &fridgeMesh);
-    Float s = 20;
-    fridgeMesh->toWorld = Translate(0,0,-5) * Scale(s,s,s) * RotateY(140);
-    MeshDescriptor fridge = MakeMesh(fridgeMesh);
-    InsertPrimitive(fridge, white);
+    std::vector<MeshMtl> mtls;
+    std::vector<ParsedMesh *> *meshes = LoadObj(DEFAULT_MESH_FOLDER "fridge.obj", &mtls);
+    MaterialDescriptor azul = MakeMatteMaterial(Spectrum(0.0,0.0,1.0));
+    MaterialDescriptor verde = MakeMatteMaterial(Spectrum(0.0,1.0,0.0));
+    MaterialDescriptor amarelo = MakeMatteMaterial(Spectrum(1.0,1.0,0.0));
+    int it = 0;
+    Transform ss = Translate(10,0,0) * Scale(20) * RotateY(100);
+    for(int i = 0; i < meshes->size(); i++){
+        ParsedMesh *m = meshes->at(i);
+        if(m->nTriangles > 0){
+            m->toWorld = ss;
+            MeshDescriptor d = MakeMesh(m);
+            if(it == 0)
+                InsertPrimitive(d, azul);
+            if(it == 1)
+                InsertPrimitive(d, red);
+            if(it == 2)
+                InsertPrimitive(d, verde);
+            if(it == 3)
+                InsertPrimitive(d, amarelo);
+            it ++;
+            if(it >= 4) it = 0;
+        }
+    }
+    
+    
     
     Transform rr = Translate(-30, 25, 0) * RotateY(90);
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
@@ -468,6 +640,7 @@ void render(Image *image){
     
     //NOTE: Use this function to perform scene setup
     CornellBoxScene(camera, aspect);
+    //CornellRandomScene(camera, aspect);
     //DragonScene(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
@@ -495,7 +668,6 @@ void render(Image *image){
     cudaFree(camera);
 }
 
-#include <mtl.h>
 int main(int argc, char **argv){
     if(argc > 1){
         if(argc != 3){
@@ -509,11 +681,38 @@ int main(int argc, char **argv){
         //std::vector<MTL *> materials;
         //MTLParse("/home/felpz/Downloads/Spectral_Demon_by_Dommk/demon.mtl", &materials);
         //exit(0);
+        /*
+        std::vector<MeshMtl> mtls;
+        std::vector<ParsedMesh *> *meshes = LoadObj(DEFAULT_MESH_FOLDER "fridge.obj", &mtls);
         
+        printf("Meshes to render: \n");
+        int totalVertices = 0;
+        for(int i = 0; i < mtls.size(); i++){
+            ParsedMesh *ptr = meshes->at(i);
+            MeshMtl mtl = mtls[i];
+            printf("%s : %s [ # triangles: %d, # vertices: %d ]\nTri: [ ", 
+                   mtl.file.c_str(), mtl.name.c_str(), ptr->nTriangles, ptr->nVertices);
+            for(int i = 0; i < 3; i += 1){
+                int i0 = ptr->indices[3 * i+0];
+                int i1 = ptr->indices[3 * i+1];
+                int i2 = ptr->indices[3 * i+2];
+                Point3f p0 = ptr->p[i0];
+                Point3f p1 = ptr->p[i1];
+                Point3f p2 = ptr->p[i2];
+            }
+            
+            printf("]\n");
+            
+            totalVertices += ptr->nVertices;
+        }
+        
+        printf("Total: %d\n", totalVertices);
+        exit(0);
+        */
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 800;
+        const int image_width = 1366;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);

@@ -406,3 +406,7 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         printf("Invalid scene, you need to call BeginScene once\n");
     }
 }
+
+__host__ Spectrum SpectrumFromURGB(Float r, Float g, Float b){
+    return Spectrum(r/255.f, g/255.f, b/255.f);
+}

@@ -76,13 +76,11 @@ template<typename T> class TextureImage : public Texture<T>{
     __bidevice__ void SetDim(Float val){
         (void)val;
         dimension = 1;
-        printf("Float texture\n");
     }
     
     __bidevice__ void SetDim(Spectrum val){
         (void)val;
         dimension = 3;
-        printf("Spectrum texture\n");
     }
     
 };
