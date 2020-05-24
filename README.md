@@ -6,6 +6,7 @@ interface which I hope to implement soon, PBRT has some really good-looking imag
 This is also based on previous version which I did based on the mini-series by Peter Shirley and the Advanced Global Illumination book,
 so I remade a few images from those using the new code, but now we have a bunch of new stuff with the BSDF interface and the Microfacet distribution which can generate really good images:
 
+![Alt text](/images/room.png)
 ![Alt text](/images/scene0.png)
 ![Alt text](/images/cornell.png) 
 
