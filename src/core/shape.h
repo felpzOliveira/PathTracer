@@ -168,8 +168,9 @@ typedef struct{
     Normal3f *n;
     vec3f *s;
     Point2f *uv;
-    int *indices;
+    Point3i *indices;
     int nTriangles, nVertices;
+    int nUvs, nNormals;
     Transform toWorld;
 }ParsedMesh;
 
@@ -177,7 +178,8 @@ typedef struct{
 class Mesh: public Shape{
     public:
     int nTriangles, nVertices;
-    int *indices;
+    int nUvs, nNormals;
+    Point3i *indices;
     Point3f *p;
     Normal3f *n;
     vec3f *s;
@@ -186,12 +188,7 @@ class Mesh: public Shape{
     Node *bvh;
     
     __bidevice__ Mesh() : Shape(Transform()){type = ShapeType::MESH;}
-    __bidevice__ Mesh(const Transform &toWorld, int nTris, int *_indices,
-                      int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
-    __bidevice__ Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy=1);
-    
-    __bidevice__ void Set(const Transform &toWorld, int nTris, int *_indices,
-                          int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
+    __bidevice__ Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy=0);
     
     __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
                                         SurfaceInteraction *isect) const override;

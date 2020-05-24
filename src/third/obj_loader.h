@@ -10,5 +10,5 @@ typedef struct{
     std::string name;
 }MeshMtl;
 
-/*TODO: Not working */
-__host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl> *mtls);
+__host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl> *mtls,
+                                           bool split_mesh=true);

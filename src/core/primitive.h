@@ -89,8 +89,6 @@ class Aggregator{
     __bidevice__ bool Intersect(const Ray &r, SurfaceInteraction *, Pixel *p = nullptr) const;
     __bidevice__ void Release();
     __bidevice__ void PrintHandle(int which=-1);
-    __bidevice__ Mesh *AddMesh(const Transform &toWorld, int nTris, int *_indices,
-                               int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV);
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=0);
     __bidevice__ void SetLights();
     __bidevice__ Spectrum UniformSampleOneLight(const Interaction &it, BSDF *bsdf,

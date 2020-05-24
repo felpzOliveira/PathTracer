@@ -15,7 +15,7 @@
 #include <mtl.h>
 #include <obj_loader.h>
 
-#define DEFAULT_MESH_FOLDER "/home/felpz/Documents/models/"
+#define MESH_FOLDER "/home/felpz/Documents/models/"
 
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
@@ -279,7 +279,7 @@ void DragonScene(Camera *camera, Float aspect){
     //InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *dragonMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
+    LoadObjData(MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
     dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
     MeshDescriptor dragon = MakeMesh(dragonMesh);
     InsertPrimitive(dragon, greenGlass);
@@ -347,13 +347,13 @@ void BoxesScene(Camera *camera, Float aspect){
     InsertPrimitive(cSphere, matGlass);
     
     ParsedMesh *winged;
-    LoadObjData(DEFAULT_MESH_FOLDER "winged.obj", &winged);
+    LoadObjData(MESH_FOLDER "winged.obj", &winged);
     winged->toWorld = Translate(-100,100,-200) * RotateY(65);
     MeshDescriptor wingedDesc = MakeMesh(winged);
     InsertPrimitive(wingedDesc, matLucy);
     
     ParsedMesh *budda;
-    LoadObjData(DEFAULT_MESH_FOLDER "budda.obj", &budda);
+    LoadObjData(MESH_FOLDER "budda.obj", &budda);
     budda->toWorld = Translate(160, 20, -270) * Scale(100) * RotateY(180);
     MeshDescriptor buddaDesc = MakeMesh(budda);
     InsertPrimitive(buddaDesc, red);
@@ -403,7 +403,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(topWall, white);
     
     ParsedMesh *tableMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "table.obj", &tableMesh);
+    LoadObjData(MESH_FOLDER "table.obj", &tableMesh);
     tableMesh->toWorld = Translate(-10, -0.3, -12) * Scale(0.06) * RotateY(-10);
     MeshDescriptor table = MakeMesh(tableMesh);
     MaterialDescriptor tableMat = MakeMatteMaterial(SpectrumFromURGB(106,75,53),30);
@@ -411,7 +411,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     
     Transform stuffT = Translate(-0.5, 3, -13) * Scale(0.02) * RotateY(230);
     ParsedMesh *stuffedGrayMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "stuff_gray.obj", &stuffedGrayMesh);
+    LoadObjData(MESH_FOLDER "stuff_gray.obj", &stuffedGrayMesh);
     stuffedGrayMesh->toWorld = stuffT;
     MeshDescriptor stuffGray = MakeMesh(stuffedGrayMesh);
     MaterialDescriptor grayMat = MakePlasticMaterial(SpectrumFromURGB(244,244,244),
@@ -419,7 +419,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(stuffGray, grayMat);
     
     ParsedMesh *stuffedWhiteMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "stuff_white.obj", &stuffedWhiteMesh);
+    LoadObjData(MESH_FOLDER "stuff_white.obj", &stuffedWhiteMesh);
     stuffedWhiteMesh->toWorld = stuffT;
     MeshDescriptor stuffWhite = MakeMesh(stuffedWhiteMesh);
     MaterialDescriptor whiteMat = MakePlasticMaterial(SpectrumFromURGB(90,90,90),
@@ -427,7 +427,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(stuffWhite, whiteMat);
     
     ParsedMesh *stuffedBlackMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "stuff_black.obj", &stuffedBlackMesh);
+    LoadObjData(MESH_FOLDER "stuff_black.obj", &stuffedBlackMesh);
     stuffedBlackMesh->toWorld = stuffT;
     MeshDescriptor stuffBlack = MakeMesh(stuffedBlackMesh);
     MaterialDescriptor blackMat = MakePlasticMaterial(SpectrumFromURGB(10,10,10),
@@ -435,7 +435,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(stuffBlack, blackMat);
     
     ParsedMesh *chairMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "chair.obj", &chairMesh);
+    LoadObjData(MESH_FOLDER "chair.obj", &chairMesh);
     chairMesh->toWorld = Translate(-11,-0.3,-8) * Scale(0.06) * RotateY(135);
     MeshDescriptor chair = MakeMesh(chairMesh);
     MaterialDescriptor chairMat = MakeGlassMaterial(Spectrum(0.99), 
@@ -443,7 +443,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(chair, chairMat);
     
     ParsedMesh *sofaMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "sofa.obj", &sofaMesh);
+    LoadObjData(MESH_FOLDER "sofa.obj", &sofaMesh);
     sofaMesh->toWorld = Translate(0,-0.3,-12) * Scale(0.06);
     MeshDescriptor sofa = MakeMesh(sofaMesh);
     MaterialDescriptor sofaMat = MakePlasticMaterial(SpectrumFromURGB(255,222,173)*0.8, 
@@ -537,7 +537,8 @@ void CornellBoxScene(Camera *camera, Float aspect){
     //MaterialDescriptor redtex = MakeMatteMaterial(desert);
     
     std::vector<MeshMtl> mtls;
-    std::vector<ParsedMesh *> *meshes = LoadObj(DEFAULT_MESH_FOLDER "fridge.obj", &mtls);
+    std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "fridge.obj", 
+                                                &mtls, true);
     MaterialDescriptor azul = MakeMatteMaterial(Spectrum(0.0,0.0,1.0));
     MaterialDescriptor verde = MakeMatteMaterial(Spectrum(0.0,1.0,0.0));
     MaterialDescriptor amarelo = MakeMatteMaterial(Spectrum(1.0,1.0,0.0));
@@ -561,7 +562,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
         }
     }
     
-    
+    //exit(0);
     
     Transform rr = Translate(-30, 25, 0) * RotateY(90);
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
@@ -607,7 +608,7 @@ void CornellBoxScene(Camera *camera, Float aspect){
     
 #if 0
     ParsedMesh *buddaMesh;
-    LoadObjData(DEFAULT_MESH_FOLDER "budda.obj", &buddaMesh);
+    LoadObjData(MESH_FOLDER "budda.obj", &buddaMesh);
     Float s = 40;
     buddaMesh->toWorld = Translate(10,0,-5) * Scale(s,s,s);
     
@@ -683,7 +684,7 @@ int main(int argc, char **argv){
         //exit(0);
         /*
         std::vector<MeshMtl> mtls;
-        std::vector<ParsedMesh *> *meshes = LoadObj(DEFAULT_MESH_FOLDER "fridge.obj", &mtls);
+        std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "fridge.obj", &mtls);
         
         printf("Meshes to render: \n");
         int totalVertices = 0;
@@ -712,7 +713,7 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 1366;
+        const int image_width = 800;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);

@@ -20,22 +20,30 @@ struct vertex_index_t {
         : v_idx(vidx), vt_idx(vtidx), vn_idx(vnidx) {}
 };
 
-static inline bool fixIndex(int idx, int n, int *ret) {
-    if (!ret) {
+struct pack_data_t{
+    int *pickedV, pickedVSize;
+    int *pickedN, pickedNSize;
+    int *pickedU, pickedUSize;
+    pack_data_t() : pickedV(nullptr), pickedVSize(0), pickedN(nullptr),
+    pickedNSize(0), pickedU(nullptr), pickedUSize(0) {}
+};
+
+static inline bool fixIndex(int idx, int n, int *ret){
+    if(!ret){
         return false;
     }
     
-    if (idx > 0) {
+    if(idx > 0){
         (*ret) = idx - 1;
         return true;
     }
     
-    if (idx == 0) {
+    if(idx == 0){
         // zero is not allowed according to the spec.
         return false;
     }
     
-    if (idx < 0) {
+    if(idx < 0){
         (*ret) = n + idx;  // negative value = relative
         return true;
     }
@@ -46,27 +54,27 @@ static inline bool fixIndex(int idx, int n, int *ret) {
 static bool parseTriple(const char **token, int vsize, int vnsize, int vtsize,
                         vertex_index_t *ret)
 {
-    if (!ret) {
+    if(!ret){
         return false;
     }
     
     vertex_index_t vi(-1);
     
-    if (!fixIndex(atoi((*token)), vsize, &(vi.v_idx))) {
+    if(!fixIndex(atoi((*token)), vsize, &(vi.v_idx))){
         return false;
     }
     
     (*token) += strcspn((*token), "/ \t\r");
-    if ((*token)[0] != '/') {
+    if((*token)[0] != '/'){
         (*ret) = vi;
         return true;
     }
     (*token)++;
     
     // i//k
-    if ((*token)[0] == '/') {
+    if((*token)[0] == '/'){
         (*token)++;
-        if (!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))) {
+        if(!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))){
             return false;
         }
         (*token) += strcspn((*token), "/ \t\r");
@@ -75,19 +83,19 @@ static bool parseTriple(const char **token, int vsize, int vnsize, int vtsize,
     }
     
     // i/j/k or i/j
-    if (!fixIndex(atoi((*token)), vtsize, &(vi.vt_idx))) {
+    if(!fixIndex(atoi((*token)), vtsize, &(vi.vt_idx))){
         return false;
     }
     
     (*token) += strcspn((*token), "/ \t\r");
-    if ((*token)[0] != '/') {
+    if((*token)[0] != '/'){
         (*ret) = vi;
         return true;
     }
     
     // i/j/k
     (*token)++;  // skip '/'
-    if (!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))) {
+    if(!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))){
         return false;
     }
     (*token) += strcspn((*token), "/ \t\r");
@@ -249,7 +257,121 @@ static inline void ParseV2(vec2f *v, const char **token){
     *v = vec2f(ParseFloat(token), ParseFloat(token));
 }
 
-__host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl> *mtls){
+static inline void AssureBufferInit(int **buffer, int &curr, int max_size){
+    if(!(*buffer)){
+        *buffer = new int[max_size];
+        curr = max_size;
+    }else if(curr < max_size && max_size > 0){
+        delete[] (*buffer);
+        *buffer = new int[max_size];
+        curr = max_size;
+    }
+}
+
+static inline void AssurePackInit(pack_data_t *pack, int maxv, int maxvn, int maxvt){
+    (void)maxvn; (void)maxvt;
+    AssureBufferInit(&pack->pickedV, pack->pickedVSize, maxv);
+    AssureBufferInit(&pack->pickedN, pack->pickedNSize, maxvn);
+    AssureBufferInit(&pack->pickedU, pack->pickedUSize, maxvt);
+    int max = maxvt > maxvn ?((maxvt > maxv) ? maxvt : maxv):((maxvn > maxv) ? maxvn : maxv);
+    for(int i = 0; i < max; i++){
+        if(i < maxv) pack->pickedV[i] = -1;
+        if(i < maxvn) pack->pickedN[i] = -1;
+        if(i < maxvt) pack->pickedU[i] = -1;
+    }
+}
+
+static inline void FreePack(pack_data_t *pack){
+    if(pack->pickedV) delete[] pack->pickedV;
+    if(pack->pickedN) delete[] pack->pickedN;
+    if(pack->pickedU) delete[] pack->pickedU;
+}
+
+static inline void FillMesh(ParsedMesh *mesh, std::vector<vec3f> *v, 
+                            std::vector<vec3f> *vn, std::vector<vec2f> *vt,
+                            pack_data_t *pack, std::vector<vertex_index_t> *indexes)
+{
+    int cV = 0, cN = 0, cU = 0;
+    std::vector<Point3f> p2;
+    std::vector<Point2f> uv;
+    std::vector<Normal3f> nor;
+    
+    AssurePackInit(pack, v->size(), vn->size(), vt->size());
+    int *picked  = pack->pickedV;
+    int *pickedN = pack->pickedN;
+    int *pickedU = pack->pickedU;
+    
+    for(int i = 0; i < indexes->size(); i++){
+        int whichV = indexes->operator[](i).v_idx;
+        int whichN = indexes->operator[](i).vn_idx;
+        int whichU = indexes->operator[](i).vt_idx;
+        if(picked[whichV] == -1){
+            picked[whichV] = cV;
+            Point3f p(v->at(whichV));
+            p2.push_back(p);
+            cV++;
+        }
+        
+        if(whichN > -1){
+            if(pickedN[whichN] == -1){
+                pickedN[whichN] = cN;
+                Normal3f n(vn->at(whichN));
+                nor.push_back(n);
+                cN++;
+            }
+        }
+        
+        if(whichU > -1){
+            if(pickedU[whichU] == -1){
+                pickedU[whichU] = cU;
+                Point2f u(vt->at(whichU));
+                uv.push_back(u);
+                cU++;
+            }
+        }
+    }
+    
+    mesh->p = cudaAllocateVx(Point3f, p2.size());
+    mesh->indices = cudaAllocateVx(Point3i, indexes->size());
+    mesh->nTriangles = indexes->size() / 3;
+    mesh->nVertices = p2.size();
+    memcpy(mesh->p, p2.data(), p2.size() * sizeof(Point3f));
+    
+    if(cN > 0){
+        mesh->n = cudaAllocateVx(Normal3f, cN);
+        memcpy(mesh->n, nor.data(), cN * sizeof(Normal3f));
+        mesh->nNormals = cN;
+    }
+    
+    if(cU > 0){
+        mesh->uv = cudaAllocateVx(Point2f, cU);
+        memcpy(mesh->uv, uv.data(), cU * sizeof(Point2f));
+        mesh->nUvs = cU;
+    }
+    
+    for(int i = 0; i < indexes->size(); i++){
+        int ip = indexes->operator[](i).v_idx;
+        int in = indexes->operator[](i).vn_idx;
+        int it = indexes->operator[](i).vt_idx;
+        
+        int iip = picked[ip];
+        int iin = (in > -1) ? pickedN[in] : -1;
+        int iit = (it > -1) ? pickedU[it] : -1;
+        if(mesh->uv){
+            if(iin > cN) printf("Invalid index for normal [%d - %d]\n", iin, cN);
+            if(iit > cU) printf("Invalid index for uv [%d - %d]\n", iit, cU);
+        }
+        
+        mesh->indices[i] = Point3i(iip, iin, iit);
+    }
+    
+    printf("New mesh # triangles: %d, # vertices: %d, # uvs: %d, # normals: %d\n",
+           mesh->nTriangles, mesh->nVertices, cU, cN);
+}
+
+__host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl> *mtls,
+                                           bool split_mesh)
+{
     ParsedMesh *currentMesh = nullptr;
     std::vector<vec3f> v, vn;
     std::vector<vec2f> vt;
@@ -259,8 +381,7 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
     vertex_index_t face[4];
     int facen = 0;
     
-    int *picked = nullptr;
-    int pickedSize = 0;
+    pack_data_t pack;
     printf("Attempting to parse %s\n", path);
     
     std::ifstream ifs(path);
@@ -299,50 +420,17 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
         if(token[0] == '#') continue; //comment line
         
         //if we just ended a mesh
-        if(token[0] != 'f' && making_mesh){
+        if(token[0] != 'f' && making_mesh && split_mesh){
             making_mesh = 0;
-            std::vector<Point3f> p2;
-            int c = 0;
-            printf("Mesh with # indices: %d [ ", (int)indexes.size());
-            if(!picked){
-                picked = new int[v.size()];
-                pickedSize = v.size();
-            }else if(pickedSize < v.size()){
-                delete[] picked;
-                picked = new int[v.size()];
-                pickedSize = v.size();
-            }
-            
-            for(int i = 0; i < v.size(); i++) picked[i] = -1;
-            for(int i = 0; i < indexes.size(); i++){
-                int which = indexes[i].v_idx;
-                if(picked[which] == -1){
-                    picked[which] = c;
-                    vec3f p = v[which];
-                    p2.push_back(Point3f(p.x, p.y, p.z));
-                    c++;
-                }
-            }
-            
-            currentMesh->p = cudaAllocateVx(Point3f, p2.size());
-            currentMesh->indices = cudaAllocateVx(int, indexes.size());
-            currentMesh->nTriangles = indexes.size() / 3;
-            currentMesh->nVertices = p2.size();
-            memcpy(currentMesh->p, p2.data(), p2.size() * sizeof(Point3f));
-            for(int i = 0; i < indexes.size(); i++){
-                int idx = indexes[i].v_idx;
-                currentMesh->indices[i] = picked[idx];
-            }
-            
-            for(int i = 0; i < 6; i++){
-                printf("%d ", currentMesh->indices[i]);
-            }
-            
-            printf("]\n");
+            FillMesh(currentMesh, &v, &vn, &vt, &pack, &indexes);
         }
         
         if(token[0] == 'o' && IS_SPACE((token[1]))){
             //TODO: grab name
+            token += 2;
+            std::stringstream ss;
+            ss << token;
+            printf("Found %s\n", token);
         }
         
         if(token[0] == 'v' && IS_SPACE((token[1]))){
@@ -372,7 +460,7 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
         if((0 == strncmp(token, "mtllib", 6)) && IS_SPACE((token[6]))){
             token += 7;
             currentMtlFile = std::string(token);
-            printf("Materials to lookup here: %s\n", currentMtlFile.c_str());
+            //printf("Materials to lookup here: %s\n", currentMtlFile.c_str());
             continue;
         }
         
@@ -382,7 +470,7 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
             ss << token;
             currentMaterialName = ss.str();
             matNameCounter ++;
-            printf("Found material %s\n", currentMaterialName.c_str());
+            //printf("Found material %s\n", currentMaterialName.c_str());
             continue;
         }
         
@@ -417,8 +505,8 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
                 size_t n = strspn(token, " \t\r");
                 token += n;
                 if(facen >= 4){
-                    printf("Not a triangle or quad face\n");
-                    exit(0);
+                    printf("Warning: Not a supported face description\n");
+                    break;
                 }
                 
                 face[facen++] = vi;
@@ -431,6 +519,8 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
                 indexes.push_back(face[0]); indexes.push_back(face[1]);
                 indexes.push_back(face[2]); indexes.push_back(face[0]); 
                 indexes.push_back(face[2]); indexes.push_back(face[3]);
+            }else{
+                printf("Warning unsupported face with %d vertices\n", facen);
             }
             
             continue;
@@ -438,47 +528,11 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
     }
     
     if(making_mesh){
-        std::vector<Point3f> p2;
-        int c = 0;
-        printf("Mesh with # indices: %d [", (int)indexes.size());
-        if(!picked){
-            picked = new int[v.size()];
-            pickedSize = v.size();
-        }else if(pickedSize < v.size()){
-            delete[] picked;
-            picked = new int[v.size()];
-            pickedSize = v.size();
-        }
-        
-        for(int i = 0; i < v.size(); i++) picked[i] = -1;
-        for(int i = 0; i < indexes.size(); i++){
-            int which = indexes[i].v_idx;
-            if(picked[which] == -1){
-                picked[which] = c;
-                vec3f p = v[which];
-                p2.push_back(Point3f(p.x, p.y, p.z));
-                c++;
-            }
-        }
-        
-        currentMesh->p = cudaAllocateVx(Point3f, p2.size());
-        currentMesh->indices = cudaAllocateVx(int, indexes.size());
-        currentMesh->nTriangles = indexes.size() / 3;
-        currentMesh->nVertices = p2.size();
-        memcpy(currentMesh->p, p2.data(), p2.size() * sizeof(Point3f));
-        for(int i = 0; i < indexes.size(); i++){
-            int idx = indexes[i].v_idx;
-            currentMesh->indices[i] = picked[idx];
-        }
-        
-        for(int i = 0; i < 6; i++){
-            printf("%d ", currentMesh->indices[i]);
-        }
-        
-        printf("]\n");
+        making_mesh = 0;
+        FillMesh(currentMesh, &v, &vn, &vt, &pack, &indexes);
     }
     
-    if(picked) free(picked);
+    FreePack(&pack);
     
     clock_t end = clock();
     

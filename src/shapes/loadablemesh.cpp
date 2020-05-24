@@ -7,7 +7,7 @@
 //TODO: We might want to write our own obj parser so we don't 
 //      have to waste time with data type translation
 
-__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, int *_indices,
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Point3i *_indices,
                                         int nVerts, Point3f *P, vec3f *S, 
                                         Normal3f *N, Point2f *UV, int copy)
 {
@@ -25,13 +25,13 @@ __host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, int
     }else{
         int ic = mesh->nVertices * 3;
         mesh->p = cudaAllocateVx(Point3f, mesh->nVertices);
-        mesh->indices = cudaAllocateVx(int, ic);
+        mesh->indices = cudaAllocateVx(Point3i, ic);
         mesh->n = nullptr;
         mesh->s = nullptr;
         mesh->uv = nullptr;
         
         memcpy(mesh->p, P, sizeof(Point3f) * mesh->nVertices);
-        memcpy(mesh->indices, _indices, sizeof(int) * ic);
+        memcpy(mesh->indices, _indices, sizeof(Point3i) * ic);
         
         if(UV){
             mesh->uv = cudaAllocateVx(Point2f, mesh->nVertices);
@@ -117,15 +117,18 @@ __host__ bool LoadObjData(const char *obj, ParsedMesh **data){
         }
         
         printf("\n * [ Found %ld vertices ( %ld triangles ) ]", size, size/3);
-        mesh->indices = cudaAllocateVx(int, size);
+        mesh->indices = cudaAllocateVx(Point3i, size);
         mesh->nTriangles = 0;
         it = 0;
         for(auto &tshape : tshapes){
             size_t idx = 0;
             for(size_t f = 0; f < tshape.mesh.num_face_vertices.size(); ++f){
-                mesh->indices[it++] = tshape.mesh.indices[idx+0].vertex_index;
-                mesh->indices[it++] = tshape.mesh.indices[idx+1].vertex_index;
-                mesh->indices[it++] = tshape.mesh.indices[idx+2].vertex_index;
+                mesh->indices[it++] = Point3i(tshape.mesh.indices[idx+0].vertex_index,
+                                              -1, -1);
+                mesh->indices[it++] = Point3i(tshape.mesh.indices[idx+1].vertex_index,
+                                              -1, -1);
+                mesh->indices[it++] = Point3i(tshape.mesh.indices[idx+2].vertex_index,
+                                              -1, -1);
                 mesh->nTriangles += 1;
                 idx += 3;
             }

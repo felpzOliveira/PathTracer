@@ -74,22 +74,6 @@ __bidevice__ Mesh *Aggregator::AddMesh(const Transform &toWorld, ParsedMesh *pMe
     return ptr;
 }
 
-__bidevice__ Mesh *Aggregator::AddMesh(const Transform &toWorld, int nTris, int *_indices,
-                                       int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
-                                       Point2f *UV)
-{
-    Mesh *ptr = nullptr;
-    if(nMeshes < nAllowedMeshes){
-        meshPtrs[nMeshes] = new Mesh(toWorld, nTris, _indices, nVerts, P, S, N, UV);
-        ptr = meshPtrs[nMeshes];
-        nMeshes ++;
-    }else{
-        printf("Hit maximum meshes allowed [%d] \n", nMeshes);
-    }
-    
-    return ptr;
-}
-
 __bidevice__ void Aggregator::Reserve(int size){
     Assert(size > 0);
     length = size;
@@ -118,7 +102,7 @@ __bidevice__ void Aggregator::SetLights(){
             gPri->light = lights[i];
         }
         
-        printf(" * Created %d DiffuseLights\n", lightCounter);
+        printf(" * Created %d Light(s)\n", lightCounter);
     }
 }
 

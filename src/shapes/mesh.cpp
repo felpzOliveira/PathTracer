@@ -1,72 +1,43 @@
 #include <shape.h>
 
-__bidevice__ Mesh::Mesh(const Transform &toWorld, int nTris, int *_indices,
-                        int nVerts, Point3f *P, vec3f *S, Normal3f *N, 
-                        Point2f *UV) : Shape(toWorld)
-{
-    Set(toWorld, nTris, _indices, nVerts, P, S, N, UV);
-    type = ShapeType::MESH;
-}
-
 __bidevice__ Mesh::Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy) 
 : Shape(toWorld)
 {
+    nTriangles = pMesh->nTriangles;
+    nVertices = pMesh->nVertices;
+    nUvs = pMesh->nUvs;
+    nNormals = pMesh->nNormals;
+    ObjectToWorld = pMesh->toWorld;
+    WorldToObject = Inverse(toWorld);
     if(copy){
-        Set(toWorld, pMesh->nTriangles, pMesh->indices, pMesh->nVertices,
-            pMesh->p, pMesh->s, pMesh->n, pMesh->uv);
+        indices = new Point3i[3 * pMesh->nTriangles];
+        memcpy(indices, pMesh->indices, sizeof(Point3i) * 3 * pMesh->nTriangles);
+        
+        p = new Point3f[pMesh->nVertices];
+        for(int i = 0; i < pMesh->nVertices; i++) p[i] = ObjectToWorld(pMesh->p[i]);
+        
+        if(pMesh->uv && pMesh->nUvs > 0){
+            uv = new Point2f[pMesh->nUvs];
+            memcpy(uv, pMesh->uv, pMesh->nUvs * sizeof(Point2f));
+        }
+        
+        if(pMesh->n && pMesh->nNormals > 0){
+            n = new Normal3f[pMesh->nNormals];
+            for(int i = 0; i < pMesh->nNormals; i++) n[i] = ObjectToWorld(pMesh->n[i]);
+        }
+        
     }else{
-        nTriangles = pMesh->nTriangles;
-        nVertices = pMesh->nVertices;
         indices = pMesh->indices;
         p = pMesh->p;
         n = pMesh->n;
         s = pMesh->s;
         uv = pMesh->uv;
         
-        for(int i = 0; i < nVertices; i++) p[i] = ObjectToWorld(p[i]);
+        for(int i = 0; i < pMesh->nVertices; i++) p[i] = ObjectToWorld(p[i]);
         
-        if(n){
-            for(int i = 0; i < nVertices; i++) n[i] = ObjectToWorld(n[i]);
+        if(n && pMesh->nNormals > 0){
+            for(int i = 0; i < pMesh->nNormals; i++) n[i] = ObjectToWorld(n[i]);
         }
-        
-        if(s){
-            for(int i = 0; i < nVertices; i++) s[i] = ObjectToWorld(s[i]);
-        }
-    }
-    
-    type = ShapeType::MESH;
-}
-
-__bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
-                            int nVerts, Point3f *P, vec3f *S, Normal3f *N, Point2f *UV)
-{
-    nTriangles = nTris;
-    nVertices = nVerts;
-    ObjectToWorld = toWorld;
-    WorldToObject = Inverse(toWorld);
-    
-    indices = new int[3 * nTriangles];
-    memcpy(indices, _indices, sizeof(int) * 3 * nTriangles);
-    
-    p = new Point3f[nVertices];
-    for(int i = 0; i < nVertices; i++) p[i] = ObjectToWorld(P[i]);
-    
-    if(UV){
-        uv = new Point2f[nVertices];
-        memcpy(uv, UV, nVertices * sizeof(Point2f));
-        printf(" >> Added %d UVs\n", nVertices);
-    }
-    
-    if(N){
-        n = new Normal3f[nVertices];
-        for(int i = 0; i < nVertices; i++) n[i] = ObjectToWorld(N[i]);
-        printf(" >> Added %d Normals\n", nVertices);
-    }
-    
-    if(S){
-        s = new vec3f[nVertices];
-        for(int i = 0; i < nVertices; i++) s[i] = ObjectToWorld(S[i]);
-        printf(" >> Added %d Tangents\n", nVertices);
     }
     
     type = ShapeType::MESH;
@@ -74,12 +45,19 @@ __bidevice__ void Mesh::Set(const Transform &toWorld, int nTris, int *_indices,
 
 __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
     if(uv){
-        int i0 = indices[3 * triNum + 0];
-        int i1 = indices[3 * triNum + 1];
-        int i2 = indices[3 * triNum + 2];
-        st[0] = uv[i0];
-        st[1] = uv[i1];
-        st[2] = uv[i2];
+        int i0 = indices[3 * triNum + 0].z;
+        int i1 = indices[3 * triNum + 1].z;
+        int i2 = indices[3 * triNum + 2].z;
+        if((i0 < 0 || i0 > nUvs) || (i1 < 0 || i1 > nUvs) || (i2 < 0 || i2 > nUvs)){
+            st[0] = Point2f(0, 0);
+            st[1] = Point2f(1, 0);
+            st[2] = Point2f(1, 1);
+        }else{
+            Point2f uv0 = uv[i0], uv1 = uv[i1], uv2 = uv[i2];
+            st[0] = uv0;
+            st[1] = uv1;
+            st[2] = uv2;
+        }
     }else{
         st[0] = Point2f(0, 0);
         st[1] = Point2f(1, 0);
@@ -90,9 +68,9 @@ __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
 __bidevice__ bool Mesh::IntersectTriangleLow(const Ray &ray, SurfaceInteraction * isect,
                                              int triNum, Float *tHit) const
 {
-    int i0 = indices[3 * triNum + 0];
-    int i1 = indices[3 * triNum + 1];
-    int i2 = indices[3 * triNum + 2];
+    int i0 = indices[3 * triNum + 0].x;
+    int i1 = indices[3 * triNum + 1].x;
+    int i2 = indices[3 * triNum + 2].x;
     Point3f p0 = p[i0];
     Point3f p1 = p[i1];
     Point3f p2 = p[i2];
@@ -136,9 +114,9 @@ __bidevice__ bool Mesh::IntersectTriangleLow(const Ray &ray, SurfaceInteraction 
 __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * isect,
                                           int triNum, Float *tHit) const
 {
-    int i0 = indices[3 * triNum + 0];
-    int i1 = indices[3 * triNum + 1];
-    int i2 = indices[3 * triNum + 2];
+    int i0 = indices[3 * triNum + 0].x;
+    int i1 = indices[3 * triNum + 1].x;
+    int i2 = indices[3 * triNum + 2].x;
     Point3f p0 = p[i0];
     Point3f p1 = p[i1];
     Point3f p2 = p[i2];
@@ -229,13 +207,38 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
     vec2f dst02 = st[0] - st[2], dst12 = st[1] - st[2];
     vec3f dp02 = p0 - p2, dp12 = p1 - p2;
     Float determinant = dst02[0] * dst12[1] - dst02[1] * dst12[0];
+    
     bool degenerateUV = Absf(determinant) < 1e-8;
+    
+    // NOTE: Some meshes might have denegerate UVs and we can't trace correctly.
+    //       However meshes that don't need that much precision on uv can get by
+    //       simply ignoring uv on this triangle. This avoid the error that happen
+    //       when we decide simply to not render this triangle and for meshes that
+    //       don't rely on uv maps, i.e.: have constant materials. See small budda
+    //       for reference.
+    // TODO: Maybe instead of defaulting to no uv mapping we can map further away.
+    //       This however needs some structured storage of triangles which I don't have now.
+    //       Maybe a edge structure so that we can sample neighbor triangles solves this.
+    if(degenerateUV){ // Fallback to no uv mapping and try again
+        st[0] = Point2f(0, 0);
+        st[1] = Point2f(1, 0);
+        st[2] = Point2f(1, 1);
+        dst02 = st[0] - st[2], dst12 = st[1] - st[2];
+        dp02 = p0 - p2, dp12 = p1 - p2;
+        determinant = dst02[0] * dst12[1] - dst02[1] * dst12[0];
+        degenerateUV = Absf(determinant) < 1e-8;
+    }
+    
     if(!degenerateUV){
         Float invdet = 1 / determinant;
         dpdu = (dst12[1] * dp02 - dst02[1] * dp12) * invdet;
         dpdv = (-dst12[0] * dp02 + dst02[0] * dp12) * invdet;
     }
     
+    // NOTE: Don't give up on this triangle, this can cause serious bugs on large
+    //       meshes rendered with small scale matrix. Perhaps the mesh handling
+    //       API for PBRTv4 needs to better handle scales on triangles. I caught 
+    //       a lot errors of this type.
 #if 0
     if(degenerateUV || IsZero(Cross(dpdu, dpdv).LengthSquared())){
         // Handle zero determinant for triangle partial derivative matrix
@@ -381,9 +384,9 @@ __global__ void MeshGetBounds(PrimitiveHandle *handles, Mesh *mesh){
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid < mesh->nTriangles){
         PrimitiveHandle *pHandle = &handles[tid];
-        int i0 = mesh->indices[3 * tid + 0];
-        int i1 = mesh->indices[3 * tid + 1];
-        int i2 = mesh->indices[3 * tid + 2];
+        int i0 = mesh->indices[3 * tid + 0].x;
+        int i1 = mesh->indices[3 * tid + 1].x;
+        int i2 = mesh->indices[3 * tid + 2].x;
         Point3f p0 = mesh->p[i0];
         Point3f p1 = mesh->p[i1];
         Point3f p2 = mesh->p[i2];

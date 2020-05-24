@@ -12,8 +12,13 @@
 #define __vec3_strfmt(v) "[%g %g %g]"
 #define __vec3_args(v) v.x, v.y, v.z
 #define __vec3_argsA(v) #v, v.x, v.y, v.z
+#define __vec2_strfmtA(v) "%s = [%g %g]"
+#define __vec2_argsA(v) #v, v.x, v.y
+
 #define v3fA(v) __vec3_strfmtA(v)
 #define v3aA(v) __vec3_argsA(v)
+#define v2fA(v) __vec2_strfmtA(v)
+#define v2aA(v) __vec2_argsA(v)
 
 #define OneMinusEpsilon 0.99999994f
 #define ShadowEpsilon 0.0001f
@@ -465,6 +470,12 @@ template<typename T> class Point3{
         Assert(!HasNaN());
     }
     
+    template<typename U> explicit __bidevice__ Point3(const vec3<U> &v) 
+        : x(v.x), y(v.y), z(v.z)
+    {
+        Assert(!HasNaN());
+    }
+    
     template<typename U> explicit __bidevice__ Point3(const Point3<U> &p)
         :x((T)p.x), y((T)p.y), z((T)p.z)
     {
@@ -570,6 +581,10 @@ template<typename T> class Point2{
     }
     
     __bidevice__ explicit Point2(const Point3<T> &p): x(p.x), y(p.y){
+        Assert(!HasNaN());
+    }
+    
+    __bidevice__ explicit Point2(const vec2<T> &v): x(v.x), y(v.y){
         Assert(!HasNaN());
     }
     
