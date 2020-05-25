@@ -6,6 +6,7 @@
 #include <shape.h>
 #include <primitive.h>
 #include <texture.h>
+#include <mtl.h>
 
 typedef struct{
     Transform toWorld;
@@ -86,6 +87,10 @@ __host__ MaterialDescriptor  MakePlasticMaterial(Spectrum kd, Spectrum ks, Float
 __host__ MaterialDescriptor  MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum kr, 
                                               Spectrum kt, Float uRough, Float vRough,
                                               Spectrum op, Float eta);
+
+//NOTE: Because MTL is phong based we really have few options for these,
+//      something like one of: matte, plastic or uber.
+__host__ MaterialDescriptor  MakeMTLMaterial(MTL *mtl);
 
 //NOTE: There is no emissive material, I'm just reusing this type 
 //      for the GeometricEmitterPrimitive

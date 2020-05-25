@@ -6,15 +6,19 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     Point3f pHit;
     vec3f oErr, dErr;
     Ray ray = WorldToObject(r, &oErr, &dErr);
-    
-    Float t = (-ray.o.z) / ray.d.z;
-    if(t < 0 || t > ray.tMax) return false;
-    
     Float hx = sizex/2, hy = sizey/2;
-    pHit = ray(t);
+    //NOTE: Reuse bounds intersection routine for better results
+    Float zb = ShadowEpsilon * Max(hx, hy);
+    Bounds3f rec(Point3f(-hx,-hy,-zb), Point3f(hx,hy,zb));
+    Float tmin, tfar;
+    bool rv = rec.IntersectP(ray, &tmin, &tfar);
+    
+    if(!rv) return false;
+    
+    pHit = ray(tmin);
     if(pHit.x < -hx || pHit.x > hx || pHit.y < -hy || pHit.y > hy) return false;
     
-    Float u = 1. - Absf((pHit.x - hx)/sizex);
+    Float u = Absf((pHit.x - hx)/sizex);
     Float v = Absf((pHit.y - hy)/sizey);
     vec3f dpdu(1, 0, 0);
     vec3f dpdv(0, 1, 0);
@@ -24,8 +28,8 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     *isect = ObjectToWorld(SurfaceInteraction(pHit, pError, Point2f(u, v),
                                               -ray.d, dpdu, dpdv, dndu, dndv,
                                               ray.time, this));
-    *tHit = t;
-    return true;
+    *tHit = tmin;
+    return rv;
 }
 
 __bidevice__ Bounds3f Rectangle::GetBounds() const{

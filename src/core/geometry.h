@@ -1095,7 +1095,7 @@ vec3f SphericalDirection(Float sinTheta, Float cosTheta, Float phi,
 template <typename T> inline __bidevice__ 
 bool Bounds3<T>::IntersectP(const Ray &ray, Float *hitt0, Float *hitt1) const{
     Float t0 = 0, t1 = ray.tMax;
-    for (int i = 0; i < 3; ++i) {
+    for(int i = 0; i < 3; ++i){
         Float invRayDir = 1 / ray.d[i];
         Float tNear = (pMin[i] - ray.o[i]) * invRayDir;
         Float tFar = (pMax[i] - ray.o[i]) * invRayDir;
@@ -1107,8 +1107,8 @@ bool Bounds3<T>::IntersectP(const Ray &ray, Float *hitt0, Float *hitt1) const{
         t1 = tFar < t1 ? tFar : t1;
         if (t0 > t1) return false;
     }
-    if (hitt0) *hitt0 = t0;
-    if (hitt1) *hitt1 = t1;
+    if(hitt0) *hitt0 = t0;
+    if(hitt1) *hitt1 = t1;
     return true;
 }
 

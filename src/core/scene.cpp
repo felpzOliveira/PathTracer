@@ -202,6 +202,99 @@ __host__ MaterialDescriptor MakeEmissive(Spectrum L){
     return desc;
 }
 
+__host__ MaterialDescriptor MakeMTLMaterial(MTL *mtl){
+    MaterialDescriptor desc;
+    bool found = false;
+    int i = 0;
+    bool hasKd = false, hasKdMap = false;
+    bool hasKs = false, hasKsMap = false;
+    // 1 - check if is emissive
+    Spectrum L = MTLGetSpectrum("Ke", mtl, found);
+    if(!L.IsBlack() && found){ // light
+        desc.is_emissive = 1;
+        desc.textures[0] = MakeTexture(L);
+        return desc;
+    }
+    
+    // not emissive
+    desc.is_emissive = 0;
+    /*
+    * I don't think we can mix Spectrum and Texture component
+    * at the moment so we either accept Kd term or texture if present
+    * because usually textures are better we get that instead.
+    * This calls for a TextureMixture class but CUDA is very
+    * sensitive for self invocation on derived types.
+*/
+    
+    // 2 - get phong based diffuse term
+    Spectrum kd = MTLGetSpectrum("Kd", mtl, hasKd);
+    std::string kdMap = MTLGetValue("map_Kd", mtl, hasKdMap);
+    
+    // 3 - get specular based term
+    Spectrum ks = MTLGetSpectrum("Ks", mtl, hasKs);
+    std::string ksMap = MTLGetValue("map_Ks", mtl, hasKsMap);
+    
+    // 4 - insert a new texture component for diffuse term
+    bool useSpectrumKd = hasKd;
+    if(hasKdMap){ // go with map if exists
+        std::string path(mtl->basedir);
+        path += kdMap;
+        ImageData *data = LoadTextureImageData(path.c_str());
+        if(data){
+            desc.textures[i++] = MakeTexture(data);
+            useSpectrumKd = false;
+        }else{
+            hasKdMap = false;
+        }
+    }
+    
+    if(useSpectrumKd){
+        desc.textures[i++] = MakeTexture(kd);
+    }
+    
+    // 5 - insert a new texture component for specular term
+    bool useSpectrumKs = hasKs;
+    if(hasKsMap){
+        std::string path(mtl->basedir);
+        path += ksMap;
+        ImageData *data = LoadTextureImageData(path.c_str());
+        if(data){
+            desc.textures[i++] = MakeTexture(data);
+            useSpectrumKs = false;
+        }else{
+            hasKsMap = false;
+        }
+    }
+    
+    if(useSpectrumKs){
+        desc.textures[i++] = MakeTexture(ks);
+    }
+    
+    // 6 - define material type
+    if(i == 2){ // if we added both this is a plastic material
+        Float rough = 0.03;
+        desc.textures[i++] = MakeTexture(rough);
+        desc.type = MaterialType::Plastic;
+    }else if(i == 1){ // we either added ks or kd, if kd than this is matte
+        if(hasKs || hasKsMap){ // matte material
+            Float sigma = 0;
+            desc.textures[i++] = MakeTexture(sigma);
+            desc.type = MaterialType::Matte;
+        }else{ // uber material
+            printf("Warning: broken uber material\n");
+            desc = MakeUberMaterial(Spectrum(0.001), ks, Spectrum(0),
+                                    Spectrum(0), 0, 0, 1, 1.5f);
+        }
+    }else{
+        printf("Warning: Could not make material for MTL\n");
+        desc.textures[i++] = MakeTexture(0.45);
+        desc.textures[i++] = MakeTexture(0.);
+        desc.type = MaterialType::Matte;
+    }
+    
+    return desc;
+}
+
 __host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat){
     PrimitiveDescriptor desc;
     desc.shapeType = ShapeType::SPHERE;

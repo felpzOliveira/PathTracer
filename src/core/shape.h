@@ -174,6 +174,13 @@ typedef struct{
     Transform toWorld;
 }ParsedMesh;
 
+/*
+* For indices (for triangle i):
+*    x - vertex indices : Point3f  p = p[indices[3 * i + ...].x]
+*    y - normal indices : Normal3f n = n[indices[3 * i + ...].y]
+*    z - uv indices     : Point2f uv = uv[indices[3 * i + ..].z]
+*/
+
 //Meshes are in world space?
 class Mesh: public Shape{
     public:

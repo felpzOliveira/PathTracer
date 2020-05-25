@@ -517,7 +517,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
 void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 18.f, -60.f), Point3f(0.0f,22.f,0.f), 
+    camera->Config(Point3f(-20.f, 20.f, -25.f), Point3f(0.0f, 5.f,-23.f), 
                    vec3f(0.f,1.f,0.f), 45.f, aspect);
     
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
@@ -535,40 +535,33 @@ void CornellBoxScene(Camera *camera, Float aspect){
     //ImageData *data = LoadTextureImageData("/home/felpz/Downloads/desert.png");
     //TextureDescriptor desert = MakeTexture(data);
     //MaterialDescriptor redtex = MakeMatteMaterial(desert);
+#if 1
+    Transform ss = Translate(0,1,-30) * Scale(0.1) * RotateY(-90);
     
     std::vector<MeshMtl> mtls;
-    std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "fridge.obj", 
-                                                &mtls, true);
-    MaterialDescriptor azul = MakeMatteMaterial(Spectrum(0.0,0.0,1.0));
-    MaterialDescriptor verde = MakeMatteMaterial(Spectrum(0.0,1.0,0.0));
-    MaterialDescriptor amarelo = MakeMatteMaterial(Spectrum(1.0,1.0,0.0));
-    int it = 0;
-    Transform ss = Translate(10,0,0) * Scale(20) * RotateY(100);
+    std::vector<MTL *> mMaterials;
+    std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "set.obj", &mtls, true);
+    bool rv = MTLParseAll(&mMaterials, &mtls, MESH_FOLDER);
+    
     for(int i = 0; i < meshes->size(); i++){
         ParsedMesh *m = meshes->at(i);
         if(m->nTriangles > 0){
             m->toWorld = ss;
+            // get object mtl
+            MTL *mPtr = MTLFindMaterial(mtls[i].name.c_str(), &mMaterials);
             MeshDescriptor d = MakeMesh(m);
-            if(it == 0)
-                InsertPrimitive(d, azul);
-            if(it == 1)
-                InsertPrimitive(d, red);
-            if(it == 2)
-                InsertPrimitive(d, verde);
-            if(it == 3)
-                InsertPrimitive(d, amarelo);
-            it ++;
-            if(it >= 4) it = 0;
+            MaterialDescriptor mat = MakeMTLMaterial(mPtr);
+            InsertPrimitive(d, mat);
         }
     }
-    
-    //exit(0);
+#endif
     
     Transform rr = Translate(-30, 25, 0) * RotateY(90);
     RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
     InsertPrimitive(rightWall, red);
     
-    Transform br = Translate(0, 25, 13);
+    Transform br = Translate(0, 25, 5);
+    
     RectDescriptor backWall = MakeRectangle(br, 60, 50);
     InsertPrimitive(backWall, white);
     
@@ -576,26 +569,16 @@ void CornellBoxScene(Camera *camera, Float aspect){
     RectDescriptor topWall = MakeRectangle(tr, 60, 200);
     InsertPrimitive(topWall, white);
     
-    Transform er = Translate(0, 0, 0) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(er, 400, 400);
+    Transform bt = Translate(0, 1, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(bt, 60, 200);
     InsertPrimitive(bottomWall, white);
     
-    MaterialDescriptor mirror = MakeMirrorMaterial(Spectrum(0.98));
-    
-    SphereDescriptor glassSphere = MakeSphere(Translate(-13, 8.f, -25), 8);
+    SphereDescriptor glassSphere = MakeSphere(Translate(0,6,-15), 2);
     MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 1.5);
     InsertPrimitive(glassSphere, matGlass);
     
-    Transform sbt = Translate(-13,4,-25) * RotateY(-30);
-    BoxDescriptor box = MakeBox(sbt, 8,8,8); //cornell is 14,14,14
-    //InsertPrimitive(box, white);
-    
-    Transform bbt = Translate(10,18,0) * RotateY(25);
-    BoxDescriptor bigBox = MakeBox(bbt, 18,36,18);
-    //InsertPrimitive(bigBox, white);
-    
-    Transform r = Translate(0, 49.99, -10) * RotateX(90);
-    RectDescriptor rect = MakeRectangle(r, 20, 20);
+    Transform r = Translate(0, 40, -60);// * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, 40, 50);
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
     InsertPrimitive(rect, matEm);
     
@@ -605,17 +588,6 @@ void CornellBoxScene(Camera *camera, Float aspect){
     
     DiskDescriptor disk = MakeDisk(r, 0, 10, 0, 360);
     //InsertPrimitive(disk, matEm);
-    
-#if 0
-    ParsedMesh *buddaMesh;
-    LoadObjData(MESH_FOLDER "budda.obj", &buddaMesh);
-    Float s = 40;
-    buddaMesh->toWorld = Translate(10,0,-5) * Scale(s,s,s);
-    
-    MeshDescriptor budda = MakeMesh(buddaMesh);
-    
-    InsertPrimitive(budda, matGlass2);
-#endif
 }
 
 void render(Image *image){
@@ -678,42 +650,10 @@ int main(int argc, char **argv){
         }
         return 0;
     }else{
-        
-        //std::vector<MTL *> materials;
-        //MTLParse("/home/felpz/Downloads/Spectral_Demon_by_Dommk/demon.mtl", &materials);
-        //exit(0);
-        /*
-        std::vector<MeshMtl> mtls;
-        std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "fridge.obj", &mtls);
-        
-        printf("Meshes to render: \n");
-        int totalVertices = 0;
-        for(int i = 0; i < mtls.size(); i++){
-            ParsedMesh *ptr = meshes->at(i);
-            MeshMtl mtl = mtls[i];
-            printf("%s : %s [ # triangles: %d, # vertices: %d ]\nTri: [ ", 
-                   mtl.file.c_str(), mtl.name.c_str(), ptr->nTriangles, ptr->nVertices);
-            for(int i = 0; i < 3; i += 1){
-                int i0 = ptr->indices[3 * i+0];
-                int i1 = ptr->indices[3 * i+1];
-                int i2 = ptr->indices[3 * i+2];
-                Point3f p0 = ptr->p[i0];
-                Point3f p1 = ptr->p[i1];
-                Point3f p2 = ptr->p[i2];
-            }
-            
-            printf("]\n");
-            
-            totalVertices += ptr->nVertices;
-        }
-        
-        printf("Total: %d\n", totalVertices);
-        exit(0);
-        */
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 800;
+        const int image_width = 1366;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);
