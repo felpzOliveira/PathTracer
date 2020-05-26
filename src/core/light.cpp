@@ -7,6 +7,38 @@ __bidevice__ bool VisibilityTester::Unoccluded(const Aggregator *scene) const{
     return !scene->Intersect(p0.SpawnRayTo(p1), &tmp);
 }
 
+__bidevice__ Spectrum VisibilityTester::Tr(const Aggregator *scene) const{
+    Ray ray(p0.SpawnRayTo(p1));
+    Spectrum Tr(1.f);
+    int debug = 0;
+    int it = 0;
+    int warned = 0;
+    while(true){
+        SurfaceInteraction isect;
+        bool hitSurface = scene->Intersect(ray, &isect);
+        if(hitSurface && isect.primitive->GetMaterial() != nullptr) 
+            return Spectrum(0.0f);
+        
+        if(ray.medium){
+            Tr *= ray.medium->Tr(ray);
+        }
+        
+        if(!hitSurface || isect.primitive->IsEmissive()) break;
+        ray = isect.SpawnRayTo(p1);
+        if(debug){
+            if(it++ > WARN_BOUNCE_COUNT){
+                if(!warned){
+                    printf("Warning: Dangerously high bounce count (%d) in Aggregator::Tr ( " v3fA(Tr) " )\n",
+                           it, v3aA(Tr));
+                    warned = 1;
+                }
+            }
+        }
+    }
+    
+    return Tr;
+}
+
 __bidevice__ DiffuseAreaLight::DiffuseAreaLight(const Transform &LightToWorld, 
                                                 const Spectrum &Le, int nSamples, 
                                                 Shape *shape, bool twoSided)

@@ -14,6 +14,7 @@ typedef struct{
     
     PrimitiveDescriptor *primitives;
     int nprimitives;
+    MediumDescriptor cameraMedium;
 }SceneDescription;
 
 SceneDescription *hostScene = nullptr;
@@ -31,6 +32,7 @@ __host__ void BeginScene(Aggregator *scene){
     hostScene->nprimitives = 0;
     hostScene->nspheres = 0;
     hostScene->nmeshes = 0;
+    hostScene->cameraMedium.is_valid = 0;
 }
 
 __host__ TextureDescriptor MakeTexture(Spectrum value){
@@ -295,16 +297,39 @@ __host__ MaterialDescriptor MakeMTLMaterial(MTL *mtl){
     return desc;
 }
 
-__host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat){
+__host__ MediumDescriptor MakeMedium(Spectrum sigma_a, Spectrum sigma_s, Float g){
+    MediumDescriptor desc;
+    desc.sa = sigma_a;
+    desc.ss = sigma_s;
+    desc.g = g;
+    desc.is_valid = 1;
+    return desc;
+}
+
+__host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat,
+                              MediumDescriptor medium)
+{
     PrimitiveDescriptor desc;
+    desc.no_mat = 0;
     desc.shapeType = ShapeType::SPHERE;
     desc.mat = mat;
+    desc.mediumDesc = medium;
     desc.sphereDesc = shape;
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat){
+    MediumDescriptor desc;
+    desc.is_valid = 0;
+    InsertPrimitive(shape, mat, desc);
+}
+
 __host__ void InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat){
+    MediumDescriptor md;
+    md.is_valid = 0;
     PrimitiveDescriptor desc;
+    desc.mediumDesc = md;
+    desc.no_mat = 0;
     desc.shapeType = ShapeType::BOX;
     desc.mat = mat;
     desc.boxDesc = shape;
@@ -312,27 +337,70 @@ __host__ void InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat){
 }
 
 __host__ void InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat){
+    MediumDescriptor md;
+    md.is_valid = 0;
     PrimitiveDescriptor desc;
+    desc.mediumDesc = md;
+    desc.no_mat = 0;
     desc.shapeType = ShapeType::RECTANGLE;
     desc.mat = mat;
     desc.rectDesc = shape;
     hPrimitives.push_back(desc);
 }
 
-__host__ void InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat){
+__host__ void InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat,
+                              MediumDescriptor medium)
+{
     PrimitiveDescriptor desc;
     desc.shapeType = ShapeType::MESH;
     desc.mat = mat;
+    desc.no_mat = 0;
+    desc.mediumDesc = medium;
     desc.meshDesc = shape;
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat){
+    MediumDescriptor desc;
+    desc.is_valid = 0;
+    InsertPrimitive(shape, mat, desc);
+}
+
 __host__ void InsertPrimitive(DiskDescriptor shape, MaterialDescriptor mat){
+    MediumDescriptor md;
+    md.is_valid = 0;
     PrimitiveDescriptor desc;
+    desc.mediumDesc = md;
+    desc.no_mat = 0;
     desc.shapeType = ShapeType::DISK;
     desc.mat = mat;
     desc.diskDesc = shape;
     hPrimitives.push_back(desc);
+}
+
+__host__ void InsertPrimitive(SphereDescriptor shape, MediumDescriptor medium){
+    PrimitiveDescriptor desc;
+    desc.no_mat = 1;
+    desc.shapeType = ShapeType::SPHERE;
+    desc.sphereDesc = shape;
+    desc.mediumDesc = medium;
+    hPrimitives.push_back(desc);
+}
+__host__ void InsertPrimitive(MeshDescriptor shape, MediumDescriptor medium){
+    PrimitiveDescriptor desc;
+    desc.no_mat = 1;
+    desc.shapeType = ShapeType::MESH;
+    desc.meshDesc = shape;
+    desc.mediumDesc = medium;
+    hPrimitives.push_back(desc);
+}
+
+__host__ void InsertCameraMedium(MediumDescriptor medium){
+    if(!hostScene){
+        printf("Warning: No invocation of BeginScene before camera medium insertion\n");
+    }else{
+        hostScene->cameraMedium = medium;
+    }
 }
 
 __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
@@ -439,32 +507,56 @@ __bidevice__ Material *MakeMaterial(PrimitiveDescriptor *pri){
 __global__ void MakeSceneGPU(Aggregator *scene, SceneDescription *description){
     if(threadIdx.x == 0 && blockIdx.x == 0){
         Assert(description->nprimitives > 0);
-        
+        scene->viewMedium = nullptr;
         scene->Reserve(description->nprimitives);
+        
+        if(description->cameraMedium.is_valid){
+            MediumDescriptor desc = description->cameraMedium;
+            scene->viewMedium = new Medium(desc.sa, desc.ss, desc.g);
+            printf("Added view medium\n");
+        }
+        
         for(int i = 0; i < description->nprimitives; i++){
             Primitive *primitive = nullptr;
+            Medium *medium = nullptr;
+            int is_emissive = 0;
             
             PrimitiveDescriptor *pri = &description->primitives[i];
             Shape *shape = MakeShape(scene, pri);
+            
             if(!shape){
                 printf("Skipping unknown shape type id %d [ at: %d ]\n", 
                        (int)pri->shapeType, i);
                 continue;
             }
             
-            if(pri->mat.is_emissive){
+            if(pri->mat.is_emissive && !pri->no_mat){
                 primitive = new GeometricEmitterPrimitive(shape, 
                                                           pri->mat.textures[0].spec_val);
+                is_emissive = 1;
             }else{
-                Material *mat = MakeMaterial(pri);
-                if(!mat){
-                    printf("Got nullptr for material given [ at: %d ]\n", i);
+                Material *mat = nullptr;
+                
+                if(!pri->no_mat){
+                    mat = MakeMaterial(pri);
+                    if(!mat){
+                        printf("Got nullptr for material given [ at: %d ]\n", i);
+                    }
+                }
+                
+                if(pri->mediumDesc.is_valid){
+                    medium = new Medium(pri->mediumDesc.sa, pri->mediumDesc.ss,
+                                        pri->mediumDesc.g);
+                    if(!medium){
+                        printf("Got nullptr for medium given [ at: %d ]\n", i);
+                    }
                 }
                 
                 primitive = new GeometricPrimitive(shape, mat);
             }
             
-            scene->Insert(primitive, pri->mat.is_emissive);
+            primitive->mediumInterface = MediumInterface(medium, nullptr);
+            scene->Insert(primitive, is_emissive);
         }
     }
 }
@@ -494,7 +586,6 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         
         MakeDiffuseLights<<<1,1>>>(scene);
         cudaDeviceAssert();
-        
     }else{
         printf("Invalid scene, you need to call BeginScene once\n");
     }

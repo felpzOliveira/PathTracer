@@ -10,6 +10,12 @@ __bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
     Float tHit;
     if(!primitive->shape->Intersect(ray, &tHit, isect)) return false;
     ray.tMax = tHit;
+    
+    if(primitive->mediumInterface.IsMediumTransition())
+        isect->mediumInterface = primitive->mediumInterface;
+    else
+        isect->mediumInterface = MediumInterface(ray.medium);
+    
     isect->primitive = primitive;
     return true;
 }
@@ -109,7 +115,9 @@ __bidevice__ void Aggregator::SetLights(){
 __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bsdf,
                                                  const Point2f &uScattering,
                                                  DiffuseAreaLight *light, 
-                                                 const Point2f &uLight, bool specular) const
+                                                 const Point2f &uLight, 
+                                                 bool handleMedium,
+                                                 bool specular) const
 {
     BxDFType bsdfFlags = specular ? BSDF_ALL : BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
     Spectrum Ld(0.f);
@@ -117,20 +125,23 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
     Float lightPdf = 0, scatteringPdf = 0;
     VisibilityTester visibility;
     Spectrum Li = light->Sample_Li(it, uLight, &wi, &lightPdf, &visibility);
+    
     if(lightPdf > 0 && !Li.IsBlack()){
         Spectrum f;
-        if(1){ //is surface interaction (we don't handle medium)
+        if(it.IsSurfaceInteraction() && bsdf){ //is surface interaction
             const SurfaceInteraction &isect = (const SurfaceInteraction &)it;
             f = bsdf->f(isect.wo, wi, bsdfFlags) * AbsDot(wi, ToVec3(isect.n));
             scatteringPdf = bsdf->Pdf(isect.wo, wi, bsdfFlags);
         }else{
-            //Medium code
+            const MediumInteraction &mi = (const MediumInteraction &)it;
+            Float p = mi.phase.p(mi.wo, wi);
+            f = Spectrum(p);
+            scatteringPdf = p;
         }
         
         if(!f.IsBlack()){
-            if(0){
-                //Visibility medium Tr estimation
-                //Li *= Tr;
+            if(handleMedium){
+                Li *= visibility.Tr(this);
             }else{
                 if(!visibility.Unoccluded(this)){ //something in front
                     Li = Spectrum(0.f);
@@ -151,7 +162,7 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
     if(!IsDeltaLight(light->flags)){
         Spectrum f;
         bool sampledSpecular = false;
-        if(1){ //is surface interaction (we don't handle medium)
+        if(it.IsSurfaceInteraction() && bsdf){ //is surface interaction
             BxDFType sampledType;
             const SurfaceInteraction &isect = (const SurfaceInteraction &)it;
             f = bsdf->Sample_f(isect.wo, &wi, uScattering, 
@@ -159,10 +170,11 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
             f *= AbsDot(wi, ToVec3(isect.n));
             sampledSpecular = (sampledType & BSDF_SPECULAR) != 0;
         }else{
-            //Medium code
+            const MediumInteraction &mi = (const MediumInteraction &)it;
+            Float p = mi.phase.Sample_p(mi.wo, &wi, uScattering);
+            f = Spectrum(p);
+            scatteringPdf = p;
         }
-        
-        //printf(v3fA(f) "\n", v3aA(f));
         
         if(!f.IsBlack() && scatteringPdf > 0){
             Float weight = 1;
@@ -175,7 +187,10 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
             SurfaceInteraction lightIsect;
             Ray ray = it.SpawnRay(wi);
             Spectrum Tr(1.f);
-            bool foundSurfaceInteraction = Intersect(ray, &lightIsect);
+            
+            bool foundSurfaceInteraction =
+                handleMedium? IntersectTr(ray, &lightIsect, &Tr) 
+                : Intersect(ray, &lightIsect);
             
             Spectrum Li(0.f);
             if(foundSurfaceInteraction){
@@ -192,7 +207,8 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
 }
 
 __bidevice__ Spectrum Aggregator::UniformSampleOneLight(const Interaction &it, BSDF *bsdf,
-                                                        Point2f u2, Point3f u3) const
+                                                        Point2f u2, Point3f u3,
+                                                        bool handleMedium) const
 {
     int nLights = lightCounter;
     if(lightCounter < 1) return Spectrum(0.f);
@@ -206,7 +222,7 @@ __bidevice__ Spectrum Aggregator::UniformSampleOneLight(const Interaction &it, B
     Point2f uLight(u2[1], u3[0]);
     Point2f uScattering(u3[1], u3[2]);
     
-    return EstimateDirect(it, bsdf, uScattering, light, uLight) / lightPdf;
+    return EstimateDirect(it, bsdf, uScattering, light, uLight, handleMedium) / lightPdf;
 }
 
 __bidevice__ bool Aggregator::IntersectNode(Node *node, const Ray &r, 
@@ -309,6 +325,36 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     }
     
     return hit_anything;
+}
+
+__bidevice__ bool Aggregator::IntersectTr(Ray ray, SurfaceInteraction *isect, 
+                                          Spectrum *Tr, Pixel *pixel) const
+{
+    *Tr = Spectrum(1);
+    int it = 0;
+    int warned = 0;
+    int debug = 0;
+    while(true){
+        bool hitSurface = Intersect(ray, isect, pixel);
+        if(ray.medium){
+            *Tr *= ray.medium->Tr(ray);
+        }
+        
+        if(!hitSurface || isect->primitive->IsEmissive()) return false;
+        if(isect->primitive->GetMaterial() != nullptr) return true;
+        ray = isect->SpawnRay(ray.d);
+        if(debug){
+            if(it++ > WARN_BOUNCE_COUNT){
+                if(!warned){
+                    printf("Warning: Dangerously high bounce count (%d) in Aggregator::Tr ( Tr = [ %g %g %g ])\n",
+                           it, __vec3_args((*Tr)));
+                    warned = 1;
+                }
+            }
+        }
+    }
+    
+    return false;
 }
 
 __bidevice__ void Aggregator::Release(){

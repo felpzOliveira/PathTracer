@@ -24,6 +24,7 @@ class VisibilityTester {
     __bidevice__ const Interaction &P0() const { return p0; }
     __bidevice__ const Interaction &P1() const { return p1; }
     __bidevice__ bool Unoccluded(const Aggregator *scene) const;
+    __bidevice__ Spectrum Tr(const Aggregator *scene) const;
 };
 
 class DiffuseAreaLight{

@@ -7,6 +7,7 @@
 
 #define Assert(x) __assert_check((x), #x, __FILE__, __LINE__, NULL)
 #define AssertA(x, msg) __assert_check((x), #x, __FILE__, __LINE__, msg)
+#define AssertAEx(x, msg) AssertA(x, msg)
 #define Infinity FLT_MAX
 #define __vec3_strfmtA(v) "%s = [%g %g %g]"
 #define __vec3_strfmt(v) "[%g %g %g]"
@@ -32,9 +33,12 @@
 #define MachineEpsilon 5.96046e-08f
 
 #define MIN_FLT -FLT_MAX
+#define MAX_FLT  FLT_MAX
 
 typedef float Float;
 //typedef double Float;
+
+class Medium;
 
 enum TransportMode{
     Radiance = 0,
@@ -70,7 +74,7 @@ inline __bidevice__ Float Min(Float a, Float b){ return a < b ? a : b; }
 inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
 inline __bidevice__ Float Radians(Float deg) { return (Pi / 180) * deg; }
-inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 0.00001; }
+inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 1e-8; }
 
 inline __bidevice__ uint32_t FloatToBits(float f){
     uint32_t ui;
@@ -203,13 +207,13 @@ template<typename T> class vec2{
     }
     
     __bidevice__ vec2<T> operator/(T f) const{
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         return vec2<T>(x * inv, y * inv);
     }
     
     __bidevice__ vec2<T> &operator/(T f){
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         x *= inv; y *= inv;
         return *this;
@@ -291,13 +295,13 @@ template<typename T> class vec3{
     }
     
     __bidevice__ vec3<T> operator/(T f) const{
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         return vec3<T>(x * inv, y * inv, z * inv);
     }
     
     __bidevice__ vec3<T> &operator/(T f){
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
@@ -431,9 +435,13 @@ template<typename T> inline __bidevice__ vec3<T> Permute(const vec3<T> &v, int x
 template<typename T> inline __bidevice__ void 
 CoordinateSystem(const vec3<T> &v1, vec3<T> *v2, vec3<T> *v3){
     if(Absf(v1.x) > Absf(v1.y)){
-        *v2 = vec3<T>(-v1.z, 0, v1.x) / sqrt(v1.x * v1.x + v1.z * v1.z);
+        Float f = sqrt(v1.x * v1.x + v1.z * v1.z);
+        AssertAEx(!IsZero(f), "Zero x component coordinate system generation");
+        *v2 = vec3<T>(-v1.z, 0, v1.x) / f;
     }else{
-        *v2 = vec3<T>(0, v1.z, -v1.y) / sqrt(v1.z * v1.z + v1.y * v1.y);
+        Float f = sqrt(v1.z * v1.z + v1.y * v1.y);
+        AssertAEx(!IsZero(f), "Zero y component coordinate system generation");
+        *v2 = vec3<T>(0, v1.z, -v1.y) / f;
     }
     
     *v3 = Cross(v1, *v2);
@@ -487,13 +495,13 @@ template<typename T> class Point3{
     }
     
     __bidevice__ Point3<T> operator/(T f) const{
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         return Point3<T>(x * inv, y * inv, z * inv);
     }
     
     __bidevice__ Point3<T> &operator/(T f){
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
@@ -785,13 +793,13 @@ template<typename T> class Normal3{
         return *this;
     }
     template <typename U> __bidevice__ Normal3<T> operator/(U f) const {
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         return Normal3<T>(x * inv, y * inv, z * inv);
     }
     
     template <typename U> __bidevice__ Normal3<T> &operator/=(U f) {
-        Assert(f != 0);
+        Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
@@ -886,11 +894,16 @@ class Ray{
     vec3f d;
     mutable Float tMax;
     Float time;
+    const Medium *medium;
     
-    __bidevice__ Ray() : tMax(Infinity), time(0.f) {}
+    __bidevice__ Ray() : tMax(Infinity), time(0.f), medium(nullptr) {}
     __bidevice__ Ray(const Point3f &o, const vec3f &d, Float tMax = Infinity,
                      Float time = 0.f)
-        : o(o), d(d), tMax(tMax), time(time) {}
+        : o(o), d(d), tMax(tMax), time(time), medium(nullptr) {}
+    
+    __bidevice__ Ray(const Point3f &o, const vec3f &d, Float tMax,
+                     Float time, const Medium *med)
+        : o(o), d(d), tMax(tMax), time(time), medium(med) {}
     
     __bidevice__ Point3f operator()(Float t){ return o + d * t; }
     __bidevice__ Point3f operator()(Float t) const{ return o + d * t; }

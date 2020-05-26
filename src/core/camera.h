@@ -44,8 +44,9 @@ class Camera{
     vec3f vertical;
     Float lensRadius;
     vec3f u, v, w;
+    Medium *medium;
     
-    __bidevice__ Camera(){}
+    __bidevice__ Camera() : medium(nullptr){}
     __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect);
     
     __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
@@ -53,6 +54,8 @@ class Camera{
     
     __bidevice__ Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
                         Float aspect, Float aperture, Float focus_dist);
+    
+    __bidevice__ void SetMedium(Medium *m){ medium = m; }
     
     __bidevice__ void Config(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect);
     

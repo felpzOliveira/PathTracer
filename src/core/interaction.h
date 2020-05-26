@@ -1,5 +1,6 @@
 #pragma once
 #include <geometry.h>
+#include <medium.h>
 
 class Shape;
 class Primitive;
@@ -12,24 +13,42 @@ class Interaction{
     vec3f pError;
     vec3f wo;
     Normal3f n;
+    MediumInterface mediumInterface;
     
     __bidevice__ Interaction(){}
     
     __bidevice__ Ray SpawnRay(const vec3f &d) const{
         Point3f o = OffsetRayOrigin(p, pError, n, d);
-        return Ray(o, d, Infinity, time);
+        return Ray(o, d, Infinity, time, GetMedium(d));
     }
     
     __bidevice__ Ray SpawnRayTo(const Interaction &it) const{
         Point3f origin = OffsetRayOrigin(p, pError, n, it.p - p);
         Point3f target = OffsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
         vec3f d = target - origin;
-        return Ray(origin, d, 1 - ShadowEpsilon, time);
+        return Ray(origin, d, 1 - ShadowEpsilon, time, GetMedium(d));
     }
     
     __bidevice__ Interaction(const Point3f &p, const Normal3f &n, const vec3f &pError,
                              const vec3f &wo, Float time) :
-    p(p), time(time), pError(pError), wo(Normalize(wo)), n(n){}
+    p(p), time(time), pError(pError), wo(Normalize(wo)), n(n), mediumInterface(nullptr){}
+    
+    __bidevice__ Interaction(const Point3f &p, const vec3f &wo, Float time,
+                             const MediumInterface &mediumInterface)
+        : p(p), time(time), wo(wo), mediumInterface(mediumInterface) {}
+    
+    __bidevice__ const Medium *GetMedium(const vec3f &w) const{
+        return Dot(w, ToVec3(n)) > 0 ? mediumInterface.outside : mediumInterface.inside;
+    }
+    
+    __bidevice__ const Medium *GetMedium() const{
+        return mediumInterface.inside;
+    }
+    
+    __bidevice__ bool IsSurfaceInteraction() const { return n != Normal3f(); }
+    
+    __bidevice__ bool IsMediumInteraction() const { return !IsSurfaceInteraction(); }
+    
 };
 
 class SurfaceInteraction : public Interaction{
@@ -54,4 +73,16 @@ class SurfaceInteraction : public Interaction{
     
     __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, const RayDifferential &r, 
                                                  TransportMode mode, bool mLobes);
+};
+
+class MediumInteraction : public Interaction{
+    public:
+    PhaseFunction phase;
+    __bidevice__ MediumInteraction(){}
+    
+    __bidevice__ MediumInteraction(const Point3f &p, const vec3f &wo, Float time,
+                                   const Medium *medium, Float g)
+        : Interaction(p, wo, time, medium) { phase.SetG(g); }
+    
+    __bidevice__ bool IsValid() const { return phase.is_initialized == 1; }
 };

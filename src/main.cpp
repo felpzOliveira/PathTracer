@@ -92,6 +92,103 @@ __device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
     return L;
 }
 
+__device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
+    Spectrum L(0.f), beta(1.f);
+    RayDifferential ray(r);
+    bool specularBounce = false;
+    bool rayFromMedium = scene->viewMedium ? true : false;
+    int bounces;
+    int max_bounces = 15;
+    Float rrThreshold = 1;
+    curandState *state = &pixel->state;
+    
+    for(bounces = 0; ; bounces++){
+        SurfaceInteraction isect;
+        bool foundIntersection = scene->Intersect(ray, &isect, pixel);
+        
+        MediumInteraction mi;
+        if(ray.medium){
+            Point2f u(rand_float(state), rand_float(state));
+            beta *= ray.medium->Sample(ray, u, &mi);
+        }
+        
+        if(beta.IsBlack()) break;
+        if(mi.IsValid()){
+            if(bounces >= max_bounces) break;
+            
+            Point2f u2(rand_float(state), rand_float(state));
+            Point3f u3(rand_float(state), rand_float(state), rand_float(state));
+            
+            Spectrum Ld = beta * scene->UniformSampleOneLight(mi, nullptr, u2, u3, true);
+            L += Ld;
+            
+            vec3f wo = -ray.d, wi;
+            u2 = Point2f(rand_float(state), rand_float(state));
+            mi.phase.Sample_p(wo, &wi, u2);
+            ray = mi.SpawnRay(wi);
+            specularBounce = false;
+            rayFromMedium = true;
+        }else{
+            if(bounces == 0 || specularBounce){
+                if(foundIntersection){
+                    L += beta * isect.Le(-ray.d);
+                }else{
+                    for(int i = 0; i < scene->lightCounter; i++){
+                        DiffuseAreaLight *light = scene->lights[i];
+                        L += light->Le(ray);
+                    }
+                }
+            }
+            
+            if(isect.primitive->IsEmissive() && rayFromMedium){
+                //printf("Hit light from medium ray\n");
+            }
+            
+            rayFromMedium = false;
+            
+            if(!foundIntersection || bounces >= max_bounces){ break; }
+            BSDF bsdf(isect);
+            isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
+            
+            if(bsdf.nBxDFs == 0){
+                ray = isect.SpawnRay(ray.d);
+                bounces--;
+                continue;
+            }
+            
+            if(bsdf.NumComponents(BxDFType(BSDF_ALL & ~BSDF_SPECULAR)) > 0){
+                Point2f u2(rand_float(state), rand_float(state));
+                Point3f u3(rand_float(state), rand_float(state), rand_float(state));
+                Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+                L += Ld;
+            }
+            
+            Float pdf = 0.f;
+            Point2f u(rand_float(state), rand_float(state));
+            vec3f wi, wo = -ray.d;
+            BxDFType flags;
+            
+            Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL, &flags);
+            if(f.IsBlack() || IsZero(pdf)) break;
+            
+            beta *= f * AbsDot(wi, ToVec3(isect.n)) / pdf;
+            specularBounce = (flags & BSDF_SPECULAR) != 0;
+            
+            ray = isect.SpawnRay(wi);
+        }
+        
+        Spectrum rrBeta = beta;
+        if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
+            Float q = Max((Float).05, 1 - MaxComponent(rrBeta));
+            Float u = rand_float(state);
+            if (u < q) break;
+            beta = beta / (1 - q);
+        }
+    }
+    
+    return L;
+}
+
 /*
 * Sampled Path Tracer. Performs light sampling at each intersection that is
 * not specular, for large scenes with small lights this is the one you want,
@@ -127,7 +224,6 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
         
         isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
         if(bsdf.nBxDFs == 0){
-            /* This is nice for medium, too bad we don't support them (yet!) */
             ray = isect.SpawnRay(ray.d);
             bounces--;
             continue;
@@ -225,6 +321,8 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
     int width = image->width;
     int height = image->height;
     
+    camera->SetMedium(scene->viewMedium);
+    
     if(i < width && j < height){
         int pixel_index = j * width + i;
         Pixel *pixel = &image->pixels[pixel_index];
@@ -240,7 +338,8 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Ray ray = camera->SpawnRay(u, v, sample);
             //out += Li_Direct(ray, scene, pixel);
             //out += Li_Path(ray, scene, pixel);
-            out += Li_PathSampled(ray, scene, pixel);
+            //out += Li_PathSampled(ray, scene, pixel);
+            out += Li_VolPath(ray, scene, pixel);
             pixel->samples ++;
         }
         
@@ -514,6 +613,53 @@ void CornellRandomScene(Camera *camera, Float aspect){
     InsertPrimitive(rect, matEm);
 }
 
+void VolumetricCausticsScene(Camera *camera, Float aspect){
+    AssertA(!!camera, "Invalid camera pointer");
+    
+    camera->Config(Point3f(0.f, 18.f, -70.f),
+                   //Point3f(53.f, 48.f, -70.f), 
+                   Point3f(0, 21.15341, 0),
+                   //Point3f(-10.12833, 5.15341, 5.16229),
+                   vec3f(0.f,1.f,0.f), 40.f, aspect);
+    
+    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
+                                                  Spectrum(.7, .7, .7), 0.1);
+    MaterialDescriptor yellow = MakeMatteMaterial(Spectrum(.7,.7,.0));
+    MaterialDescriptor white  = MakeMatteMaterial(Spectrum(0.87, 0.87, 0.87));
+    MaterialDescriptor orange = MakeMatteMaterial(Spectrum(0.98, 0.56, 0.0));
+    MaterialDescriptor red    = MakeMatteMaterial(Spectrum(0.86, 0.2, 0.1));
+    MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
+                                                    Spectrum(0.6f), 0.03);
+    MaterialDescriptor greenGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
+    
+    Transform er = Translate(0, -1.29, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
+    InsertPrimitive(bottomWall, yellow);
+    
+    Transform rl = Translate(0, 60, 0) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(rl, 200, 200);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 15);
+    SphereDescriptor lightSphere = MakeSphere(Translate(15, 60, 3), 4);
+    SphereDescriptor lightSphere2 = MakeSphere(Translate(-15, 60, 3), 4);
+    InsertPrimitive(lightSphere, matEm);
+    InsertPrimitive(lightSphere2, matEm);
+    
+    //SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
+    //InsertPrimitive(lightSphere, matEm);
+    MediumDescriptor medium = MakeMedium(Spectrum(.0007), Spectrum(0.005), 0);
+#if 0
+    ParsedMesh *dragonMesh;
+    LoadObjData(MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
+    dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
+    MeshDescriptor dragon = MakeMesh(dragonMesh);
+    InsertPrimitive(dragon, medium);
+#endif
+    
+    SphereDescriptor spehre = MakeSphere(Translate(0, 26,0), 13);
+    InsertPrimitive(spehre, greenGlass);
+    InsertCameraMedium(medium);
+}
+
 void CornellBoxScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
@@ -524,18 +670,15 @@ void CornellBoxScene(Camera *camera, Float aspect){
                                                   Spectrum(0), Spectrum(0), 0.001, 
                                                   0.001, Spectrum(1), 1.5f);
     
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(0.025));
     MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
     MaterialDescriptor green = MakeMatteMaterial(Spectrum(.12, .45, .15));
     MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
     
     Transform lr = Translate(30, 25, 0) * RotateY(-90);
     RectDescriptor leftWall = MakeRectangle(lr, 200, 50);
-    InsertPrimitive(leftWall, green);
-    
-    //ImageData *data = LoadTextureImageData("/home/felpz/Downloads/desert.png");
-    //TextureDescriptor desert = MakeTexture(data);
-    //MaterialDescriptor redtex = MakeMatteMaterial(desert);
-#if 1
+    InsertPrimitive(leftWall, gray);
+#if 0
     Transform ss = Translate(0,1,-30) * Scale(0.1) * RotateY(-90);
     
     std::vector<MeshMtl> mtls;
@@ -563,23 +706,32 @@ void CornellBoxScene(Camera *camera, Float aspect){
     Transform br = Translate(0, 25, 5);
     
     RectDescriptor backWall = MakeRectangle(br, 60, 50);
-    InsertPrimitive(backWall, white);
+    InsertPrimitive(backWall, gray);
     
     Transform tr = Translate(0, 50, 0) * RotateX(90);
     RectDescriptor topWall = MakeRectangle(tr, 60, 200);
-    InsertPrimitive(topWall, white);
+    InsertPrimitive(topWall, gray);
     
     Transform bt = Translate(0, 1, 0) * RotateX(90);
     RectDescriptor bottomWall = MakeRectangle(bt, 60, 200);
-    InsertPrimitive(bottomWall, white);
+    InsertPrimitive(bottomWall, gray);
     
-    SphereDescriptor glassSphere = MakeSphere(Translate(0,6,-15), 2);
-    MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 1.5);
-    InsertPrimitive(glassSphere, matGlass);
+    
+    ParsedMesh *dragonMesh;
+    LoadObjData(MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
+    dragonMesh->toWorld = Translate(0, 3,-25) * Scale(6) * RotateZ(-15) * RotateY(70);
+    MeshDescriptor dragon = MakeMesh(dragonMesh);
+    
+    SphereDescriptor glassSphere = MakeSphere(Translate(0,6,-25), 6);
+    MediumDescriptor medium = MakeMedium(Spectrum(.03), Spectrum(0.05), 0);
+    InsertPrimitive(dragon, medium);
+    
+    //MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 1.5);
+    //InsertPrimitive(glassSphere, matGlass);
     
     Transform r = Translate(0, 40, -60);// * RotateX(90);
     RectDescriptor rect = MakeRectangle(r, 40, 50);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 5);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 8);
     InsertPrimitive(rect, matEm);
     
     //Test for sampling
@@ -612,9 +764,10 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    CornellBoxScene(camera, aspect);
+    //CornellBoxScene(camera, aspect);
     //CornellRandomScene(camera, aspect);
     //DragonScene(camera, aspect);
+    VolumetricCausticsScene(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     

@@ -129,8 +129,10 @@ Point3<T> Transform::operator()(const Point3<T> &p) const{
     T wp = m.m[3][0] * x + m.m[3][1] * y + m.m[3][2] * z + m.m[3][3];
     if (wp == 1)
         return Point3<T>(xp, yp, zp);
-    else
+    else{
+        AssertAEx(!IsZero(wp), "Zero transform wp [Point3f]");
         return Point3<T>(xp, yp, zp) / wp;
+    }
 }
 
 template <typename T> inline __bidevice__ 
@@ -156,7 +158,7 @@ inline __bidevice__ Ray Transform::operator()(const Ray &r) const{
     
     Float lengthSquared = d.LengthSquared();
     Float tMax = r.tMax;
-    if (lengthSquared > 0) {
+    if(lengthSquared > 0){
         Float dt = Dot(Abs(d), oError) / lengthSquared;
         o += d * dt;
         tMax -= dt;
@@ -190,11 +192,12 @@ Point3<T> Transform::operator()(const Point3<T> &p, vec3<T> *pError) const{
     T zAbsSum = (Absf(m.m[2][0] * x) + Absf(m.m[2][1] * y) +
                  Absf(m.m[2][2] * z) + Absf(m.m[2][3]));
     *pError = gamma(3) * vec3<T>(xAbsSum, yAbsSum, zAbsSum);
-    Assert(wp != 0);
     if (wp == 1)
         return Point3<T>(xp, yp, zp);
-    else
+    else{
+        AssertAEx(!IsZero(wp), "Zero transform wp [Point3f][2]");
         return Point3<T>(xp, yp, zp) / wp;
+    }
 }
 
 template <typename T> inline __bidevice__ 
@@ -224,11 +227,12 @@ Point3<T> Transform::operator()(const Point3<T> &pt, const vec3<T> &ptError,
          Absf(m.m[2][2]) * ptError.z) +
         gamma(3) * (Absf(m.m[2][0] * x) + Absf(m.m[2][1] * y) +
                     Absf(m.m[2][2] * z) + Absf(m.m[2][3]));
-    Assert(wp != 0);
     if (wp == 1.)
         return Point3<T>(xp, yp, zp);
-    else
+    else{
+        AssertAEx(!IsZero(wp), "Zero transform wp [Point3f][3]");
         return Point3<T>(xp, yp, zp) / wp;
+    }
 }
 
 template <typename T> inline __bidevice__ 

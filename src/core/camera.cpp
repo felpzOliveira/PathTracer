@@ -3,8 +3,6 @@
 #include <miniz.h>
 #include <iostream>
 
-#define gamma 2.2
-
 __bidevice__ Spectrum ReinhardMap(Spectrum value, Float exposure){
     (void)exposure;
     value = (value / (value + 1.f));
@@ -166,17 +164,21 @@ __bidevice__ void Camera::Config(Point3f eye, Point3f at, vec3f up, Float fov, F
 
 __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
                             Float aspect, Float aperture, Float focus_dist)
+:medium(nullptr)
 {
     Config(eye, at, up, fov, aspect, aperture, focus_dist);
 }
 
 __bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, 
                             Float aspect, Float aperture)
+:medium(nullptr)
 {
     Config(eye, at, up, fov, aspect, aperture);
 }
 
-__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect){
+__bidevice__ Camera::Camera(Point3f eye, Point3f at, vec3f up, Float fov, Float aspect)
+:medium(nullptr)
+{
     Config(eye, at, up, fov, aspect);
 }
 
@@ -184,11 +186,11 @@ __bidevice__ Ray Camera::SpawnRay(Float s, Float t, Point2f disk){
     Point2f rd = lensRadius * disk;
     vec3f offset = u * rd.x + v * rd.y;
     vec3f d = lower_left + s * horizontal + t * vertical - position - offset;
-    return Ray(position + offset, Normalize(d));
+    return Ray(position + offset, Normalize(d), Infinity, 0, medium);
 }
 
 __bidevice__ Ray Camera::SpawnRay(Float s, Float t){
     vec3f d = lower_left + s * horizontal + t * vertical - position;
-    return Ray(position, Normalize(d));
+    return Ray(position, Normalize(d), Infinity, 0, medium);
 }
 

@@ -242,21 +242,21 @@ inline __bidevice__ void PrintShape(Shape *shape){
     if(shape->type == ShapeType::SPHERE){
         Sphere *sphere = (Sphere *)shape;
         Point3f center = (shape->ObjectToWorld)(Point3f(0,0,0));
-        printf("Sphere [ " __vec3_strfmtA(center) " , radius: %g ]", 
+        printf("Sphere [ " __vec3_strfmtA(center) " , radius: %g ]\n", 
                __vec3_argsA(center), sphere->radius);
     }else if(shape->type == ShapeType::MESH){
         Mesh *mesh = (Mesh *)shape;
-        printf("Mesh [ triangles: %d , vertices: %d]", mesh->nTriangles,
+        printf("Mesh [ triangles: %d , vertices: %d]\n", mesh->nTriangles,
                mesh->nVertices);
     }else if(shape->type == ShapeType::RECTANGLE){
         Rectangle *rect = (Rectangle *)shape;
-        printf("Rectangle [ %g x %g ]", rect->sizex, rect->sizey);
+        printf("Rectangle [ %g x %g ]\n", rect->sizex, rect->sizey);
     }else if(shape->type == ShapeType::DISK){
         Disk *disk = (Disk *)shape;
-        printf("Disk [ radius: %g , innerRadius: %g , phiMax: %g ]",
+        printf("Disk [ radius: %g , innerRadius: %g , phiMax: %g ]\n",
                disk->radius, disk->innerRadius, disk->phiMax);
     }else{
-        printf("None");
+        printf("None\n");
     }
 }
 

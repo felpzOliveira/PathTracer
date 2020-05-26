@@ -50,6 +50,12 @@ typedef struct{
 }MaterialDescriptor;
 
 typedef struct{
+    Spectrum sa, ss;
+    Float g;
+    int is_valid;
+}MediumDescriptor;
+
+typedef struct{
     ShapeType shapeType;
     SphereDescriptor sphereDesc;
     MeshDescriptor meshDesc;
@@ -57,6 +63,8 @@ typedef struct{
     BoxDescriptor boxDesc;
     DiskDescriptor diskDesc;
     MaterialDescriptor mat;
+    MediumDescriptor mediumDesc;
+    int no_mat;
 }PrimitiveDescriptor;
 
 __host__ void                BeginScene(Aggregator *scene);
@@ -96,11 +104,23 @@ __host__ MaterialDescriptor  MakeMTLMaterial(MTL *mtl);
 //      for the GeometricEmitterPrimitive
 __host__ MaterialDescriptor  MakeEmissive(Spectrum L);
 
+__host__ MediumDescriptor    MakeMedium(Spectrum sigma_a, Spectrum sigma_s, Float g);
+__host__ void                InsertCameraMedium(MediumDescriptor medium);
+
 __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(DiskDescriptor shape, MaterialDescriptor mat);
+
+__host__ void                InsertPrimitive(SphereDescriptor shape, MediumDescriptor medium);
+__host__ void                InsertPrimitive(MeshDescriptor shape, MediumDescriptor medium);
+
+__host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat,
+                                             MediumDescriptor medium);
+__host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat,
+                                             MediumDescriptor medium);
+
 __host__ void                PrepareSceneForRendering(Aggregator *scene);
 
 __bidevice__ Spectrum        SpectrumFromURGB(Float r, Float g, Float b);

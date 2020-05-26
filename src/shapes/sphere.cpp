@@ -6,7 +6,9 @@ Float Shape::Pdf(const Interaction &ref, const vec3f &wi) const{
     SurfaceInteraction isectLight;
     if(!Intersect(ray, &tHit, &isectLight)) return 0;
     
-    Float pdf = DistanceSquared(ref.p, isectLight.p) / (AbsDot(isectLight.n, -wi) * Area());
+    Float f = (AbsDot(isectLight.n, -wi) * Area());
+    AssertAEx(!IsZero(f), "Zero Shape::Pdf");
+    Float pdf = DistanceSquared(ref.p, isectLight.p) / f;
     if(std::isinf(pdf)) pdf = 0.f;
     return pdf;
 }
