@@ -19,9 +19,24 @@ __bidevice__ Float PhaseHG(Float cosTheta, Float g){
 }
 
 
-__bidevice__ PhaseFunction::PhaseFunction(Float g) : g(g){is_initialized = 1;}
+__bidevice__ PhaseFunction::PhaseFunction(Float g) : g(g){
+    if(g > 1 || g < -1){
+        printf("Warning: Invalid phase function G value (%g), clamping.\n", g);
+        g = g > 1 ? .999 : g;
+        g = g < -1 ? -.999 : g;
+    }
+    is_initialized = 1;
+}
 
-__bidevice__ void PhaseFunction::SetG(Float _g){g = _g; is_initialized = 1;}
+__bidevice__ void PhaseFunction::SetG(Float _g){
+    g = _g; 
+    if(g > 1 || g < -1){
+        printf("Warning: Invalid phase function G value (%g) {SetG}, clamping.\n", g);
+        g = g > 1 ? .999 : g;
+        g = g < -1 ? -.999 : g;
+    }
+    is_initialized = 1;
+}
 
 __bidevice__ Float PhaseFunction::p(const vec3f &wo, const vec3f &wi) const{
     AssertAEx(is_initialized == 1, "Invalid call to PhaseFunction::p");

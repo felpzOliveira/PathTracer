@@ -24,6 +24,13 @@ class Interaction{
     
     __bidevice__ Ray SpawnRayTo(const Interaction &it) const;
     
+    __bidevice__ Interaction(const Point3f &p, Float time)
+        : p(p), time(time), mediumInterface(nullptr) {}
+    
+    __bidevice__ Interaction(const Point3f &p, Float time,
+                             const MediumInterface &mediumInterface)
+        : p(p), time(time), mediumInterface(mediumInterface) {}
+    
     __bidevice__ Interaction(const Point3f &p, const Normal3f &n, const vec3f &pError,
                              const vec3f &wo, Float time) :
     p(p), time(time), pError(pError), wo(Normalize(wo)), n(n), mediumInterface(nullptr){}

@@ -36,7 +36,7 @@ __bidevice__ void SurfaceInteraction::ComputeScatteringFunctions(BSDF *bsdf,
 }
 
 __bidevice__ Spectrum SurfaceInteraction::Le(const vec3f &w) const{
-    DiffuseAreaLight *light = primitive->GetLight();
+    Light *light = primitive->GetLight();
     if(light){
         Spectrum s = light->L(*this, w);
         if(s.IsBlack()){

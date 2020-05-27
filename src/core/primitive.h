@@ -2,12 +2,12 @@
 
 #include <shape.h>
 #include <medium.h>
+#include <light.h>
 
 class BSDF;
 class SurfaceInteraction;
 class Material;
 class Pixel;
-class DiffuseAreaLight;
 
 class Primitive{
     public:
@@ -22,7 +22,7 @@ class Primitive{
         const = 0;
     __bidevice__ virtual void PrintSelf() const = 0;
     __bidevice__ virtual Spectrum Le() const{ return Spectrum(0.f); }
-    __bidevice__ virtual DiffuseAreaLight *GetLight() const = 0;
+    __bidevice__ virtual Light *GetLight() const = 0;
     __bidevice__ virtual Material *GetMaterial() const{ return nullptr; }
     __bidevice__ virtual bool IsEmissive() const{ return false; }
 };
@@ -46,14 +46,14 @@ class GeometricPrimitive : public Primitive{
         printf(" ) \n");
     }
     
-    __bidevice__ virtual DiffuseAreaLight *GetLight() const override{ return nullptr; }
+    __bidevice__ virtual Light *GetLight() const override{ return nullptr; }
 };
 
 class GeometricEmitterPrimitive : public Primitive{
     public:
     Spectrum L;
     Float power;
-    DiffuseAreaLight *light;
+    Light *light;
     
     __bidevice__ GeometricEmitterPrimitive() : Primitive(nullptr){}
     __bidevice__ GeometricEmitterPrimitive(Shape *shape, Spectrum L, Float power=1);
@@ -69,7 +69,7 @@ class GeometricEmitterPrimitive : public Primitive{
         printf(" [ " v3fA(L) " ] ) \n", v3aA(L));
     }
     
-    __bidevice__ virtual DiffuseAreaLight *GetLight() const override{ return light; }
+    __bidevice__ virtual Light *GetLight() const override{ return light; }
     __bidevice__ virtual bool IsEmissive() const override{ return true; }
 };
 
@@ -85,15 +85,17 @@ class Aggregator{
     Mesh **meshPtrs;
     int nAllowedMeshes;
     int nMeshes;
-    int lightList[256];
+    LightDesc lightList[256];
     int lightCounter;
     
-    DiffuseAreaLight **lights;
+    Light **lights;
     Medium *viewMedium;
     
     __bidevice__ Aggregator();
     __bidevice__ void Reserve(int size);
     __bidevice__ void Insert(Primitive *pri, int is_light=0);
+    __bidevice__ void InsertDistantLight(const Spectrum &L, const vec3f &w);
+    
     __bidevice__ bool Intersect(const Ray &r, SurfaceInteraction *, Pixel *p = nullptr) const;
     __bidevice__ bool IntersectTr(Ray r, SurfaceInteraction *, Spectrum *Tr, 
                                   Pixel *p = nullptr) const;
@@ -108,11 +110,12 @@ class Aggregator{
     
     __host__ void ReserveMeshes(int n);
     __host__ void Wrap();
+    __bidevice__ Bounds3f WorldBound() const;
     
     private:
     __bidevice__ bool IntersectNode(Node *node, const Ray &r, SurfaceInteraction *) const;
     __bidevice__ Spectrum EstimateDirect(const Interaction &it,  BSDF *bsdf,
-                                         const Point2f &uScattering, DiffuseAreaLight *light,  
+                                         const Point2f &uScattering, Light *light,  
                                          const Point2f &uLight, bool handleMedium = false,
                                          bool specular = false) const;
 };

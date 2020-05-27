@@ -4,18 +4,38 @@
 
 class Aggregator;
 
-enum class LightFlags : int {
+/*
+* Cuda is being a little c**t again with class inheritance
+* so I'm gonna have to *again* wrap all light types in a single type.
+*/
+
+enum class LightFlags : int{
     DeltaPosition = 1,
     DeltaDirection = 2,
     Area = 4,
     Infinite = 8
 };
 
-inline __bidevice__ bool IsDeltaLight(int flags) {
+enum LightType{
+    DiffuseArea = 1,
+    Distant,
+};
+
+typedef struct{
+    LightType type;
+    int shapeId; // id in light vector to find shape for this light
+    int flags;
+    Transform toWorld;
+    
+    vec3f wLight; // direction light vector
+    Spectrum L; // spectrum
+}LightDesc;
+
+inline __bidevice__ bool IsDeltaLight(int flags){
     return flags & (int)LightFlags::DeltaPosition || flags & (int)LightFlags::DeltaDirection;
 }
 
-class VisibilityTester {
+class VisibilityTester{
     public:
     Interaction p0, p1;
     
@@ -27,30 +47,35 @@ class VisibilityTester {
     __bidevice__ Spectrum Tr(const Aggregator *scene) const;
 };
 
-class DiffuseAreaLight{
+class Light{
     public:
-    const Spectrum Lemit;
-    Shape *shape;
-    const bool twoSided;
-    const Float area;
-    const int flags;
-    const int nSamples;
+    // Generic for any light
     const Transform LightToWorld, WorldToLight;
+    int flags;
+    LightType type;
+    const int nSamples;
     
-    __bidevice__ DiffuseAreaLight(const Transform &LightToWorld, const Spectrum &Le,
-                                  int nSamples, Shape *shape, bool twoSided = false);
+    Spectrum Lemit;
     
-    __bidevice__ Spectrum Le(const RayDifferential &r) const{ return Spectrum(0.f); }
+    // Area light properties
+    Shape *shape;
+    bool twoSided;
+    Float area;
     
-    __bidevice__ Spectrum L(const Interaction &intr, const vec3f &w) const{
-        return (twoSided || Dot(ToVec3(intr.n), w) > 0) ? Lemit : Spectrum(0.f);
-    }
+    // Distant light
+    vec3f wLight; // which direction this thing is comming from
+    Point3f worldCenter;
+    Float worldRadius;
     
-    __bidevice__ Spectrum Sample_Li(const Interaction &ref, const Point2f &u, 
-                                    vec3f *wo, Float *pdf, 
-                                    VisibilityTester *vis) const;
+    __bidevice__ Light(const Transform &LightToWorld, int flags, int nSamples=1);
     
-    __bidevice__ Float Pdf_Li(const Interaction &, const vec3f &) const;
+    __bidevice__ void Init_DiffuseArea(const Spectrum &Le, Shape *shape, 
+                                       bool twoSided = false);
+    
+    __bidevice__ void Init_Distant(const Spectrum &Le, const vec3f &w);
+    
+    __bidevice__ Spectrum Le(const RayDifferential &r) const;
+    __bidevice__ Spectrum L(const Interaction &intr, const vec3f &w) const;
     
     __bidevice__ Spectrum Sample_Le(const Point2f &u1, const Point2f &u2, Float time,
                                     Ray *ray, Normal3f *nLight, Float *pdfPos,
@@ -58,5 +83,37 @@ class DiffuseAreaLight{
     
     __bidevice__ void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
                              Float *pdfDir) const;
+    __bidevice__ Float Pdf_Li(const Interaction &, const vec3f &) const;
     
+    __bidevice__ Spectrum Sample_Li(const Interaction &ref, const Point2f &u, 
+                                    vec3f *wo, Float *pdf, VisibilityTester *vis) const;
+    
+    __bidevice__ void Prepare(Aggregator *scene);
+    
+    private:
+    __bidevice__ Spectrum DiffuseArea_L(const Interaction &intr, const vec3f &w) const;
+    __bidevice__ Spectrum DiffuseArea_Sample_Li(const Interaction &ref, const Point2f &u,
+                                                vec3f *wi, Float *pdf, 
+                                                VisibilityTester *vis) const;
+    __bidevice__ Float DiffuseArea_Pdf_Li(const Interaction &ref, const vec3f &wi) const;
+    __bidevice__ Spectrum DiffuseArea_Le(const RayDifferential &r) const;
+    __bidevice__ Spectrum DiffuseArea_Sample_Le(const Point2f &u1, const Point2f &u2,
+                                                Float time, Ray *ray, Normal3f *nLight,
+                                                Float *pdfPos, Float *pdfDir) const;
+    __bidevice__ void DiffuseArea_Pdf_Le(const Ray &ray, const Normal3f &n,
+                                         Float *pdfPos, Float *pdfDir) const;
+    __bidevice__ void DiffuseArea_Prepare(Aggregator *scene);
+    
+    __bidevice__ Spectrum Distant_L(const Interaction &intr, const vec3f &w) const;
+    __bidevice__ Spectrum Distant_Sample_Li(const Interaction &ref, const Point2f &u,
+                                            vec3f *wi, Float *pdf, 
+                                            VisibilityTester *vis) const;
+    __bidevice__ Float Distant_Pdf_Li(const Interaction &ref, const vec3f &wi) const;
+    __bidevice__ Spectrum Distant_Le(const RayDifferential &r) const;
+    __bidevice__ Spectrum Distant_Sample_Le(const Point2f &u1, const Point2f &u2,
+                                            Float time, Ray *ray, Normal3f *nLight,
+                                            Float *pdfPos, Float *pdfDir) const;
+    __bidevice__ void Distant_Pdf_Le(const Ray &ray, const Normal3f &n,
+                                     Float *pdfPos, Float *pdfDir) const;
+    __bidevice__ void Distant_Prepare(Aggregator *scene);
 };

@@ -39,72 +39,159 @@ __bidevice__ Spectrum VisibilityTester::Tr(const Aggregator *scene) const{
     return Tr;
 }
 
-__bidevice__ DiffuseAreaLight::DiffuseAreaLight(const Transform &LightToWorld, 
-                                                const Spectrum &Le, int nSamples, 
-                                                Shape *shape, bool twoSided)
-:flags((int)LightFlags::Area), nSamples(Max(1, nSamples)), LightToWorld(LightToWorld),
-WorldToLight(Inverse(LightToWorld)) , Lemit(Le), shape(shape),
-twoSided(twoSided), area(shape->Area()) 
+__bidevice__ Light::Light(const Transform &LightToWorld, int flags, int nSamples)
+: flags(flags), nSamples(Max(1, nSamples)), LightToWorld(LightToWorld),
+WorldToLight(Inverse(LightToWorld)){}
+
+__bidevice__ void Light::Init_DiffuseArea(const Spectrum &Le, Shape *sshape, 
+                                          bool btwoSided)
 {
-    printf(v3fA(Lemit) "\n", v3aA(Lemit));
+    flags = (int)LightFlags::Area;
+    type = LightType::DiffuseArea;
+    twoSided = btwoSided;
+    shape = sshape;
+    Lemit = Le;
+    area = shape->Area();
 }
 
-__bidevice__ Spectrum DiffuseAreaLight::Sample_Li(const Interaction &ref, const Point2f &u,
-                                                  vec3f *wi, Float *pdf, 
-                                                  VisibilityTester *vis) const
-{
-    Interaction pShape = shape->Sample(ref, u, pdf);
-    if(IsZero(*pdf) || IsZero((pShape.p - ref.p).LengthSquared())){
-        *pdf = 0;
-        return 0.f;
-    }
-    
-    *wi = Normalize(pShape.p - ref.p);
-    *vis = VisibilityTester(ref, pShape);
-    return L(pShape, -*wi);
+
+__bidevice__ void Light::Init_Distant(const Spectrum &Le, const vec3f &w){
+    flags = (int)LightFlags::DeltaDirection;
+    type = LightType::Distant;
+    Lemit = Le;
+    wLight = Normalize(LightToWorld(w));
 }
 
-__bidevice__ Float DiffuseAreaLight::Pdf_Li(const Interaction &ref, const vec3f &wi) const{
-    return shape->Pdf(ref, wi);
-}
-
-__bidevice__ Spectrum DiffuseAreaLight::Sample_Le(const Point2f &u1, const Point2f &u2,
-                                                  Float time, Ray *ray, Normal3f *nLight,
-                                                  Float *pdfPos, Float *pdfDir) const
-{
-    Interaction pShape = shape->Sample(u1, pdfPos);
-    *nLight = pShape.n;
-    
-    vec3f w;
-    if(twoSided){
-        Point2f u = u2;
-        if(u[0] < .5){
-            u[0] = Min(u[0] * 2, OneMinusEpsilon);
-            w = CosineSampleHemisphere(u);
-        }else{
-            u[0] = Min((u[0] - .5f) * 2, OneMinusEpsilon);
-            w = CosineSampleHemisphere(u);
-            w.z *= -1;
-        }
+__bidevice__ Spectrum Light::Le(const RayDifferential &r) const{
+    switch(type){
+        case LightType::DiffuseArea:{
+            return DiffuseArea_Le(r);
+        } break;
         
-        *pdfDir = 0.5f * CosineHemispherePdf(Absf(w.z));
-    }else{
-        w = CosineSampleHemisphere(u2);
-        *pdfDir = CosineHemispherePdf(w.z);
+        case LightType::Distant:{
+            return Distant_Le(r);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
     }
     
-    vec3f v1, v2, n(ToVec3(pShape.n));
-    CoordinateSystem(n, &v1, &v2);
-    w = w.x * v1 + w.y * v2 + w.z * n;
-    *ray = pShape.SpawnRay(w);
-    return L(pShape, w);
+    return Spectrum(0);
 }
 
-__bidevice__ void DiffuseAreaLight::Pdf_Le(const Ray &ray, const Normal3f &n, 
-                                           Float *pdfPos, Float *pdfDir) const
+__bidevice__ Spectrum Light::L(const Interaction &intr, const vec3f &w) const{
+    switch(type){
+        case LightType::DiffuseArea:{
+            return DiffuseArea_L(intr, w);
+        } break;
+        
+        case LightType::Distant:{
+            return Distant_L(intr, w);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
+    }
+    
+    return Spectrum(0);
+}
+
+__bidevice__ Spectrum Light::Sample_Le(const Point2f &u1, const Point2f &u2, Float time,
+                                       Ray *ray, Normal3f *nLight, Float *pdfPos,
+                                       Float *pdfDir) const
 {
-    Interaction it(ray.o, n, vec3f(), ToVec3(n), ray.time);
-    *pdfPos = shape->Pdf(it);
-    *pdfDir = twoSided ? (.5 * CosineHemispherePdf(AbsDot(n, ray.d)))
-        : CosineHemispherePdf(Dot(n, ray.d));
+    switch(type){
+        case LightType::DiffuseArea:{
+            return DiffuseArea_Sample_Le(u1, u2, time, ray, nLight, pdfPos, pdfDir);
+        } break;
+        
+        case LightType::Distant:{
+            return Distant_Sample_Le(u1, u2, time, ray, nLight, pdfPos, pdfDir);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
+    }
+    
+    *pdfPos = 0;
+    *pdfDir = 0;
+    return Spectrum(0);
+}
+
+__bidevice__ void Light::Pdf_Le(const Ray &ray, const Normal3f &n, 
+                                Float *pdfPos, Float *pdfDir) const
+{
+    switch(type){
+        case LightType::DiffuseArea:{
+            DiffuseArea_Pdf_Le(ray, n, pdfPos, pdfDir);
+        } break;
+        
+        case LightType::Distant:{
+            Distant_Pdf_Le(ray, n, pdfPos, pdfDir);
+        } break;
+        
+        default:{
+            *pdfPos = 0;
+            *pdfDir = 0;
+            printf("Unknown light type\n");
+        }
+    }
+}
+
+__bidevice__ Float Light::Pdf_Li(const Interaction &ref, const vec3f &wi) const{
+    switch(type){
+        case LightType::DiffuseArea:{
+            return DiffuseArea_Pdf_Li(ref, wi);
+        } break;
+        
+        case LightType::Distant:{
+            return Distant_Pdf_Li(ref, wi);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
+    }
+    
+    return 0;
+}
+
+__bidevice__ Spectrum Light::Sample_Li(const Interaction &ref, const Point2f &u, 
+                                       vec3f *wo, Float *pdf, VisibilityTester *vis) const
+{
+    switch(type){
+        case LightType::DiffuseArea:{
+            return DiffuseArea_Sample_Li(ref, u, wo, pdf, vis);
+        } break;
+        
+        case LightType::Distant:{
+            return Distant_Sample_Li(ref, u, wo, pdf, vis);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
+    }
+    
+    *pdf = 0;
+    return Spectrum(0);
+}
+
+__bidevice__ void Light::Prepare(Aggregator *scene){
+    switch(type){
+        case LightType::DiffuseArea:{
+            DiffuseArea_Prepare(scene);
+        } break;
+        
+        case LightType::Distant:{
+            Distant_Prepare(scene);
+        } break;
+        
+        default:{
+            printf("Unknown light type\n");
+        }
+    }
 }

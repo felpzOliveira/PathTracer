@@ -54,7 +54,7 @@ __global__ void ReleaseScene(Aggregator *scene){
 }
 
 __bidevice__ Spectrum GetSky(vec3f dir){
-    return Spectrum(0);
+    //return Spectrum(0);
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
     return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0));
@@ -70,7 +70,7 @@ __device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
     curandState *state = &pixel->state;
     if(!scene->Intersect(ray, &isect, pixel)){
         for(int i = 0; i < scene->lightCounter; i++){
-            DiffuseAreaLight *light = scene->lights[i];
+            Light *light = scene->lights[i];
             L += light->Le(ray);
         }
     }else{
@@ -145,11 +145,15 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
                     L += beta * isect.Le(-ray.d);
                 }else{
                     for(int i = 0; i < scene->lightCounter; i++){
-                        DiffuseAreaLight *light = scene->lights[i];
-                        L += light->Le(ray);
+                        Light *light = scene->lights[i];
+                        L += beta * light->Le(ray);
                     }
                 }
             }
+            
+            if(!foundIntersection || bounces >= max_bounces){ break; }
+            
+            AssertA(isect.primitive, "Intersection without primitive");
             
             if(isect.primitive->IsEmissive()){
                 pixel->stats.lightHits++;
@@ -158,8 +162,6 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             }
             
             rayFromMedium = false;
-            
-            if(!foundIntersection || bounces >= max_bounces){ break; }
             
             BSDF bsdf(isect);
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
@@ -173,7 +175,8 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             if(bsdf.NumComponents(BxDFType(BSDF_ALL & ~BSDF_SPECULAR)) > 0){
                 Point2f u2(rand_float(state), rand_float(state));
                 Point3f u3(rand_float(state), rand_float(state), rand_float(state));
-                Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+                Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, 
+                                                                  u3, true);
                 if(Ld.IsBlack()){
                     pixel->stats.zeroRadiancePaths ++;
                 }
@@ -235,13 +238,15 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
                 L += beta * isect.Le(-ray.d);
             }else{
                 for(int i = 0; i < scene->lightCounter; i++){
-                    DiffuseAreaLight *light = scene->lights[i];
-                    L += light->Le(ray);
+                    Light *light = scene->lights[i];
+                    L += beta * light->Le(ray);
                 }
             }
         }
         
         if(!foundIntersection || bounces >= max_bounces){ break; }
+        
+        AssertA(isect.primitive, "Intersection without primitive");
         
         if(isect.primitive->IsEmissive()){
             pixel->stats.lightHits++;
@@ -335,7 +340,12 @@ __device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
                 beta = beta / (1 - q);
             }
         }else{
-            L += beta * GetSky(ray.d);
+            
+            for(int i = 0; i < scene->lightCounter; i++){
+                Light *light = scene->lights[i];
+                L += beta * light->Le(ray);
+            }
+            
             pixel->stats.misses += 1;
             break;
         }
@@ -492,6 +502,9 @@ void BoxesScene(Camera *camera, Float aspect){
     Transform lightModel = Translate(0,554,0) * RotateX(90);
     RectDescriptor light = MakeRectangle(lightModel, 300, 265);
     InsertPrimitive(light, matEm);
+    
+    MediumDescriptor medium = MakeMedium(Spectrum(0.0003), Spectrum(0.0005), -0.7);
+    InsertCameraMedium(medium);
 }
 
 void CornellRandomScene(Camera *camera, Float aspect){
@@ -669,7 +682,7 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     
     Transform rl = Translate(0, 60, 0) * RotateX(90);
     RectDescriptor rect = MakeRectangle(rl, 200, 200);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 15);
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 35);
     SphereDescriptor lightSphere = MakeSphere(Translate(15, 60, 3), 4);
     SphereDescriptor lightSphere2 = MakeSphere(Translate(-15, 60, 3), 4);
     InsertPrimitive(lightSphere, matEm);
@@ -677,7 +690,7 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     
     //SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
     //InsertPrimitive(lightSphere, matEm);
-    MediumDescriptor medium = MakeMedium(Spectrum(.0007), Spectrum(0.005), 0);
+    MediumDescriptor medium = MakeMedium(Spectrum(0.03), Spectrum(0.05), -0.7);
     Transform glassT = Translate(0, 26, 0) * RotateY(45);
     SphereDescriptor spehre = MakeSphere(glassT, 13);
     InsertPrimitive(spehre, greenGlass);
@@ -791,8 +804,8 @@ void render(Image *image){
     //CornellBoxScene(camera, aspect);
     //CornellRandomScene(camera, aspect);
     //DragonScene(camera, aspect);
-    VolumetricCausticsScene(camera, aspect);
-    //BoxesScene(camera, aspect);
+    //VolumetricCausticsScene(camera, aspect);
+    BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;

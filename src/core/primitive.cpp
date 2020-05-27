@@ -61,6 +61,10 @@ __bidevice__ Aggregator::Aggregator(){
     lightCounter = 0;
 }
 
+__bidevice__ Bounds3f Aggregator::WorldBound() const{
+    return root->bound;
+}
+
 __host__ void Aggregator::ReserveMeshes(int n){
     nAllowedMeshes = n;
     meshPtrs = cudaAllocateVx(Mesh*, n);
@@ -90,31 +94,67 @@ __bidevice__ void Aggregator::Insert(Primitive *pri, int is_light){
     Assert(head < length && primitives);
     primitives[head] = pri;
     if(is_light){
+        LightDesc desc;
         Assert(lightCounter < 256);
-        lightList[lightCounter++] = head;
+        desc.type = LightType::DiffuseArea;
+        desc.flags = (int)LightFlags::Area;
+        desc.shapeId = head;
+        desc.toWorld = pri->shape->ObjectToWorld;
+        lightList[lightCounter++] = desc;
     }
     
     head++;
 }
 
+__bidevice__ void Aggregator::InsertDistantLight(const Spectrum &L, const vec3f &w){
+    Assert(lightCounter < 256);
+    LightDesc desc;
+    desc.type = LightType::Distant;
+    desc.flags = (int)LightFlags::DeltaDirection;
+    desc.toWorld = Transform();
+    desc.wLight = w;
+    desc.L = L;
+    lightList[lightCounter++] = desc;
+}
+
 __bidevice__ void Aggregator::SetLights(){
     if(lightCounter > 0){
-        lights = new DiffuseAreaLight*[lightCounter];
+        int lightAreaCount = 0;
+        int lightDistantCount = 0;
+        lights = new Light*[lightCounter];
         for(int i = 0; i < lightCounter; i++){
-            Primitive *pri = primitives[lightList[i]];
-            GeometricEmitterPrimitive *gPri = (GeometricEmitterPrimitive *)pri;
-            lights[i] = new DiffuseAreaLight(pri->shape->ObjectToWorld, 
-                                             pri->Le(), 1, pri->shape);
-            gPri->light = lights[i];
+            LightDesc desc = lightList[i];
+            Light *light = new Light(desc.toWorld, desc.flags);
+            
+            if(desc.type == LightType::DiffuseArea){
+                Primitive *pri = primitives[desc.shapeId];
+                GeometricEmitterPrimitive *gPri = (GeometricEmitterPrimitive *)pri;
+                /* Diffuse areas need to set geometry light pointer upon light creation */
+                light->Init_DiffuseArea(pri->Le(), pri->shape);
+                gPri->light = light;
+                lightAreaCount++;
+            }else if(desc.type == LightType::Distant){
+                light->Init_Distant(desc.L, desc.wLight);
+                lightDistantCount++;
+            }else{
+                //TODO
+                AssertA(0, "Unsupported light type");
+            }
+            
+            light->Prepare(this);
+            lights[i] = light;
         }
         
-        printf(" * Created %d Light(s)\n", lightCounter);
+        if(lightAreaCount > 0)
+            printf(" * Created %d Area Light(s)\n", lightAreaCount);
+        if(lightDistantCount > 0)
+            printf(" * Created %d Distant Light(s)\n", lightDistantCount);
     }
 }
 
 __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bsdf,
                                                  const Point2f &uScattering,
-                                                 DiffuseAreaLight *light, 
+                                                 Light *light, 
                                                  const Point2f &uLight, 
                                                  bool handleMedium,
                                                  bool specular) const
@@ -125,6 +165,8 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
     Float lightPdf = 0, scatteringPdf = 0;
     VisibilityTester visibility;
     Spectrum Li = light->Sample_Li(it, uLight, &wi, &lightPdf, &visibility);
+    
+    //printf("Sampled " v3fA(Li) "\n", v3aA(Li));
     
     if(lightPdf > 0 && !Li.IsBlack()){
         Spectrum f;
@@ -218,7 +260,7 @@ __bidevice__ Spectrum Aggregator::UniformSampleOneLight(const Interaction &it, B
     lightNum = Min((int)(u2[0] * nLights), nLights - 1);
     lightPdf = Float(1) / nLights;
     
-    DiffuseAreaLight *light = lights[lightNum];
+    Light *light = lights[lightNum];
     Point2f uLight(u2[1], u3[0]);
     Point2f uScattering(u3[1], u3[2]);
     

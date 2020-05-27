@@ -51,7 +51,7 @@ inline __bidevice__ void __assert_check(bool v, const char *name,
     if(!v){
         int* ptr = nullptr;
         if(!msg)
-            printf("Assert: %s (%s:%d) : (None)\n", name, filename, line);
+            printf("Assert: %s (%s:%d) : (No message)\n", name, filename, line);
         else
             printf("Assert: %s (%s:%d) : (%s)\n", name, filename, line, msg);
         *ptr = 10;
