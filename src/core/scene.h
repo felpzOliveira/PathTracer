@@ -12,6 +12,7 @@ typedef struct{
     Transform toWorld;
     Float radius;
     bool reverseOrientation;
+    bool procedural;
 }SphereDescriptor;
 
 typedef struct{
@@ -70,6 +71,7 @@ typedef struct{
 __host__ void                BeginScene(Aggregator *scene);
 __host__ SphereDescriptor    MakeSphere(Transform toWorld, Float radius, 
                                         bool reverseOrientation=false);
+__host__ SphereDescriptor    MakeSphereProcedural(Transform toWorld, Float radius);
 __host__ RectDescriptor      MakeRectangle(Transform toWorld, Float sizex, Float sizey, 
                                            bool reverseOrientation=false);
 __host__ MeshDescriptor      MakeMesh(ParsedMesh *mesh);

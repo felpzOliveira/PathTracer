@@ -257,8 +257,8 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     if(hit_bound && node->is_leaf){
         hit_tests += node->n;
         if(pixel){
-            if(hit_tests > pixel->max_transverse_tests) 
-                pixel->max_transverse_tests = hit_tests;
+            if(hit_tests > pixel->stats.max_transverse_tests) 
+                pixel->stats.max_transverse_tests = hit_tests;
         }
         
         return IntersectNode(node, r, isect);
@@ -320,8 +320,8 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     }
     
     if(pixel){
-        if(pixel->max_transverse_tests < hit_tests)
-            pixel->max_transverse_tests = hit_tests;
+        if(pixel->stats.max_transverse_tests < hit_tests)
+            pixel->stats.max_transverse_tests = hit_tests;
     }
     
     return hit_anything;

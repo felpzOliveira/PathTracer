@@ -6,7 +6,8 @@
 #include <util.h>
 
 enum ShapeType{
-    SPHERE, RECTANGLE, DISK, BOX, MESH
+    SPHERE, RECTANGLE, DISK, BOX, MESH,
+    SPHERE_PROCEDURAL, 
 };
 
 #define MAX_STACK_SIZE 256

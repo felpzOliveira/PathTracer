@@ -22,12 +22,7 @@ class Interaction{
         return Ray(o, d, Infinity, time, GetMedium(d));
     }
     
-    __bidevice__ Ray SpawnRayTo(const Interaction &it) const{
-        Point3f origin = OffsetRayOrigin(p, pError, n, it.p - p);
-        Point3f target = OffsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
-        vec3f d = target - origin;
-        return Ray(origin, d, 1 - ShadowEpsilon, time, GetMedium(d));
-    }
+    __bidevice__ Ray SpawnRayTo(const Interaction &it) const;
     
     __bidevice__ Interaction(const Point3f &p, const Normal3f &n, const vec3f &pError,
                              const vec3f &wo, Float time) :

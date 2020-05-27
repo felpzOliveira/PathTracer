@@ -79,16 +79,51 @@ __host__ void ImageWrite(Image *image, const char *path, Float exposure,
         fwrite(png_data, 1, png_data_size, fp);
         fclose(fp);
         std::cout << "Saved PNG " << path << std::endl;
-        std::string cmd("display ");
-        cmd += path;
-        if(system(cmd.c_str()) < 0){ 
-            std::cout << "Failure in child process" << std::endl;
-        }
     }   
     
     delete[] data;
 }
 
+__host__ void ImageStats(Image *image){
+    long zeroRadiance = 0;
+    long totalPaths = 0;
+    long totalHits = 0;
+    long mediumHits = 0;
+    long surfaceHits = 0;
+    long misses = 0;
+    long lightHits = 0;
+    long lHitsMedium = 0;
+    int pixels_count = image->pixels_count;
+    for(int i = 0; i < pixels_count; i++){
+        zeroRadiance += image->pixels[i].stats.zeroRadiancePaths;
+        totalPaths   += image->pixels[i].stats.totalPaths;
+        totalHits    += image->pixels[i].stats.mediumHits + image->pixels[i].stats.hits;
+        surfaceHits  += image->pixels[i].stats.hits;
+        mediumHits   += image->pixels[i].stats.mediumHits;
+        misses       += image->pixels[i].stats.misses;
+        lightHits    += image->pixels[i].stats.lightHits;
+        lHitsMedium  += image->pixels[i].stats.lightHitFromMedium;
+    }
+    
+    double zeroPathsPct = static_cast<double>(zeroRadiance) / static_cast<double>(totalPaths);
+    double mediumHitsPct = static_cast<double>(mediumHits) / static_cast<double>(totalHits);
+    double surfaceHitsPct = static_cast<double>(surfaceHits) / static_cast<double>(totalHits);
+    double missesPct = static_cast<double>(misses) / static_cast<double>(totalPaths);
+    double lightHitsPct = static_cast<double>(lightHits) / static_cast<double>(totalHits);
+    double lightHitsMedium = static_cast<double>(lHitsMedium) / static_cast<double>(lightHits);
+    
+    zeroPathsPct *= 100; mediumHitsPct *= 100;
+    surfaceHits *= 100; missesPct *= 100;
+    lightHitsPct *= 100; lightHitsMedium *= 100;
+    
+    printf(" * Rendered using %ld samples\n", image->pixels[0].samples);
+    printf(" * Zero radiance paths: %g%%\n", zeroPathsPct);
+    printf(" * Medium hits: %g%%\n", mediumHitsPct);
+    printf(" * Surface hits: %g%%\n", surfaceHitsPct);
+    printf(" * Light hits: %g%%\n", lightHitsPct);
+    printf(" * Light hits from medium: %g%%\n", lightHitsMedium);
+    printf(" * Misses: %g%%\n", missesPct);
+}
 
 __host__ void ImageFree(Image *image){
     if(image){
@@ -193,4 +228,3 @@ __bidevice__ Ray Camera::SpawnRay(Float s, Float t){
     vec3f d = lower_left + s * horizontal + t * vertical - position;
     return Ray(position, Normalize(d), Infinity, 0, medium);
 }
-

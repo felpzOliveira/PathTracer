@@ -107,6 +107,7 @@ class Transform {
 
 __bidevice__ Transform Translate(const vec3f &delta);
 __bidevice__ Transform Translate(Float x, Float y, Float z);
+__bidevice__ Transform Translate(Float u);
 __bidevice__ Transform Scale(Float x, Float y, Float z);
 __bidevice__ Transform Scale(Float u);
 __bidevice__ Transform RotateX(Float theta);
@@ -163,7 +164,7 @@ inline __bidevice__ Ray Transform::operator()(const Ray &r) const{
         o += d * dt;
         tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time);
+    return Ray(o, d, tMax, r.time, r.medium);
 }
 
 inline __bidevice__  RayDifferential Transform::operator()(const RayDifferential &r) const{
@@ -291,7 +292,7 @@ inline __bidevice__ Ray Transform::operator()(const Ray &r, vec3f *oError,
         Float dt = Dot(Abs(d), *oError) / lengthSquared;
         o += d * dt;
     }
-    return Ray(o, d, tMax, r.time);
+    return Ray(o, d, tMax, r.time, r.medium);
 }
 
 inline __bidevice__ Ray Transform::operator()(const Ray &r, const vec3f &oErrorIn,
@@ -306,5 +307,5 @@ inline __bidevice__ Ray Transform::operator()(const Ray &r, const vec3f &oErrorI
         Float dt = Dot(Abs(d), *oErrorOut) / lengthSquared;
         o += d * dt;
     }
-    return Ray(o, d, tMax, r.time);
+    return Ray(o, d, tMax, r.time, r.medium);
 }

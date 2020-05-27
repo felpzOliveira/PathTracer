@@ -41,10 +41,8 @@ __global__ void SetupPixels(Image *image, unsigned long long seed){
     if(i < width && j < height){
         int pixel_index = j * width + i;
         image->pixels[pixel_index].we = Spectrum(0.f);
-        image->pixels[pixel_index].misses = 0;
-        image->pixels[pixel_index].hits = 0;
         image->pixels[pixel_index].samples = 0;
-        image->pixels[pixel_index].max_transverse_tests = 0;
+        memset(&image->pixels[pixel_index].stats, 0, sizeof(PixelStats));
         curand_init(seed, pixel_index, 0, &image->pixels[pixel_index].state);
     }
 }
@@ -56,7 +54,7 @@ __global__ void ReleaseScene(Aggregator *scene){
 }
 
 __bidevice__ Spectrum GetSky(vec3f dir){
-    //return Spectrum(0);
+    return Spectrum(0);
     vec3f unit = Normalize(dir);
     Float t = 0.5*(dir.y + 1.0);
     return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0));
@@ -92,6 +90,11 @@ __device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
     return L;
 }
 
+/*
+* Volumetric Path Tracer. The only code for now that can capture mediums,
+* several rays are traced for each medium interaction so be aware that things
+* might get complicated. 
+*/
 __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
     Spectrum L(0.f), beta(1.f);
     RayDifferential ray(r);
@@ -105,6 +108,9 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
     for(bounces = 0; ; bounces++){
         SurfaceInteraction isect;
         bool foundIntersection = scene->Intersect(ray, &isect, pixel);
+        
+        pixel->stats.totalPaths++;
+        pixel->stats.misses += !foundIntersection ? 1 : 0;
         
         MediumInteraction mi;
         if(ray.medium){
@@ -120,6 +126,10 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             Point3f u3(rand_float(state), rand_float(state), rand_float(state));
             
             Spectrum Ld = beta * scene->UniformSampleOneLight(mi, nullptr, u2, u3, true);
+            if(Ld.IsBlack()){
+                pixel->stats.zeroRadiancePaths ++;
+            }
+            
             L += Ld;
             
             vec3f wo = -ray.d, wi;
@@ -128,6 +138,7 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             ray = mi.SpawnRay(wi);
             specularBounce = false;
             rayFromMedium = true;
+            pixel->stats.mediumHits++;
         }else{
             if(bounces == 0 || specularBounce){
                 if(foundIntersection){
@@ -140,13 +151,16 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
                 }
             }
             
-            if(isect.primitive->IsEmissive() && rayFromMedium){
-                //printf("Hit light from medium ray\n");
+            if(isect.primitive->IsEmissive()){
+                pixel->stats.lightHits++;
+                if(rayFromMedium)
+                    pixel->stats.lightHitFromMedium ++;
             }
             
             rayFromMedium = false;
             
             if(!foundIntersection || bounces >= max_bounces){ break; }
+            
             BSDF bsdf(isect);
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
             
@@ -160,6 +174,10 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
                 Point2f u2(rand_float(state), rand_float(state));
                 Point3f u3(rand_float(state), rand_float(state), rand_float(state));
                 Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+                if(Ld.IsBlack()){
+                    pixel->stats.zeroRadiancePaths ++;
+                }
+                
                 L += Ld;
             }
             
@@ -175,10 +193,11 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             specularBounce = (flags & BSDF_SPECULAR) != 0;
             
             ray = isect.SpawnRay(wi);
+            pixel->stats.hits++;
         }
         
         Spectrum rrBeta = beta;
-        if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
+        if(MaxComponent(rrBeta) < rrThreshold && bounces > 3){
             Float q = Max((Float).05, 1 - MaxComponent(rrBeta));
             Float u = rand_float(state);
             if (u < q) break;
@@ -207,6 +226,10 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
     for(bounces = 0; ; bounces++){
         SurfaceInteraction isect;
         bool foundIntersection = scene->Intersect(ray, &isect, pixel);
+        
+        pixel->stats.totalPaths++;
+        pixel->stats.misses += !foundIntersection ? 1 : 0;
+        
         if(bounces == 0 || specularBounce){
             if(foundIntersection){
                 L += beta * isect.Le(-ray.d);
@@ -219,6 +242,10 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
         }
         
         if(!foundIntersection || bounces >= max_bounces){ break; }
+        
+        if(isect.primitive->IsEmissive()){
+            pixel->stats.lightHits++;
+        }
         
         BSDF bsdf(isect);
         
@@ -233,6 +260,9 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
             Point2f u2(rand_float(state), rand_float(state));
             Point3f u3(rand_float(state), rand_float(state), rand_float(state));
             Spectrum Ld = beta * scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+            if(Ld.IsBlack()){
+                pixel->stats.zeroRadiancePaths++;
+            }
             L += Ld;
         }
         
@@ -249,6 +279,7 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
         specularBounce = (flags & BSDF_SPECULAR) != 0;
         
         ray = isect.SpawnRay(wi);
+        pixel->stats.hits++;
         
         Spectrum rrBeta = beta;
         if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
@@ -294,7 +325,7 @@ __device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
             
             beta *= f * AbsDot(wi, ToVec3(isect.n)) / pdf;
             ray = isect.SpawnRay(wi);
-            pixel->hits += 1;
+            pixel->stats.hits += 1;
             
             Spectrum rrBeta = beta;
             if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
@@ -305,7 +336,7 @@ __device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
             }
         }else{
             L += beta * GetSky(ray.d);
-            pixel->misses += 1;
+            pixel->stats.misses += 1;
             break;
         }
     }
@@ -614,7 +645,7 @@ void CornellRandomScene(Camera *camera, Float aspect){
 }
 
 void VolumetricCausticsScene(Camera *camera, Float aspect){
-    AssertA(!!camera, "Invalid camera pointer");
+    AssertA(camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 18.f, -70.f),
                    //Point3f(53.f, 48.f, -70.f), 
@@ -647,15 +678,8 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     //SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
     //InsertPrimitive(lightSphere, matEm);
     MediumDescriptor medium = MakeMedium(Spectrum(.0007), Spectrum(0.005), 0);
-#if 0
-    ParsedMesh *dragonMesh;
-    LoadObjData(MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
-    dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
-    MeshDescriptor dragon = MakeMesh(dragonMesh);
-    InsertPrimitive(dragon, medium);
-#endif
-    
-    SphereDescriptor spehre = MakeSphere(Translate(0, 26,0), 13);
+    Transform glassT = Translate(0, 26, 0) * RotateY(45);
+    SphereDescriptor spehre = MakeSphere(glassT, 13);
     InsertPrimitive(spehre, greenGlass);
     InsertCameraMedium(medium);
 }
@@ -806,7 +830,7 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 1366;
+        const int image_width = 800;
         const int image_height = (int)((Float)image_width / aspect_ratio);
         
         Image *image = CreateImage(image_width, image_height);
@@ -814,6 +838,9 @@ int main(int argc, char **argv){
         render(image);
         
         ImageWrite(image, "output.png", 1.f, ToneMapAlgorithm::Exponential);
+        
+        ImageStats(image);
+        
         ImageFree(image);
         cudaDeviceReset();
         return 0;

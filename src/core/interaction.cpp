@@ -2,6 +2,13 @@
 #include <primitive.h>
 #include <light.h>
 
+__bidevice__ Ray Interaction::SpawnRayTo(const Interaction &it) const{
+    Point3f origin = OffsetRayOrigin(p, pError, n, it.p - p);
+    Point3f target = OffsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
+    vec3f d = target - origin;
+    return Ray(origin, d, 1 - ShadowEpsilon, time, GetMedium(d));
+}
+
 __bidevice__ 
 SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
                                        const Point2f &uv, const vec3f &wo,

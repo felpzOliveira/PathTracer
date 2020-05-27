@@ -1,6 +1,7 @@
 #include <scene.h>
 #include <cutil.h>
 #include <vector>
+#include <procedural.h>
 
 std::vector<PrimitiveDescriptor> hPrimitives;
 
@@ -56,6 +57,14 @@ __host__ TextureDescriptor MakeTexture(ImageData *data){
     return desc;
 }
 
+__host__ SphereDescriptor MakeSphereProcedural(Transform toWorld, Float radius){
+    SphereDescriptor desc;
+    desc.toWorld = toWorld;
+    desc.radius = radius;
+    desc.procedural = true;
+    return desc;
+}
+
 __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius,
                                      bool reverseOrientation)
 {
@@ -63,6 +72,7 @@ __host__ SphereDescriptor MakeSphere(Transform toWorld, Float radius,
     desc.toWorld = toWorld;
     desc.radius = radius;
     desc.reverseOrientation = reverseOrientation;
+    desc.procedural = false;
     return desc;
 }
 
@@ -407,8 +417,13 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     Shape *shape = nullptr;
     
     if(pri->shapeType == ShapeType::SPHERE){
-        shape = new Sphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius,
-                           pri->sphereDesc.reverseOrientation);
+        if(pri->sphereDesc.procedural){
+            shape = new ProceduralSphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius);
+            printf(" * Created procedural sphere\n");
+        }else{
+            shape = new Sphere(pri->sphereDesc.toWorld, pri->sphereDesc.radius,
+                               pri->sphereDesc.reverseOrientation);
+        }
     }else if(pri->shapeType == ShapeType::MESH){
         shape = scene->AddMesh(pri->meshDesc.mesh->toWorld, pri->meshDesc.mesh);
     }else if(pri->shapeType == ShapeType::RECTANGLE){

@@ -9,15 +9,23 @@ enum ToneMapAlgorithm{
     NaughtyDog
 };
 
+struct PixelStats{
+    long hits;
+    long misses;
+    long mediumHits;
+    long zeroRadiancePaths;
+    long totalPaths;
+    long lightHitFromMedium;
+    long lightHits;
+    int max_transverse_tests;
+};
+
 struct Pixel{
     curandState state;
     Spectrum we;
     Float u, v;
-    
-    long hits;
-    long misses;
     long samples;
-    int max_transverse_tests;
+    PixelStats stats;
 };
 
 struct Image{
@@ -29,6 +37,7 @@ struct Image{
 __host__ Image *CreateImage(int res_x, int res_y);
 __host__ void ImageWrite(Image *image, const char *path, Float exposure, 
                          ToneMapAlgorithm algorithm);
+__host__ void ImageStats(Image *image);
 __host__ void ImageFree(Image *image);
 
 __bidevice__ Spectrum ReinhardMap(Spectrum value, Float exposure);

@@ -257,7 +257,6 @@ template<typename T> class vec2{
 template<typename T> class vec3{
     public:
     T x, y, z;
-    
     __bidevice__ vec3(){ x = y = z = (T)0; }
     __bidevice__ vec3(T a){ x = y = z = a; }
     __bidevice__ vec3(T a, T b, T c): x(a), y(b), z(c){
@@ -466,6 +465,15 @@ typedef vec2<Float> vec2f;
 typedef vec2<int> vec2i;
 typedef vec3<Float> vec3f;
 typedef vec3<int> vec3i;
+
+inline __bidevice__ vec3f Max(vec3f a, vec3f b){
+    return vec3f(Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z));
+}
+
+inline __bidevice__ vec3f Min(vec3f a, vec3f b){
+    return vec3f(Min(a.x, b.x), Min(a.y, b.y), Min(a.z, b.z));
+}
+
 
 typedef vec3<Float> Spectrum; //RGB Spectrum
 
@@ -754,6 +762,10 @@ template<typename T> class Normal3{
         Assert(!HasNaN());
     }
     
+    template<typename U> __bidevice__ Normal3(const vec3<U> &v):x(v.x), y(v.y), z(v.z){
+        Assert(!HasNaN());
+    }
+    
     __bidevice__ bool HasNaN(){
         return IsNaN(x) || IsNaN(y) || IsNaN(z);
     }
@@ -763,6 +775,7 @@ template<typename T> class Normal3{
     }
     
     __bidevice__ Normal3<T> operator-() const { return Normal3(-x, -y, -z); }
+    
     __bidevice__ Normal3<T> operator+(const Normal3<T> &n) const {
         Assert(!n.HasNaN());
         return Normal3<T>(x + n.x, y + n.y, z + n.z);

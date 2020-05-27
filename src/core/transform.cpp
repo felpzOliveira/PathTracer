@@ -101,6 +101,10 @@ __bidevice__ Transform Translate(Float x, Float y, Float z){
     return Translate(vec3f(x, y, z));
 }
 
+__bidevice__ Transform Translate(Float u){
+    return Translate(vec3f(u, u, u));
+}
+
 __bidevice__ Transform Scale(Float x, Float y, Float z) {
     Matrix4x4 m(x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1);
     Matrix4x4 minv(1 / x, 0, 0, 0, 0, 1 / y, 0, 0, 0, 0, 1 / z, 0, 0, 0, 0, 1);
@@ -161,13 +165,11 @@ __bidevice__ Transform Rotate(Float theta, const vec3f &axis) {
 
 __bidevice__ Transform LookAt(const Point3f &pos, const Point3f &look, const vec3f &up) {
     Matrix4x4 cameraToWorld;
-    // Initialize fourth column of viewing matrix
     cameraToWorld.m[0][3] = pos.x;
     cameraToWorld.m[1][3] = pos.y;
     cameraToWorld.m[2][3] = pos.z;
     cameraToWorld.m[3][3] = 1;
     
-    // Initialize first three columns of viewing matrix
     vec3f dir = Normalize(look - pos);
     if (Cross(Normalize(up), dir).Length() == 0) {
         printf(
@@ -194,22 +196,22 @@ __bidevice__ Transform LookAt(const Point3f &pos, const Point3f &look, const vec
     return Transform(Inverse(cameraToWorld), cameraToWorld);
 }
 
-__bidevice__ Transform Transform::operator*(const Transform &t2) const {
+__bidevice__ Transform Transform::operator*(const Transform &t2) const{
     return Transform(Matrix4x4::Mul(m, t2.m), Matrix4x4::Mul(t2.mInv, mInv));
 }
 
-__bidevice__ bool Transform::SwapsHandedness() const {
+__bidevice__ bool Transform::SwapsHandedness() const{
     Float det = m.m[0][0] * (m.m[1][1] * m.m[2][2] - m.m[1][2] * m.m[2][1]) -
         m.m[0][1] * (m.m[1][0] * m.m[2][2] - m.m[1][2] * m.m[2][0]) +
         m.m[0][2] * (m.m[1][0] * m.m[2][1] - m.m[1][1] * m.m[2][0]);
     return det < 0;
 }
 
-__bidevice__ Transform Orthographic(Float zNear, Float zFar) {
+__bidevice__ Transform Orthographic(Float zNear, Float zFar){
     return Scale(1, 1, 1 / (zFar - zNear)) * Translate(vec3f(0, 0, -zNear));
 }
 
-__bidevice__ Transform Perspective(Float fov, Float n, Float f) {
+__bidevice__ Transform Perspective(Float fov, Float n, Float f){
     // Perform projective divide for perspective projection
     Matrix4x4 persp(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, f / (f - n), -f * n / (f - n),
                     0, 0, 1, 0);
@@ -221,21 +223,20 @@ __bidevice__ Transform Perspective(Float fov, Float n, Float f) {
 
 __bidevice__ SurfaceInteraction Transform::operator()(const SurfaceInteraction &si) const{
     SurfaceInteraction ret;
-    // Transform _p_ and _pError_ in _SurfaceInteraction_
     ret.p = (*this)(si.p);
-    
-    // Transform remaining members of _SurfaceInteraction_
     const Transform &t = *this;
     ret.n = Normalize(t(si.n));
     ret.wo = Normalize(t(si.wo));
     ret.time = si.time;
-    //ret.mediumInterface = si.mediumInterface;
+    ret.mediumInterface = si.mediumInterface;
     ret.uv = si.uv;
     ret.shape = si.shape;
     ret.dpdu = t(si.dpdu);
     ret.dpdv = t(si.dpdv);
     ret.dndu = t(si.dndu);
     ret.dndv = t(si.dndv);
+    ret.primitive = si.primitive;
+    ret.faceIndex = si.faceIndex;
     //ret.shading.n = Normalize(t(si.shading.n));
     //ret.shading.dpdu = t(si.shading.dpdu);
     //ret.shading.dpdv = t(si.shading.dpdv);
@@ -249,10 +250,8 @@ __bidevice__ SurfaceInteraction Transform::operator()(const SurfaceInteraction &
     //ret.dpdy = t(si.dpdy);
     //ret.bsdf = si.bsdf;
     //ret.bssrdf = si.bssrdf;
-    //ret.primitive = si.primitive;
-    //    ret.n = Faceforward(ret.n, ret.shading.n);
+    //ret.n = Faceforward(ret.n, ret.shading.n);
     //ret.shading.n = Faceforward(ret.shading.n, ret.n);
-    ret.faceIndex = si.faceIndex;
     return ret;
 }
 
