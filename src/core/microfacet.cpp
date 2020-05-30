@@ -12,7 +12,7 @@ __bidevice__ Float MicrofacetDistribution::Lambda(const vec3f &w) const{
 
 __bidevice__ Float MicrofacetDistribution::D(const vec3f &wh) const{
     Float tan2Theta = Tan2Theta(wh);
-    if (std::isinf(tan2Theta)) return 0.;
+    if(std::isinf(tan2Theta)) return 0.;
     const Float cos4Theta = Cos2Theta(wh) * Cos2Theta(wh);
     Float e =
         (Cos2Phi(wh) / (alphax * alphax) + Sin2Phi(wh) / (alphay * alphay)) *

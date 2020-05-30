@@ -34,7 +34,7 @@ void * LoadSymbol(void *handle, const char *name){
     return ptr;
 }
 
-void graphy_initialize(Image *image){
+void graphy_initialize(int width, int height){
     if(!display){
         GraphyHandle = dlopen(GraphyPath, RTLD_LAZY);
         graphy_ok = -1;
@@ -45,8 +45,8 @@ void graphy_initialize(Image *image){
             graphy_render_pixels = (GraphyRenderPixels) LoadSymbol(GraphyHandle, "_Z23gr_opengl_render_pixelsPfiiP12gr_display_t");
             
             if(graphy_get_display && graphy_render_pixels){
-                display = graphy_get_display(image->width, image->height);
-                vals = new float[image->pixels_count * 3];
+                display = graphy_get_display(width, height);
+                vals = new float[width * height * 3];
                 graphy_ok = 1;
             }else{
                 std::cout << "Failed to load Graphy symbols" << std::endl;
@@ -65,7 +65,7 @@ void threaded_save_tmp_image(int width, int height){
 }
 
 void graphy_display_pixels(Image *image, int count, int filter){
-    if(graphy_ok == 0) graphy_initialize(image);
+    if(graphy_ok == 0) graphy_initialize(image->width, image->height);
     
     int it = 0;
     int save = ((count % BACKUP_AT_EACH) == 0 && count > 0) ? 1 : 0;
@@ -91,6 +91,22 @@ void graphy_display_pixels(Image *image, int count, int filter){
         
         if(graphy_ok > 0){
             graphy_render_pixels(vals, image->width, image->height, display);
+        }
+    }
+}
+
+void graphy_display_pixels(Spectrum *pixels, int width, int height){
+    if(graphy_ok == 0) graphy_initialize(width, height);
+    int it = 0;
+    if(graphy_ok > 0){
+        for(int k = 0; k < width * height; k++){
+            Spectrum we = pixels[k];
+            we = ExponentialMap(we, 1.f);
+            vals[it++] = we[0]; vals[it++] = we[1]; vals[it++] = we[2];
+        }
+        
+        if(graphy_ok > 0){
+            graphy_render_pixels(vals, width, height, display);
         }
     }
 }

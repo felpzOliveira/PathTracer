@@ -72,6 +72,10 @@ __bidevice__ Spectrum Light::Le(const RayDifferential &r) const{
             return Distant_Le(r);
         } break;
         
+        case LightType::Infinite:{
+            return Infinite_Le(r);
+        } break;
+        
         default:{
             printf("Unknown light type\n");
         }
@@ -88,6 +92,10 @@ __bidevice__ Spectrum Light::L(const Interaction &intr, const vec3f &w) const{
         
         case LightType::Distant:{
             return Distant_L(intr, w);
+        } break;
+        
+        case LightType::Infinite:{
+            return Infinite_L(intr, w);
         } break;
         
         default:{
@@ -109,6 +117,10 @@ __bidevice__ Spectrum Light::Sample_Le(const Point2f &u1, const Point2f &u2, Flo
         
         case LightType::Distant:{
             return Distant_Sample_Le(u1, u2, time, ray, nLight, pdfPos, pdfDir);
+        } break;
+        
+        case LightType::Infinite:{
+            return Infinite_Sample_Le(u1, u2, time, ray, nLight, pdfPos, pdfDir);
         } break;
         
         default:{
@@ -133,6 +145,10 @@ __bidevice__ void Light::Pdf_Le(const Ray &ray, const Normal3f &n,
             Distant_Pdf_Le(ray, n, pdfPos, pdfDir);
         } break;
         
+        case LightType::Infinite:{
+            Infinite_Pdf_Le(ray, n, pdfPos, pdfDir);
+        } break;
+        
         default:{
             *pdfPos = 0;
             *pdfDir = 0;
@@ -149,6 +165,10 @@ __bidevice__ Float Light::Pdf_Li(const Interaction &ref, const vec3f &wi) const{
         
         case LightType::Distant:{
             return Distant_Pdf_Li(ref, wi);
+        } break;
+        
+        case LightType::Infinite:{
+            return Infinite_Pdf_Li(ref, wi);
         } break;
         
         default:{
@@ -171,6 +191,10 @@ __bidevice__ Spectrum Light::Sample_Li(const Interaction &ref, const Point2f &u,
             return Distant_Sample_Li(ref, u, wo, pdf, vis);
         } break;
         
+        case LightType::Infinite:{
+            return Infinite_Sample_Li(ref, u, wo, pdf, vis);
+        } break;
+        
         default:{
             printf("Unknown light type\n");
         }
@@ -188,6 +212,10 @@ __bidevice__ void Light::Prepare(Aggregator *scene){
         
         case LightType::Distant:{
             Distant_Prepare(scene);
+        } break;
+        
+        case LightType::Infinite:{
+            Infinite_Prepare(scene);
         } break;
         
         default:{

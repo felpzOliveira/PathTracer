@@ -13,10 +13,7 @@ __bidevice__ void Light::Distant_Prepare(Aggregator *scene){
 }
 
 __bidevice__ Spectrum Light::Distant_Le(const RayDifferential &r) const{
-    vec3f unit = Normalize(r.d);
-    Float t = 0.5*(r.d.y + 1.0);
-    return ((1.0-t)*Spectrum(1.0, 1.0, 1.0) + t*Spectrum(0.5, 0.7, 1.0));
-    //return Spectrum(0);
+    return Spectrum(0);
 }
 
 __bidevice__ Spectrum Light::Distant_Sample_Li(const Interaction &ref, const Point2f &u,

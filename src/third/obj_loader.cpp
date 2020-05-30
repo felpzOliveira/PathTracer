@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cutil.h>
 #include <sstream>
+#include <transform.h>
 
 #define IS_SPACE(x) (((x) == ' ') || ((x) == '\t'))
 #define IS_NEW_LINE(x) (((x) == '\r') || ((x) == '\n') || ((x) == '\0'))
@@ -131,11 +132,11 @@ static inline Float ParseFloat(const char **token){
 }
 
 static inline void ParseV3(vec3f *v, const char **token){
-    *v = vec3f(ParseFloat(token), ParseFloat(token), ParseFloat(token));
+    *v = Flip(vec3f(ParseFloat(token), ParseFloat(token), ParseFloat(token)));
 }
 
 static inline void ParseV2(vec2f *v, const char **token){
-    *v = vec2f(ParseFloat(token), ParseFloat(token));
+    *v = Flip(vec2f(ParseFloat(token), ParseFloat(token)));
 }
 
 static inline void AssureBufferInit(int **buffer, int &curr, int max_size){
@@ -255,8 +256,6 @@ static inline void FillMesh(ParsedMesh *mesh, std::vector<vec3f> *v,
         mesh->indices[i] = Point3i(iip, iin, iit);
     }
     
-    //printf("New mesh # triangles: %d, # vertices: %d, # uvs: %d, # normals: %d\n",
-    //mesh->nTriangles, mesh->nVertices, cU, cN);
 }
 
 __host__ ParsedMesh *LoadObjOnly(const char *path){
@@ -377,6 +376,7 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
             if(!making_mesh){
                 MeshMtl mtl;
                 currentMesh = cudaAllocateVx(ParsedMesh, 1);
+                currentMesh->toWorld = Translate(0,0,0);
                 currentMesh->nVertices = 0;
                 currentMesh->nTriangles = 0;
                 meshes->push_back(currentMesh);

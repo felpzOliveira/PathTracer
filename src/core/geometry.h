@@ -75,6 +75,16 @@ inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
 inline __bidevice__ Float Radians(Float deg) { return (Pi / 180) * deg; }
 inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 1e-8; }
+inline __bidevice__ Float Log2(Float x){
+    const Float invLog2 = 1.442695040888963387004650940071;
+    return std::log(x) * invLog2;
+}
+
+inline __bidevice__ int Log2Int(uint64_t n){
+#define S(k) if (n >= (UINT64_C(1) << k)) { i += k; n >>= k; }
+    int i = -(n == 0); S(32); S(16); S(8); S(4); S(2); S(1); return i;
+#undef S
+}
 
 inline __bidevice__ uint32_t FloatToBits(float f){
     uint32_t ui;
@@ -223,6 +233,18 @@ template<typename T> class vec2{
         return vec2<T>(-x, -y);
     }
     
+    __bidevice__ vec2<T> operator-() const{
+        return vec2<T>(-x, -y);
+    }
+    
+    __bidevice__ vec2<T> operator-(const vec2<T> &v) const{
+        return vec2(x - v.x, y - v.y);
+    }
+    
+    __bidevice__ vec2<T> operator-(const vec2<T> &v){
+        return vec2(x - v.x, y - v.y);
+    }
+    
     __bidevice__ vec2<T> operator+(const vec2<T> &v) const{
         return vec2<T>(x + v.x, y + v.y);
     }
@@ -367,15 +389,44 @@ template<typename T> class vec3{
         return *this;
     }
     
+    // for Spectrum only
+    __bidevice__ Float Y() const{
+        const Float YWeight[3] = {0.212671f, 0.715160f, 0.072169f};
+        return YWeight[0] * x + YWeight[1] * y + YWeight[2] * z;
+    }
+    
     __bidevice__ Float LengthSquared() const{ return x * x + y * y + z * z; }
     __bidevice__ Float Length() const{ return sqrt(LengthSquared()); }
 };
+
+template<typename T>
+inline __bidevice__ vec2<T> Clamp(const vec2<T> &val, const vec2<T> &low, const vec2<T> &high){
+    return vec2<T>(Clamp(val.x, low.x, high.x),
+                   Clamp(val.y, low.y, high.y));
+}
+
+template<typename T>
+inline __bidevice__ vec3<T> Clamp(const vec3<T> &val, const vec3<T> &low, const vec3<T> &high){
+    return vec3<T>(Clamp(val.x, low.x, high.x),
+                   Clamp(val.y, low.y, high.y),
+                   Clamp(val.z, low.z, high.z));
+}
+
+template<typename T>
+inline __bidevice__ vec2<T> Round(const vec2<T> &val){
+    return vec2<T>(round(val.x), round(val.y));
+}
 
 template<typename T> inline __bidevice__ vec2<T> operator*(T s, vec2<T> &v){ return v * s; }
 template<typename T> inline __bidevice__ vec3<T> operator*(T s, vec3<T> &v){ return v * s; }
 
 template<typename T> inline __bidevice__ vec2<T> Abs(const vec2<T> &v){
     return vec2<T>(Absf(v.x), Absf(v.y));
+}
+
+template <typename T, typename U> inline __bidevice__ 
+vec2<T> operator*(U s, const vec2<T> &v){
+    return v * s;
 }
 
 template <typename T, typename U> inline __bidevice__ 
@@ -387,7 +438,11 @@ template<typename T> inline vec3<T> __bidevice__ Abs(const vec3<T> &v){
     return vec3<T>(Absf(v.x), Absf(v.y), Absf(v.z));
 }
 
-template<typename T> inline T __bidevice__ Dot(const vec3<T> &v1, const vec3<T> &v2){
+template<typename T> inline __bidevice__ T Dot(const vec2<T> &v1, const vec2<T> &v2){
+    return v1.x * v2.x + v1.y * v2.y;
+}
+
+template<typename T> inline __bidevice__ T Dot(const vec3<T> &v1, const vec3<T> &v2){
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
@@ -407,6 +462,18 @@ template<typename T> inline __bidevice__ vec3<T> Normalize(const vec3<T> &v){
     return v / v.Length();
 }
 
+inline __bidevice__ Float Sin(const Float &v){
+    return std::sin(v);
+}
+
+template<typename T> inline __bidevice__ vec2<T> Sin(const vec2<T> &v){
+    return vec2<T>(std::sin(v.x), std::sin(v.y));
+}
+
+template<typename T> inline __bidevice__ vec3<T> Sin(const vec3<T> &v){
+    return vec3<T>(std::sin(v.x), std::sin(v.y), std::sin(v.z));
+}
+
 template<typename T> inline __bidevice__ T MinComponent(const vec3<T> &v){
     return Min(v.x, Min(v.y, v.z));
 }
@@ -423,6 +490,10 @@ template<typename T> inline __bidevice__ vec3<T> Min(const vec3<T> &v1, const ve
     return vec3<T>(Min(v1.x, v1.y), Min(v1.y, v2.y), Min(v1.z, v2.z));
 }
 
+template<typename T> inline __bidevice__ vec2<T> Max(const vec2<T> &v1, const vec2<T> &v2){
+    return vec2<T>(Max(v1.x, v1.y), Max(v1.y, v2.y));
+}
+
 template<typename T> inline __bidevice__ vec3<T> Max(const vec3<T> &v1, const vec3<T> &v2){
     return vec3<T>(Max(v1.x, v1.y), Max(v1.y, v2.y), Max(v1.z, v2.z));
 }
@@ -430,6 +501,12 @@ template<typename T> inline __bidevice__ vec3<T> Max(const vec3<T> &v1, const ve
 template<typename T> inline __bidevice__ vec3<T> Permute(const vec3<T> &v, int x, int y, int z){
     return vec3<T>(v[x], v[y], v[z]);
 }
+
+template<typename T> inline __bidevice__ 
+vec3<T> Flip(const vec3<T> &p){ return vec3<T>(p.z, p.y, p.x); }
+
+template<typename T> inline __bidevice__ 
+vec2<T> Flip(const vec2<T> &p){ return vec2<T>(p.y, p.x); }
 
 template<typename T> inline __bidevice__ void 
 CoordinateSystem(const vec3<T> &v1, vec3<T> *v2, vec3<T> *v3){
@@ -703,8 +780,22 @@ template<typename T> inline __bidevice__ Float DistanceSquared(const Point2<T> &
     return (p1 - p2).LengthSquared();
 }
 
+template<typename T> inline __bidevice__ T Mix(const T &p0, const T &p1, T t){
+    return (1 - t) * p0 + t * p1;
+}
+
+template<typename T> inline __bidevice__ T Lerp(T t, const T &p0, const T &p1){
+    return (1 - t) * p0 + t * p1;
+}
+
 template<typename T> inline __bidevice__ Point3<T> Lerp(Float t, const Point3<T> &p0, 
                                                         const Point3<T> &p1)
+{
+    return (1 - t) * p0 + t * p1;
+}
+
+template<typename T> inline __bidevice__ vec3<T> Lerp(Float t, const vec3<T> &p0, 
+                                                      const vec3<T> &p1)
 {
     return (1 - t) * p0 + t * p1;
 }
@@ -728,6 +819,23 @@ inline __bidevice__ Float Floor(const Float &v){
 template<typename T> inline __bidevice__ Point3<T> Floor(const Point3<T> &p0)
 {
     return Point3<T>(floor(p0.x), floor(p0.y), floor(p0.z));
+}
+
+template<typename T> inline __bidevice__ vec2<T> Floor(const vec2<T> &v){
+    return vec2<T>(std::floor(v.x), std::floor(v.y));
+}
+
+template<typename T> inline __bidevice__ vec3<T> Floor(const vec3<T> &v){
+    return vec3<T>(std::floor(v.x), std::floor(v.y), std::floor(v.z));
+}
+
+template<typename T> inline __bidevice__ T Fract(T val){
+    return val - Floor(val);
+}
+
+template <typename T> inline __bidevice__ T Mod(T a, T b) {
+    T result = a - (a / b) * b;
+    return (T)((result < 0) ? result + b : result);
 }
 
 template<typename T> inline __bidevice__ Point3<T> Ceil(const Point3<T> &p0){

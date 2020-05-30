@@ -15,14 +15,16 @@ typedef struct{
     std::vector<std::string> *values;
 }MTLToken;
 
-static const int mtlToParseCount = 12;
+static const int mtlToParseCount = 13;
 static const char *mtlVars[mtlToParseCount] = {
     "Ka", "Kd", "Ks", "Tf", "Ns", "illum",
     "map_Ka", "map_Kd", "map_Ks", "d", "Ke", "Ni",
+    "map_Bump"
 };
 static const int mtlVarsNumeric[mtlToParseCount] = {
     1, 1, 1, 1, 1, 1,
     0, 0, 0, 1, 1, 1,
+    0,
 };
 
 static bool IsNumeric(const char *property){

@@ -2,10 +2,17 @@
 #include <cutil.h>
 #include <vector>
 #include <procedural.h>
+#include <image_util.h>
 
 std::vector<PrimitiveDescriptor> hPrimitives;
 
 int any_mesh = 0;
+typedef struct{
+    MipMap<Spectrum> *lightMap;
+    Distribution2D *lightMapDist;
+    Transform toWorld;
+}LightMap;
+
 typedef struct{
     SphereDescriptor *spheres;
     int nspheres;
@@ -16,6 +23,7 @@ typedef struct{
     PrimitiveDescriptor *primitives;
     int nprimitives;
     MediumDescriptor cameraMedium;
+    LightMap *lightMap;
 }SceneDescription;
 
 SceneDescription *hostScene = nullptr;
@@ -34,6 +42,7 @@ __host__ void BeginScene(Aggregator *scene){
     hostScene->nspheres = 0;
     hostScene->nmeshes = 0;
     hostScene->cameraMedium.is_valid = 0;
+    hostScene->lightMap = nullptr;
 }
 
 __host__ TextureDescriptor MakeTexture(Spectrum value){
@@ -255,6 +264,7 @@ __host__ MaterialDescriptor MakeMTLMaterial(MTL *mtl){
         if(data){
             desc.textures[i++] = MakeTexture(data);
             useSpectrumKd = false;
+            printf(" * Got Kd map\n");
         }else{
             hasKdMap = false;
         }
@@ -273,6 +283,7 @@ __host__ MaterialDescriptor MakeMTLMaterial(MTL *mtl){
         if(data){
             desc.textures[i++] = MakeTexture(data);
             useSpectrumKs = false;
+            printf(" * Got Ks map\n");
         }else{
             hasKsMap = false;
         }
@@ -403,6 +414,25 @@ __host__ void InsertPrimitive(MeshDescriptor shape, MediumDescriptor medium){
     desc.meshDesc = shape;
     desc.mediumDesc = medium;
     hPrimitives.push_back(desc);
+}
+
+__host__ void InsertEXRLightMap(const char *path, const Transform &toWorld, 
+                                const Spectrum &scale)
+{
+    if(hostScene){
+        if(!hostScene->lightMap){
+            LightMap *map = cudaAllocateVx(LightMap, 1);
+            printf(" * Gerenating light MipMap...");
+            map->lightMap = BuildSpectrumMipMap(path, &map->lightMapDist, scale);
+            map->toWorld = toWorld;
+            hostScene->lightMap = map;
+            printf("OK ( generated %d levels )\n", map->lightMap->Levels());
+        }else{
+            printf("Warning: Multiple calls to InsertLightMap\n");
+        }
+    }else{
+        printf("Warning: No call to BeginScene\n");
+    }
 }
 
 __host__ void InsertCameraMedium(MediumDescriptor medium){
@@ -576,9 +606,14 @@ __global__ void MakeSceneGPU(Aggregator *scene, SceneDescription *description){
     }
 }
 
-__global__ void MakeLights(Aggregator *scene){
+__global__ void MakeLights(Aggregator *scene, SceneDescription *hScene){
     if(threadIdx.x == 0 && blockIdx.x == 0){
-        Assert(scene);
+        Assert(scene && hScene);
+        LightMap *map = hScene->lightMap;
+        if(map){
+            scene->InsertInfiniteLight(map->lightMap, map->lightMapDist, map->toWorld);
+        }
+        
         scene->SetLights();
     }
 }
@@ -603,7 +638,7 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         printf(" * Scene bounds " v3fA(pMin) ", " v3fA(pMax) "\n", 
                v3aA(pMin), v3aA(pMax));
         
-        MakeLights<<<1,1>>>(scene);
+        MakeLights<<<1,1>>>(scene, hostScene);
         cudaDeviceAssert();
     }else{
         printf("Invalid scene, you need to call BeginScene once\n");

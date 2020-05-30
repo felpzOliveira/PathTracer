@@ -53,9 +53,9 @@ __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
             st[1] = Point2f(1, 0);
             st[2] = Point2f(1, 1);
         }else{
-            st[0] = uv[i0]; 
-            st[1] = uv[i1]; 
-            st[2] = uv[i2];
+            st[0] = Point2f(uv[i0].x, 1.0 - uv[i0].y); 
+            st[1] = Point2f(uv[i1].x, 1.0 - uv[i1].y);
+            st[2] = Point2f(uv[i2].x, 1.0 - uv[i2].y); 
         }
     }else{
         st[0] = Point2f(0, 0);

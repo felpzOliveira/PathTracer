@@ -117,10 +117,25 @@ __bidevice__ void Aggregator::InsertDistantLight(const Spectrum &L, const vec3f 
     lightList[lightCounter++] = desc;
 }
 
+__bidevice__ void Aggregator::InsertInfiniteLight(MipMap<Spectrum> *mipmap, 
+                                                  Distribution2D *dist,
+                                                  const Transform &LightToWorld)
+{
+    Assert(lightCounter < 256);
+    LightDesc desc;
+    desc.type = LightType::Infinite;
+    desc.flags = (int)LightFlags::Infinite;
+    desc.toWorld = LightToWorld;
+    desc.Ls = mipmap;
+    desc.dist = dist;
+    lightList[lightCounter++] = desc;
+}
+
 __bidevice__ void Aggregator::SetLights(){
     if(lightCounter > 0){
         int lightAreaCount = 0;
         int lightDistantCount = 0;
+        int lightInfiniteCount = 0;
         lights = new Light*[lightCounter];
         for(int i = 0; i < lightCounter; i++){
             LightDesc desc = lightList[i];
@@ -136,6 +151,9 @@ __bidevice__ void Aggregator::SetLights(){
             }else if(desc.type == LightType::Distant){
                 light->Init_Distant(desc.L, desc.wLight);
                 lightDistantCount++;
+            }else if(desc.type == LightType::Infinite){
+                light->Init_Infinite(desc.Ls, desc.dist);
+                lightInfiniteCount++;
             }else{
                 //TODO
                 AssertA(0, "Unsupported light type");
@@ -149,6 +167,8 @@ __bidevice__ void Aggregator::SetLights(){
             printf(" * Created %d Area Light(s)\n", lightAreaCount);
         if(lightDistantCount > 0)
             printf(" * Created %d Distant Light(s)\n", lightDistantCount);
+        if(lightInfiniteCount > 0)
+            printf(" * Created %d Infinite Light(s)\n", lightInfiniteCount);
     }
 }
 
@@ -168,7 +188,7 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
     
     //printf("Sampled " v3fA(Li) "\n", v3aA(Li));
     
-    if(lightPdf > 0 && !Li.IsBlack()){
+    if(lightPdf > 0 && !Li.IsBlack() && !IsZero(lightPdf)){
         Spectrum f;
         if(it.IsSurfaceInteraction() && bsdf){ //is surface interaction
             const SurfaceInteraction &isect = (const SurfaceInteraction &)it;
@@ -218,7 +238,7 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
             scatteringPdf = p;
         }
         
-        if(!f.IsBlack() && scatteringPdf > 0){
+        if(!f.IsBlack() && scatteringPdf > 0 && !IsZero(scatteringPdf)){
             Float weight = 1;
             if(!sampledSpecular){
                 lightPdf = light->Pdf_Li(it, wi);

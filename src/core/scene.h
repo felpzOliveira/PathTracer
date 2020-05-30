@@ -108,6 +108,8 @@ __host__ MaterialDescriptor  MakeEmissive(Spectrum L);
 
 __host__ MediumDescriptor    MakeMedium(Spectrum sigma_a, Spectrum sigma_s, Float g);
 __host__ void                InsertCameraMedium(MediumDescriptor medium);
+__host__ void                InsertEXRLightMap(const char *path, const Transform &toWorld,
+                                               const Spectrum &scale);
 
 __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat);
 __host__ void                InsertPrimitive(RectDescriptor shape, MaterialDescriptor mat);

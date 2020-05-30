@@ -28,6 +28,7 @@ __bidevice__ Float BxDF::MicrofacetTransmission_Pdf(const vec3f &wo, const vec3f
     vec3f wh = Normalize(h);
     
     Float sqrtDenom = Dot(wo, wh) + eta * Dot(wi, wh);
+    AssertA(!IsZero(sqrtDenom), "MicrofacetTransmission::Pdf zero");
     Float dwh_dwi = Absf((eta * eta * Dot(wi, wh)) / (sqrtDenom * sqrtDenom));
     return mDist.Pdf(wo, wh) * dwh_dwi;
 }
@@ -35,14 +36,18 @@ __bidevice__ Float BxDF::MicrofacetTransmission_Pdf(const vec3f &wo, const vec3f
 __bidevice__ Float BxDF::MicrofacetReflection_Pdf(const vec3f &wo, const vec3f &wi) const{
     if(!SameHemisphere(wo, wi)) return 0;
     vec3f wh = Normalize(wo + wi);
-    return mDist.Pdf(wo, wh) / (4 * Dot(wo, wh));
+    Float dww = Dot(wo, wh);
+    AssertA(!IsZero(dww), "MicrofacetReflection::Pdf zero");
+    return mDist.Pdf(wo, wh) / (4 * dww);
 }
 
 __bidevice__ Float BxDF::FresnelBlend_Pdf(const vec3f &wo, const vec3f &wi) const{
     if(!SameHemisphere(wo, wi)) return 0;
     vec3f wh = Normalize(wo + wi);
     Float pdf_wh = mDist.Pdf(wo, wh);
-    return .5f * (AbsCosTheta(wi) * InvPi + pdf_wh / (4 * Dot(wo, wh)));
+    Float dww = Dot(wo, wh);
+    AssertA(!IsZero(dww), "FresnelBlend::Pdf zero");
+    return .5f * (AbsCosTheta(wi) * InvPi + pdf_wh / (4 * dww));
 }
 
 __bidevice__ Float BxDF::Pdf(const vec3f &wo, const vec3f &wi) const{
@@ -139,7 +144,7 @@ __bidevice__ Spectrum BxDF::MicrofacetTransmission_f(const vec3f &wo, const vec3
     
     Float sqrtDenom = Dot(wo, wh) + eta * Dot(wi, wh);
     Float factor = (mode == TransportMode::Radiance) ? (1 / eta) : 1;
-    
+    AssertA(!IsZero(sqrtDenom), "MicrofacetTransmission::f zero");
     return (Spectrum(1.f) - F) * T * Absf(mDist.D(wh) * mDist.G(wo, wi) * eta * eta *
                                           AbsDot(wi, wh) * AbsDot(wo, wh) * factor * factor /
                                           (cosThetaI * cosThetaO * sqrtDenom * sqrtDenom));
@@ -316,8 +321,9 @@ __bidevice__ Spectrum BxDF::MicrofacetReflection_Sample_f(const vec3f &wo, vec3f
     if(Dot(wo, wh) < 0) return 0.;
     *wi = Reflect(wo, wh);
     if(!SameHemisphere(wo, *wi)) return Spectrum(0.f);
-    
-    *pdf = mDist.Pdf(wo, wh) / (4 * Dot(wo, wh));
+    Float dd = Dot(wo, wh);
+    AssertA(!IsZero(dd), "MicrofacetReflection::Sample_f zero");
+    *pdf = mDist.Pdf(wo, wh) / (4 * dd);
     return f(wo, *wi);
 }
 

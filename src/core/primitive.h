@@ -8,6 +8,7 @@ class BSDF;
 class SurfaceInteraction;
 class Material;
 class Pixel;
+class Distribution2D;
 
 class Primitive{
     public:
@@ -95,6 +96,8 @@ class Aggregator{
     __bidevice__ void Reserve(int size);
     __bidevice__ void Insert(Primitive *pri, int is_light=0);
     __bidevice__ void InsertDistantLight(const Spectrum &L, const vec3f &w);
+    __bidevice__ void InsertInfiniteLight(MipMap<Spectrum> *mipmap, Distribution2D *dist,
+                                          const Transform &LightToWorld);
     
     __bidevice__ bool Intersect(const Ray &r, SurfaceInteraction *, Pixel *p = nullptr) const;
     __bidevice__ bool IntersectTr(Ray r, SurfaceInteraction *, Spectrum *Tr, 

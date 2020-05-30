@@ -2,30 +2,6 @@
 #include <cutil.h>
 #include <image_util.h>
 
-__host__ ImageData *LoadTextureImageData(const char *path){
-    int nx = 0, ny = 0, nn = 0;
-    ImageData *tImage = cudaAllocateVx(ImageData, 1);
-    unsigned char *ptr = ReadImage(path, nx, ny, nn);
-    Assert(ptr && nx > 0 && ny > 0);
-    tImage->data = cudaAllocateVx(unsigned char, 3 * nx * ny);
-    tImage->width = nx;
-    tImage->height = ny;
-    
-    int it = 0;
-    int imit = 0;
-    for(int i = 0; i < nx * ny; i++){
-        tImage->data[it+0] = ptr[imit+0];
-        tImage->data[it+1] = ptr[imit+1];
-        tImage->data[it+2] = ptr[imit+2];
-        it += 3; imit += 3;
-        if(nn == 4) imit++; //skip alpha
-    }
-    
-    tImage->is_valid = 1;
-    free(ptr);
-    return tImage;
-}
-
 __bidevice__ Float FrDieletric(Float cosThetaI, Float etaI, Float etaT){
     cosThetaI = Clamp(cosThetaI, -1, 1);
     // Potentially swap indices of refraction

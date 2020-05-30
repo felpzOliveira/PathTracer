@@ -1,4 +1,5 @@
 #pragma once
+#include <geometry.h>
 
 /*
 * I'm not really gonna add a image util files, this is just
@@ -6,3 +7,5 @@
 */
 
 unsigned char *ReadImage(const char *path, int &width, int &height, int &channels);
+
+Spectrum *ReadImageEXR(const char *path, int &width, int &height);

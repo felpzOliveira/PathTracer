@@ -12,3 +12,4 @@
 * slow. However because we are currently Path Tracing this time is not relevant.
 */
 void graphy_display_pixels(Image *image, int count, int filter=1);
+void graphy_display_pixels(Spectrum *out, int width, int height);
