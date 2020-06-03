@@ -48,6 +48,7 @@ typedef struct{
     int is_emissive;
     MaterialType type;
     TextureDescriptor textures[16];
+    Float vals[16];
 }MaterialDescriptor;
 
 typedef struct{
@@ -92,6 +93,18 @@ __host__ MaterialDescriptor  MakeMetalMaterial(Spectrum kr, Spectrum k,
                                                Float etaI, Float etaT);
 __host__ MaterialDescriptor  MakeGlassMaterial(Spectrum kr, Spectrum kt, Float index,
                                                Float uRough=0, Float vRough=0);
+
+__host__ MaterialDescriptor  MakeSubsurfaceMaterial(Spectrum kr, Spectrum kt,
+                                                    Spectrum sa, Spectrum ss,
+                                                    Float scale, Float eta, Float g=0,
+                                                    Float uRough=0, Float vRough=0);
+
+__host__ MaterialDescriptor  MakeSubsurfaceMaterial(const char *name, Spectrum kr, 
+                                                    Spectrum kt, Float scale, Float eta, 
+                                                    Float g=0, Float uRough=0, Float vRough=0);
+
+__host__ MaterialDescriptor  MakeSubsurfaceMaterial(const char *name, Float scale, Float eta, 
+                                                    Float g=0, Float uRough=0, Float vRough=0);
 
 __host__ MaterialDescriptor  MakePlasticMaterial(Spectrum kd, Spectrum ks, Float rough);
 __host__ MaterialDescriptor  MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum kr, 

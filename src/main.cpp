@@ -14,6 +14,8 @@
 #include <image_util.h>
 #include <mtl.h>
 #include <obj_loader.h>
+#include <ctime>
+#include <sstream>
 
 #define MESH_FOLDER "/home/felpz/Documents/models/"
 #define TEXTURE_FOLDER "/home/felpz/Documents/models/Textures/"
@@ -197,6 +199,30 @@ __device__ Spectrum Li_VolPath(Ray r, Aggregator *scene, Pixel *pixel){
             specularBounce = (flags & BSDF_SPECULAR) != 0;
             
             ray = isect.SpawnRay(wi);
+            
+            if(bsdf.has_bssrdf && (flags & BSDF_TRANSMISSION)){
+                SurfaceInteraction pi;
+                bsdf.nBxDFs = 0;
+                Float u1 = rand_float(state);
+                Point2f u2(rand_float(state), rand_float(state));
+                Spectrum S = bsdf.bssrdf.Sample_S(scene, &bsdf, u1, u2, &pi, &pdf, &isect);
+                
+                if(S.IsBlack() || IsZero(pdf)) break;
+                beta *= S / pdf;
+                u2 = Point2f(rand_float(state), rand_float(state));
+                Point3f u3(rand_float(state), rand_float(state), rand_float(state));
+                Spectrum uL = scene->UniformSampleOneLight(pi, &bsdf, u2, u3, true);
+                L += beta * uL;
+                
+                u2 = Point2f(rand_float(state), rand_float(state));
+                Spectrum f = bsdf.Sample_f(pi.wo, &wi, u2, &pdf, BSDF_ALL, &flags);
+                
+                if(f.IsBlack() || IsZero(pdf)) break;
+                beta *= f * AbsDot(wi, ToVec3(pi.n)) / pdf;
+                specularBounce = (flags & BSDF_SPECULAR) != 0;
+                ray = pi.SpawnRay(wi);
+            }
+            
             pixel->stats.hits++;
         }
         
@@ -223,7 +249,7 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
     RayDifferential ray(r);
     bool specularBounce = false;
     int bounces;
-    int max_bounces = 10;
+    int max_bounces = 4;
     Float rrThreshold = 1;
     
     curandState *state = &pixel->state;
@@ -286,6 +312,30 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
         
         ray = isect.SpawnRay(wi);
         pixel->stats.hits++;
+        
+        if(bsdf.has_bssrdf && (flags & BSDF_TRANSMISSION)){
+            SurfaceInteraction pi;
+            bsdf.nBxDFs = 0;
+            Float u1 = rand_float(state);
+            Point2f u2(rand_float(state), rand_float(state));
+            Spectrum S = bsdf.bssrdf.Sample_S(scene, &bsdf, u1, u2, &pi, &pdf, &isect);
+            if(S.IsBlack() || IsZero(pdf)) break;
+            beta *= S / pdf;
+            
+            u2 = Point2f(rand_float(state), rand_float(state));
+            Point3f u3(rand_float(state), rand_float(state), rand_float(state));
+            Spectrum uL = scene->UniformSampleOneLight(pi, &bsdf, u2, u3);
+            L += beta * uL;
+            
+            u2 = Point2f(rand_float(state), rand_float(state));
+            Spectrum f = bsdf.Sample_f(pi.wo, &wi, u2, &pdf, BSDF_ALL, &flags);
+            
+            if(f.IsBlack() || IsZero(pdf)) break;
+            
+            beta *= f * AbsDot(wi, ToVec3(pi.n)) / pdf;
+            specularBounce = (flags & BSDF_SPECULAR) != 0;
+            ray = pi.SpawnRay(wi);
+        }
         
         Spectrum rrBeta = beta;
         if(MaxComponent(rrBeta) < rrThreshold && bounces > 3) {
@@ -761,38 +811,44 @@ void CornellRandomScene(Camera *camera, Float aspect){
 void LightMapScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 32.f, 60.f),
-                   Point3f(0, 14, -20),
-                   vec3f(0.f,1.f,0.f), 40.f, aspect);
+    camera->Config(Point3f(0.f, 72.f, 70.f),
+                   Point3f(-10, 0, -20),
+                   vec3f(0.f,1.f,0.f), 35.f, aspect);
     
-    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.7,.7, .7), 
-                                                  Spectrum(.1, .1, .1), 0.1);
-    MaterialDescriptor yellow = MakeMatteMaterial(Spectrum(.7,.7,.0));
-    MaterialDescriptor white  = MakeMatteMaterial(Spectrum(0.87, 0.87, 0.87));
-    MaterialDescriptor orange = MakeMatteMaterial(Spectrum(0.98, 0.56, 0.0));
-    MaterialDescriptor red    = MakePlasticMaterial(Spectrum(0.2, 0.46, 0.1),
-                                                    Spectrum(0.99), 0.03);
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1));
     
-    MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
-                                                    Spectrum(0.6f), 0.03);
-    MaterialDescriptor greenGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
-    
-    Transform er = Translate(0, -1.29, 0) * RotateX(90);
+    Transform er = Translate(0, 0, 0) * RotateX(90);
     RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
     InsertPrimitive(bottomWall, gray);
     
-    Transform br = Translate(0, 0, -20);
-    RectDescriptor backWall = MakeRectangle(br, 1000, 1000);
-    InsertPrimitive(backWall, gray);
+    //Transform br = Translate(0, 0, -40);
+    //RectDescriptor backWall = MakeRectangle(br, 1000, 1000);
+    //InsertPrimitive(backWall, gray);
     
+    MaterialDescriptor skin = MakeSubsurfaceMaterial("White Zinfandel", 10, 
+                                                     1.33, 0, 0.05, 0.05);
+    //MediumDescriptor medium = MakeMedium(Spectrum(0.03), Spectrum(0.05), -0.7);
     
     InsertEXRLightMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",  
-                      RotateX(-95) * RotateZ(50), Spectrum(2.5));
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
     
-    ParsedMesh *buddaMesh = LoadObjOnly(MESH_FOLDER "budda.obj");
-    buddaMesh->toWorld = Translate(0, -1,0) * Scale(40) * RotateY(180);
-    MeshDescriptor budda = MakeMesh(buddaMesh);
-    InsertPrimitive(budda, red);
+    //SphereDescriptor lightSphere = MakeSphere(Translate(-20, 50, 71), 10);
+    //MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 10);
+    //InsertPrimitive(lightSphere, matEm);
+    
+    ParsedMesh *sssDragon = LoadObjOnly(MESH_FOLDER "sssDragonAligned.obj");
+    sssDragon->toWorld = Translate(0, 0, 0) * Scale(0.4) * RotateY(210) * RotateZ(4);
+    MeshDescriptor sssDragonDesc = MakeMesh(sssDragon);
+    ///InsertPrimitive(sssDragonDesc, skin);
+    InsertPrimitive(sssDragonDesc, skin);
+    
+    /*
+    SphereDescriptor sphere = MakeSphere(Translate(17, 15, 0), 15);
+    InsertPrimitive(sphere, spec);
+    
+    SphereDescriptor sphere2 = MakeSphere(Translate(-17, 15, 0), 15);
+    InsertPrimitive(sphere2, ket);
+    */
 }
 
 void VolumetricCausticsScene(Camera *camera, Float aspect){
@@ -922,7 +978,6 @@ void render(Image *image){
     int ty = 8;
     int nx = image->width;
     int ny = image->height;
-    int it = 10000;
     unsigned long long seed = time(0);
     Float aspect = (Float)nx / (Float)ny;
     dim3 blocks(nx/tx+1, ny/ty+1);
@@ -952,13 +1007,17 @@ void render(Image *image){
     PrepareSceneForRendering(scene);
     std::cout << "Done" << std::endl;
     
+    int it = 4000;
+    clock_t start = clock();
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){
         Render<<<blocks, threads>>>(image, scene, camera, 1);
         cudaDeviceAssert();
+        clock_t end = clock();
         graphy_display_pixels(image, i);
         //if(i == 0) getchar();
-        std::cout << "\rIteration: " << i << std::flush;
+        std::string ctime = get_time_string(start, end, i, it);
+        std::cout << "\rSamples: " << (i+1) << " " << ctime << std::flush;
     }
     
     std::cout << std::endl;
@@ -982,33 +1041,15 @@ int main(int argc, char **argv){
     }else{
         cudaInitEx();
         
-#if 0
-        Distribution2D *dist;
-        MipMap<Spectrum> *mipmap = BuildSpectrumMipMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",
-                                                       &dist);
-        
-        int level = 0;
-        PyramidLevel<Spectrum> *pLevel = &mipmap->pyramid[level];
-        Spectrum *f = new Spectrum[pLevel->rx * pLevel->ry];
-        Float m = Max(pLevel->rx, pLevel->ry);
-        Float invM = 1 / m;
-        for(int s = 0; s < pLevel->rx; s++){
-            for(int t = 0; t < pLevel->ry; t++){
-                Float ps = ((Float)s) / pLevel->rx;
-                Float py = ((Float)t) / pLevel->ry;
-                Spectrum v = mipmap->Lookup(Point2f(ps, py), invM * 2);
-                f[s + t * pLevel->rx] = v;
-            }
-        }
-        
-        graphy_display_pixels(f, pLevel->rx, pLevel->ry);
-        getchar();
-        exit(0);
-#endif
-        
         Float aspect_ratio = 16.0 / 9.0;
-        const int image_width = 800;
-        const int image_height = (int)((Float)image_width / aspect_ratio);
+        //int image_width = 1600;
+        int image_width = 500;
+        int image_height = (int)((Float)image_width / aspect_ratio);
+#if 0
+        image_width = 1200;
+        image_height = 900;
+#endif
+        aspect_ratio = ((Float)image_width / (Float)image_height);
         
         Image *image = CreateImage(image_width, image_height);
         

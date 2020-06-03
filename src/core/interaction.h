@@ -23,6 +23,7 @@ class Interaction{
     }
     
     __bidevice__ Ray SpawnRayTo(const Interaction &it) const;
+    __bidevice__ Ray SpawnRayTo(const Point3f &it) const;
     
     __bidevice__ Interaction(const Point3f &p, Float time)
         : p(p), time(time), mediumInterface(nullptr) {}

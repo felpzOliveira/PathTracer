@@ -69,7 +69,7 @@ inline __bidevice__ Float InverseGammaCorrect(Float value){
     return std::pow((value + 0.055f) * 1.f / 1.055f, (Float)2.4f);
 }
 
-inline __bidevice__ Float Max(Float a, Float b){ return a > b ? a : b; }
+inline __bidevice__ Float Max(Float a, Float b){ return a < b ? b : a; }
 inline __bidevice__ Float Min(Float a, Float b){ return a < b ? a : b; }
 inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
@@ -282,7 +282,7 @@ template<typename T> class vec3{
     __bidevice__ vec3(){ x = y = z = (T)0; }
     __bidevice__ vec3(T a){ x = y = z = a; }
     __bidevice__ vec3(T a, T b, T c): x(a), y(b), z(c){
-        Assert(!HasNaN());
+        //Assert(!HasNaN());
     }
     
     __bidevice__ bool HasNaN(){
@@ -316,13 +316,20 @@ template<typename T> class vec3{
     }
     
     __bidevice__ vec3<T> operator/(T f) const{
-        Assert(!IsZero(f));
+        //Assert(!IsZero(f));
+        if(IsZero(f)){
+            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+        }
         Float inv = (Float)1 / f;
         return vec3<T>(x * inv, y * inv, z * inv);
     }
     
     __bidevice__ vec3<T> &operator/(T f){
-        Assert(!IsZero(f));
+        //Assert(!IsZero(f));
+        if(IsZero(f)){
+            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+        }
+        
         Float inv = (Float)1 / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
@@ -410,6 +417,11 @@ inline __bidevice__ vec3<T> Clamp(const vec3<T> &val, const vec3<T> &low, const 
     return vec3<T>(Clamp(val.x, low.x, high.x),
                    Clamp(val.y, low.y, high.y),
                    Clamp(val.z, low.z, high.z));
+}
+
+template<typename T>
+inline __bidevice__ vec3<T> Clamp(const vec3<T> &val){
+    return Clamp(val, vec3<T>(-1), vec3<T>(1));
 }
 
 template<typename T>
@@ -954,6 +966,11 @@ template<typename T> class Normal3{
     __bidevice__ Float Length() const { return sqrt(LengthSquared()); }
 };
 
+template <typename T, typename U> inline __bidevice__ 
+Normal3<T> operator*(U s, const Normal3<T> &n){
+    return n * s;
+}
+
 template <typename T> inline __bidevice__ Normal3<T> Normalize(const Normal3<T> &n) {
     return n / n.Length();
 }
@@ -1276,7 +1293,6 @@ inline __bidevice__ Point3f OffsetRayOrigin(const Point3f &p, const vec3f &pErro
                                             const Normal3f &n, const vec3f &w)
 {
     Float d = Dot(Abs(n), pError);
-    //printf(v3fA(pError) "\n", v3aA(pError));
     vec3f offset = d * ToVec3(n);
     if(Dot(w, ToVec3(n)) < 0) offset = -offset;
     Point3f po = p + offset;

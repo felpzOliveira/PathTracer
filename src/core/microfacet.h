@@ -19,6 +19,14 @@ class MicrofacetDistribution{
         sampleVisibleArea = sampleVis;
     }
     
+    __bidevice__ void SetUnmapped(Float _alphax, Float _alphay,
+                                  bool sampleVis = true)
+    {
+        alphax = _alphax;
+        alphay = _alphay;
+        sampleVisibleArea = sampleVis;
+    }
+    
     __bidevice__ Float G1(const vec3f &w) const{
         return 1 / (1 + Lambda(w));
     }

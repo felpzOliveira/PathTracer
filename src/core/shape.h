@@ -25,9 +25,9 @@ typedef struct Node_t{
 }Node;
 typedef Node* NodePtr;
 
-
+extern int BVH_MAX_DEPTH;
 __host__ Node *CreateBVH(PrimitiveHandle *handles, int n, int depth, 
-                         int max_depth, int *totalNodes);
+                         int max_depth, int *totalNodes, int *maxNodes);
 
 class Shape{
     public:
@@ -237,6 +237,7 @@ class Mesh: public Shape{
                                            int triNum, Float *tHit) const;
     
     __bidevice__ void GetUVs(Point2f uv[3], int nTri) const;
+    __bidevice__ void GetNormals(Normal3f n[3], int nTri) const;
 };
 
 inline __bidevice__ void PrintShape(Shape *shape){

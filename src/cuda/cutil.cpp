@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <ctime>
+#include <sstream>
 
 Memory global_memory = {0};
 
@@ -12,6 +13,46 @@ void _check(cudaError_t err, int line, const char *filename){
         getchar();
         exit(0);
     }
+}
+
+std::string get_time_string(clock_t start, clock_t end, int i, int it){
+    double tt = to_cpu_time(start, end);
+    double est = tt * it / (i + 1);
+    std::stringstream stt, sest;
+    stt << tt; sest << est;
+    std::string ts = time_to_string(stt.str(), 8);
+    std::string vs = time_to_string(sest.str(), 8);
+    std::string resp("( ");
+    resp += ts; resp += "s | ";
+    resp += vs; resp += "s )";
+    return resp;
+}
+
+std::string time_to_string(std::string val, int size){
+    std::string resp(val);
+    int dif = size - val.size();
+    if(dif < 0){ // truncate
+        resp = val.substr(0, size);
+    }else if(dif > 0){
+        int has_dot = 0;
+        for(int i = 0; i < val.size(); i++){
+            if(val[i] == '.'){
+                has_dot = 1;
+                break;
+            }
+        }
+        
+        if(has_dot){
+            for(int i = 0; i < dif; i++) resp += "0";
+        }else{
+            std::string out;
+            for(int i = 0; i < dif; i++) out += "0";
+            out += val;
+            resp = out;
+        }
+    }
+    
+    return resp;
 }
 
 double to_cpu_time(clock_t start, clock_t end){

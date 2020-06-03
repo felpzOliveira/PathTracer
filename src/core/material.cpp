@@ -94,12 +94,13 @@ __bidevice__ const char * GetMaterialName(MaterialType type){
         case MaterialType::Glass: return "Glass";
         case MaterialType::Metal: return "Metal";
         case MaterialType::Translucent: return "Translucent";
+        case MaterialType::Subsurface: return "Subsurface";
         default: return "(None)";
     }
 }
 
 __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
-                                                       TransportMode mode, bool mLobes) const
+                                                       TransportMode mode, bool mLobes)
 {
     if(material){
         switch(type){
@@ -138,6 +139,11 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
                 uber->ComputeScatteringFunctions(bsdf, si, mode, mLobes);
             } break;
             
+            case MaterialType::Subsurface:{
+                SubsurfaceMaterial *sub = (SubsurfaceMaterial *) material;
+                sub->ComputeScatteringFunctions(bsdf, si, mode, mLobes, this);
+            } break;
+            
             default:{
                 printf("Unknown material type\n");
             }
@@ -146,80 +152,3 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
         printf("Invalid pointer in Material::Evaluate for %s\n", GetMaterialName(type));
     }
 }
-
-#if 0
-__bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
-                                                       TransportMode mode, bool mLobes) const
-{
-    switch(type){
-        case MaterialType::Matte:{
-            ComputeScatteringFunctionsMatte(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Mirror:{
-            ComputeScatteringFunctionsMirror(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Glass:{
-            ComputeScatteringFunctionsGlass(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Metal:{
-            ComputeScatteringFunctionsMetal(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Translucent:{
-            ComputeScatteringFunctionsTranslucent(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Plastic:{
-            ComputeScatteringFunctionsPlastic(bsdf, si, mode, mLobes);
-        } break;
-        
-        case MaterialType::Uber:{
-            ComputeScatteringFunctionsUber(bsdf, si, mode, mLobes);
-        } break;
-        
-        default:{
-            printf("Unknown material\n");
-        }
-    }
-}
-
-__bidevice__ void Texture::Init_ConstantTexture(Spectrum K){
-    C = K;
-    type = TextureType::ConstantTexture;
-}
-
-__bidevice__ void Texture::Init_ImageTexture(TextureImage *imageptr){
-    imagePtr = imageptr;
-    type = TextureType::ImageTexture;
-}
-
-__bidevice__ Spectrum Texture::EvaluateConstant(SurfaceInteraction *si) const{
-    return C;
-}
-
-__bidevice__ Spectrum Texture::EvaluateImage(SurfaceInteraction *si) const{
-    //TODO: Sample image
-    return Spectrum(0.f);
-}
-
-__bidevice__ Spectrum Texture::Evaluate(SurfaceInteraction *si) const{
-    switch(type){
-        case TextureType::ConstantTexture:{
-            return EvaluateConstant(si);
-        } break;
-        
-        case TextureType::ImageTexture:{
-            return EvaluateImage(si);
-        } break;
-        
-        default:{
-            printf("Unknown texture\n");
-            return Spectrum(0.f);
-        }
-    }
-}
-
-#endif

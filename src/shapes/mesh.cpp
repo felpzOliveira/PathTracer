@@ -64,6 +64,30 @@ __bidevice__ void Mesh::GetUVs(Point2f st[3], int triNum) const{
     }
 }
 
+__bidevice__ void Mesh::GetNormals(Normal3f nor[3], int triNum) const{
+    if(n){
+        int i0 = indices[3 * triNum + 0].y;
+        int i1 = indices[3 * triNum + 1].y;
+        int i2 = indices[3 * triNum + 2].y;
+        if((i0 < 0 || i0 > nNormals) || (i1 < 0 || i1 > nNormals) || 
+           (i2 < 0 || i2 > nNormals))
+        {
+            printf("Warning: Invalid normal query [%d %d %d, #%d]\n",
+                   i0, i1, i2, nNormals);
+            nor[0] = Normal3f(0,1,0); n[1] = Normal3f(0,1,0);
+            nor[2] = Normal3f(0,1,0);
+        }else{
+            nor[0] = n[i0];
+            nor[1] = n[i1];
+            nor[2] = n[i2];
+        }
+    }else{
+        printf("Warning: Query for normals but have none\n");
+        nor[0] = Normal3f(0,1,0); n[1] = Normal3f(0,1,0);
+        nor[2] = Normal3f(0,1,0);
+    }
+}
+
 __bidevice__ bool Mesh::IntersectTriangleLow(const Ray &ray, SurfaceInteraction * isect,
                                              int triNum, Float *tHit) const
 {
@@ -209,16 +233,8 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
     
     bool degenerateUV = Absf(determinant) < 1e-8;
     
-    // NOTE: Some meshes might have denegerate UVs and we can't trace correctly.
-    //       However meshes that don't need that much precision on uv can get by
-    //       simply ignoring uv on this triangle. This avoid the error that happen
-    //       when we decide simply to not render this triangle and for meshes that
-    //       don't rely on uv maps, i.e.: have constant materials. See small budda
-    //       for reference.
-    // TODO: Maybe instead of defaulting to no uv mapping we can map further away.
-    //       This however needs some structured storage of triangles which I don't have now.
-    //       Maybe a edge structure so that we can sample neighbor triangles solves this.
-    if(degenerateUV){ // Fallback to no uv mapping and try again
+    // Attempt to save this triangle
+    if(degenerateUV && 0){ // Fallback to no uv mapping and try again
         st[0] = Point2f(0, 0);
         st[1] = Point2f(1, 0);
         st[2] = Point2f(1, 1);
@@ -234,11 +250,6 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         dpdv = (-dst12[0] * dp02 + dst02[0] * dp12) * invdet;
     }
     
-    // NOTE: Don't give up on this triangle, this can cause serious bugs on large
-    //       meshes rendered with small scale matrix. Perhaps the mesh handling
-    //       API for PBRTv4 needs to better handle scales on triangles. I caught 
-    //       a lot errors of this type.
-#if 0
     if(degenerateUV || IsZero(Cross(dpdu, dpdv).LengthSquared())){
         // Handle zero determinant for triangle partial derivative matrix
         vec3f ng = Cross(p2 - p0, p1 - p0);
@@ -248,7 +259,6 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         
         CoordinateSystem(Normalize(ng), &dpdu, &dpdv);
     }
-#endif
     
     Float xAbsSum = (Absf(b0 * p0.x) + Absf(b1 * p1.x) + Absf(b2 * p2.x));
     Float yAbsSum = (Absf(b0 * p0.y) + Absf(b1 * p1.y) + Absf(b2 * p2.y));
@@ -263,7 +273,68 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
                                 this, triNum);
     
     isect->n = Normal3f(Normalize(Cross(dp02, dp12)));
+    if(reverseOrientation ^ transformSwapsHandedness){
+        isect->n = -isect->n;
+    }
     
+#if 0
+    if(n || s){
+        Normal3f ns;
+        Normal3f nn[3];
+        if(n){
+            GetNormals(nn, triNum);
+            ns = (b0 * nn[0] + b1 * nn[1] + b2 * nn[2]);
+            if(!IsZero(ns.LengthSquared())){
+                ns = Normalize(ns);
+            }else{
+                ns = isect->n;
+            }
+        }else{
+            ns = isect->n;
+        }
+        
+        //TODO: Compute SS
+        vec3f ss = Normalize(isect->dpdu);
+        vec3f ts = Cross(ss, ToVec3(ns));
+        if(ts.LengthSquared() > 0.f){
+            ts = Normalize(ts);
+            ss = Cross(ts, ToVec3(ns));
+        }else{
+            CoordinateSystem(ToVec3(ns), &ss, &ts);
+        }
+        
+        Normal3f dndu, dndv;
+        if(n){
+            vec2f duv02 = uv[0] - uv[2];
+            vec2f duv12 = uv[1] - uv[2];
+            Normal3f dn1 = nn[0] - nn[2];
+            Normal3f dn2 = nn[1] - nn[2];
+            Float determinant = duv02[0] * duv12[1] - duv02[1] * duv12[0];
+            bool degenerateUV = std::abs(determinant) < 1e-8;
+            if(degenerateUV){
+                vec3f dn = Cross(ToVec3(nn[2] - nn[0]), ToVec3(nn[1] - nn[0]));
+                if(IsZero(dn.LengthSquared())){
+                    dndu = dndv = Normal3f(0, 0, 0);
+                }else{
+                    vec3f dnu, dnv;
+                    CoordinateSystem(dn, &dnu, &dnv);
+                    dndu = Normal3f(dnu);
+                    dndv = Normal3f(dnv);
+                }
+            }else{
+                Float invDet = 1 / determinant;
+                dndu = (duv12[1] * dn1 - duv02[1] * dn2) * invDet;
+                dndv = (-duv12[0] * dn1 + duv02[0] * dn2) * invDet;
+            }
+        }else{
+            dndu = dndv = Normal3f(0, 0, 0);
+        }
+        
+        if(reverseOrientation) ts = -ts;
+        vec3f n2 = Normalize(Cross(ss, ts));
+        isect->n = Faceforward(isect->n, n2);
+    }
+#endif
     *tHit = t;
     return true;
 }
@@ -427,14 +498,15 @@ __host__ void WrapMesh(Mesh *mesh){
     MeshGetBounds<<<pBlocks, pThreads>>>(handles, mesh);
     cudaDeviceAssert();
     
-    printf("OK\nPacking...");
-    int max_depth = 12;
+    printf("OK\nPacking\n");
+    int max_depth = BVH_MAX_DEPTH;
     int totalNodes = 0;
-    Node *bvh = CreateBVH(handles, data->nTriangles, 0, max_depth, &totalNodes);
+    int maxNodes = 0;
+    Node *bvh = CreateBVH(handles, data->nTriangles, 0, max_depth, &totalNodes, &maxNodes);
     Point3f pMin = bvh->bound.pMin;
     Point3f pMax = bvh->bound.pMax;
-    printf("OK [ Build BVH with %d nodes, bounds: " v3fA(pMin) ", " v3fA(pMax) " ] \n",
-           totalNodes, v3aA(pMin), v3aA(pMax));
+    printf("[ Build BVH with %d nodes, max: %d bounds: " v3fA(pMin) ", " v3fA(pMax) " ] \n",
+           totalNodes, maxNodes, v3aA(pMin), v3aA(pMax));
     
     MeshSetHandles<<<1, 1>>>(mesh, handles, bvh);
     cudaDeviceAssert();

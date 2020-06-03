@@ -42,9 +42,9 @@ class GeometricPrimitive : public Primitive{
     __bidevice__ virtual Material *GetMaterial() const override{ return material; }
     
     __bidevice__ virtual void PrintSelf() const override{
-        printf("Geometric ( ");
+        //printf("Geometric ( ");
         PrintShape(shape);
-        printf(" ) \n");
+        //printf(" ) \n");
     }
     
     __bidevice__ virtual Light *GetLight() const override{ return nullptr; }
@@ -65,9 +65,9 @@ class GeometricEmitterPrimitive : public Primitive{
     __bidevice__ virtual Spectrum Le() const{ return L; }
     
     __bidevice__ virtual void PrintSelf() const override{
-        printf("Geometric Emitter( ");
+        //printf("Geometric Emitter( ");
         PrintShape(shape);
-        printf(" [ " v3fA(L) " ] ) \n", v3aA(L));
+        //printf(" [ " v3fA(L) " ] ) \n", v3aA(L));
     }
     
     __bidevice__ virtual Light *GetLight() const override{ return light; }
@@ -122,3 +122,6 @@ class Aggregator{
                                          const Point2f &uLight, bool handleMedium = false,
                                          bool specular = false) const;
 };
+
+__bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
+                                     SurfaceInteraction *isect);

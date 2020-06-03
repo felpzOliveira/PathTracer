@@ -4,6 +4,7 @@
 #include <cutil.h>
 #include <interaction.h>
 #include <microfacet.h>
+#include <bssrdf.h>
 
 #define MAX_BxDFS 8
 
@@ -47,8 +48,19 @@ enum BxDFImpl{
     OrenNayar,
     MicrofacetTransmission,
     MicrofacetReflection,
-    FresnelBlend
+    FresnelBlend,
+    BSSRDFAdapter,
+    DisneyDiffuse,
+    DisneyFakeSS,
+    DisneyRetro,
+    DisneySheen,
+    DisneyClearcoat,
 };
+
+__bidevice__ Float FrDieletric(Float cosThetaI, Float etaI, Float etaT);
+
+__bidevice__ Spectrum FrConductor(Float cosThetaI, const Spectrum &etai,
+                                  const Spectrum &etat, const Spectrum &k);
 
 class BxDF{
     public:
@@ -63,10 +75,47 @@ class BxDF{
     
     MicrofacetDistribution mDist;
     
+    
+    
+    SeparableBSSRDF *bssrdf;
+    
     __bidevice__ BxDF(){is_valid = 1;}
     __bidevice__ BxDF(BxDFImpl impl) : impl(impl), type(BxDFType(0)){is_valid=1;}
     
     __bidevice__ void Invalidate(){is_valid = 0;}
+    
+    __bidevice__ void Init_DisneyClearcoat(Float weight, Float gloss){
+        type = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY);
+        impl = BxDFImpl::DisneyClearcoat;
+        A = weight;
+        B = gloss;
+    }
+    
+    __bidevice__ void Init_DisneySheen(const Spectrum &R){
+        type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
+        impl = BxDFImpl::DisneySheen;
+        S = R;
+    }
+    
+    __bidevice__ void Init_DisneyDiffuse(const Spectrum &R){
+        S = R;
+        type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
+        impl = BxDFImpl::DisneyDiffuse;
+    }
+    
+    __bidevice__ void Init_DisneyFakeSS(const Spectrum &R, Float uRough){
+        S = R;
+        A = uRough;
+        type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
+        impl = BxDFImpl::DisneyFakeSS;
+    }
+    
+    __bidevice__ void Init_DisneyRetro(const Spectrum &R, Float uRough){
+        S = R;
+        A = uRough;
+        type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
+        impl = BxDFImpl::DisneyRetro;
+    }
     
     __bidevice__ void Init_LambertianReflection(const Spectrum &R){
         type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
@@ -122,7 +171,7 @@ class BxDF{
     
     __bidevice__ void Init_MicrofacetTransmission(const Spectrum &_T, Float eA, Float eB,
                                                   Float alphax, Float alphay,
-                                                  TransportMode _mode)
+                                                  TransportMode _mode, bool remap=true)
     {
         type = BxDFType(BSDF_TRANSMISSION | BSDF_GLOSSY);
         impl = BxDFImpl::MicrofacetTransmission;
@@ -130,25 +179,31 @@ class BxDF{
         B = eB;
         T = _T;
         fresnel.Init_Dieletric(A, B);
-        mDist.Set(alphax, alphay);
+        if(remap)
+            mDist.Set(alphax, alphay);
+        else
+            mDist.SetUnmapped(alphax, alphay);
         mode = _mode;
     }
     
     __bidevice__ void Init_MicrofacetReflection(const Spectrum &R, Float alphax,
                                                 Float alphay, Fresnel *_fresnel,
-                                                TransportMode _mode)
+                                                TransportMode _mode, bool remap=true)
     {
         type = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY);
         impl = BxDFImpl::MicrofacetReflection;
         S = R;
         fresnel = *_fresnel;
-        mDist.Set(alphax, alphay);
+        if(remap)
+            mDist.Set(alphax, alphay);
+        else
+            mDist.SetUnmapped(alphax, alphay);
         mode = _mode;
     }
     
     __bidevice__ void Init_MicrofacetReflection(const Spectrum &R, Float eA, Float eB,
                                                 Float alphax, Float alphay,
-                                                TransportMode _mode)
+                                                TransportMode _mode, bool remap=true)
     {
         type = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY);
         impl = BxDFImpl::MicrofacetReflection;
@@ -156,7 +211,10 @@ class BxDF{
         B = eB;
         S = R;
         fresnel.Init_Dieletric(A, B);
-        mDist.Set(alphax, alphay);
+        if(remap)
+            mDist.Set(alphax, alphay);
+        else
+            mDist.SetUnmapped(alphax, alphay);
         mode = _mode;
     }
     
@@ -168,6 +226,12 @@ class BxDF{
         S = R;
         T = _T;
         mDist.Set(alphax, alphay);
+    }
+    
+    __bidevice__ void Init_BSSRDF(SeparableBSSRDF *sbssrdf){
+        bssrdf = sbssrdf;
+        type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
+        impl = BxDFImpl::BSSRDFAdapter;
     }
     
     __bidevice__ Spectrum f(const vec3f &wo, const vec3f &wi) const;
@@ -260,11 +324,31 @@ class BxDF{
     __bidevice__ Spectrum FresnelBlend_Sample_f(const vec3f &wo, vec3f *wi,
                                                 const Point2f &sample, Float *pdf,
                                                 BxDFType *sampledType = nullptr) const;
+    
+    __bidevice__ Spectrum DisneyDiffuse_f(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Spectrum DisneyFakeSS_f(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Spectrum DisneyRetro_f(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Spectrum DisneySheen_f(const vec3f &wo, const vec3f &wi) const;
+    
+    
+    __bidevice__ Spectrum DisneyClearcoat_f(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Float DisneyClearcoat_Pdf(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Spectrum DisneyClearcoat_Sample_f(const vec3f &wo, vec3f *wi,
+                                                   const Point2f &sample, Float *pdf,
+                                                   BxDFType *sampledType = nullptr) const;
+    
+    __bidevice__ Spectrum BSSRDFAdapter_f(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Float BSSRDFAdapter_Pdf(const vec3f &wo, const vec3f &wi) const;
+    __bidevice__ Spectrum BSSRDFAdapter_Sample_f(const vec3f &wo, vec3f *wi,
+                                                 const Point2f &sample, Float *pdf,
+                                                 BxDFType *sampledType = nullptr) const;
 };
 
 class BSDF{
     public:
     BxDF bxdfs[MAX_BxDFS];
+    SeparableBSSRDF bssrdf;
+    int has_bssrdf;
     int nBxDFs;
     const Normal3f ns, ng;
     const vec3f ss, ts;
@@ -273,6 +357,7 @@ class BSDF{
         : ns(si.n), ng(si.n), ss(Normalize(si.dpdu)), ts(Cross(ToVec3(ns), ss)) 
     {
         nBxDFs = 0;
+        has_bssrdf = 0;
     }
     
     __bidevice__ vec3f LocalToWorld(const vec3f &v) const{
@@ -294,6 +379,11 @@ class BSDF{
     
     __bidevice__ Float Pdf(const vec3f &wo, const vec3f &wi, 
                            BxDFType flags = BSDF_ALL) const;
+    
+    __bidevice__ void PushBSSRDF(SeparableBSSRDF *pbssrdf){
+        bssrdf = *pbssrdf;
+        has_bssrdf = 1;
+    }
     
     __bidevice__ void Push(BxDF *bxdf){
         if(nBxDFs < MAX_BxDFS){

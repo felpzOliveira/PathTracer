@@ -4,8 +4,7 @@ __bidevice__ Float MicrofacetDistribution::Lambda(const vec3f &w) const{
     Float absTanTheta = Absf(TanTheta(w));
     if (std::isinf(absTanTheta)) return 0.;
     
-    Float alpha =
-        std::sqrt(Cos2Phi(w) * alphax * alphax + Sin2Phi(w) * alphay * alphay);
+    Float alpha = std::sqrt(Cos2Phi(w) * alphax * alphax + Sin2Phi(w) * alphay * alphay);
     Float alpha2Tan2Theta = (alpha * absTanTheta) * (alpha * absTanTheta);
     return (-1 + std::sqrt(1.f + alpha2Tan2Theta)) / 2;
 }

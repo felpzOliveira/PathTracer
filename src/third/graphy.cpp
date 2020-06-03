@@ -74,6 +74,7 @@ void graphy_display_pixels(Image *image, int count, int filter){
             Pixel *pixel = &image->pixels[k];
             Spectrum we = pixel->we;
             if(filter){
+                AssertA(pixel->samples != 0, "Zero samples on graphy_display");
                 Float invNS = 1.0f / (Float)(pixel->samples);
                 we = ExponentialMap(pixel->we * invNS, 1.f);
             }

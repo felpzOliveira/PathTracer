@@ -4,6 +4,9 @@
 #include <interaction.h>
 #include <reflection.h>
 #include <texture.h>
+#include <bssrdf.h>
+
+class Material;
 
 class MatteMaterial{
     public:
@@ -165,9 +168,35 @@ class TranslucentMaterial{
     }
 };
 
+class SubsurfaceMaterial{
+    public:
+    Float scale;
+    Texture<Spectrum> *Kr, *Kt, *sigma_a, *sigma_s;
+    Texture<Float> *uRough, *vRough;
+    Float eta;
+    BSSRDFTable *table;
+    
+    __bidevice__ SubsurfaceMaterial(Texture<Spectrum> *kr, Texture<Spectrum> *kt,
+                                    Texture<Spectrum> *sa, Texture<Spectrum> *ss,
+                                    Texture<Float> *urough, Texture<Float> *vrough,
+                                    Float g, Float e, Float scale=10);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes,
+                                                 Material *sourceMat) const;
+    
+    __bidevice__ ~SubsurfaceMaterial(){
+        TexPtrClean(Kr); TexPtrClean(Kt);
+        TexPtrClean(sigma_a); TexPtrClean(sigma_s);
+        TexPtrClean(vRough); TexPtrClean(uRough);
+        //TODO: cleanup BSSRDFTable
+    }
+};
+
 
 enum MaterialType{
-    Matte=1, Mirror, Glass, Metal, Translucent, Plastic, Uber
+    Matte=1, Mirror, Glass, Metal, Translucent, Plastic, Uber,
+    Subsurface
 };
 
 class Material{
@@ -178,5 +207,5 @@ class Material{
     __bidevice__ Material(){ material = nullptr; type = MaterialType(0); }
     __bidevice__ void Set(void *ptr) { material = ptr; }
     __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
-                                                 TransportMode mode, bool mLobes) const;
+                                                 TransportMode mode, bool mLobes);
 };

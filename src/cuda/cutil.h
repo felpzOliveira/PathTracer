@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <string.h>
+#include <iostream>
 
 /*
 * CUDA UTILITIES
@@ -71,5 +72,11 @@ void cudaSafeExit(void);
 
 /* Simple utility for time checking */
 double to_cpu_time(clock_t start, clock_t end);
+
+std::string get_time_string(clock_t start, clock_t end, int i, int it);
+
+std::string get_time_unit(double *inval);
+
+std::string time_to_string(std::string val, int size);
 
 #endif

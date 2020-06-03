@@ -4,6 +4,50 @@
 #include <camera.h>
 #include <light.h>
 
+int BVH_MAX_DEPTH = 20;
+
+struct NodeDistribution{
+    Node *nodes;
+    PrimitiveHandle *handles;
+    int length;
+    int head;
+    int maxElements;
+    int handleHead;
+    int maxHandles;
+    int skippedSorts;
+    int totalSorts;
+};
+
+__host__ void MakeNodeDistribution(NodeDistribution *dist, int nElements,
+                                   int maxDepth)
+{
+    Float fh = Log2(nElements);
+    int h = ceil(fh);
+    h = h > maxDepth ? maxDepth : h;
+    int c = std::pow(2, h+1) - 1;
+    int leafs = std::pow(2, h);
+    long mem = sizeof(Node) * c;
+    mem /= (1024 * 1024);
+    
+    printf(" * Requesting %ld Mb for nodes ...", mem);
+    dist->nodes = cudaAllocateVx(Node, c);
+    printf("OK\n");
+    
+    mem = sizeof(PrimitiveHandle) * nElements;
+    mem /= (1024 * 1024);
+    printf(" * Requsting %ld Mb for handles ...", mem);
+    dist->handles = cudaAllocateVx(PrimitiveHandle, nElements);
+    printf("OK\n");
+    
+    dist->length = c;
+    dist->head = 0;
+    dist->handleHead = 0;
+    dist->maxHandles = nElements;
+    dist->maxElements = 0;
+    dist->totalSorts = 0;
+    dist->skippedSorts = 0;
+}
+
 __bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
                                      SurfaceInteraction *isect)
 {
@@ -463,8 +507,9 @@ __bidevice__ int CompareZ(PrimitiveHandle *p0, PrimitiveHandle *p1){
     return p0->bound.pMin.z >= p1->bound.pMin.z ? 1 : 0;
 }
 
-__host__ Node *CreateNode(int n){
-    Node *node = cudaAllocateVx(Node, 1);
+__host__ Node *GetNode(int n, NodeDistribution *nodeDist){
+    AssertA(nodeDist->head < nodeDist->length, "Too many node requirement");
+    Node *node = &nodeDist->nodes[nodeDist->head++];
     node->left = nullptr;
     node->right = nullptr;
     node->handles = nullptr;
@@ -473,45 +518,62 @@ __host__ Node *CreateNode(int n){
     return node;
 }
 
-__host__ void NodeSetItens(Node *node, int n){
+__host__ void NodeSetItens(Node *node, int n, NodeDistribution *dist){
+    AssertA(dist->handleHead+n <= dist->maxHandles, "Too many handles requirement");
     node->n = n;
-    node->handles = cudaAllocateVx(PrimitiveHandle, n);
+    node->handles = &dist->handles[dist->handleHead];
+    dist->handleHead += n;
 }
 
-__host__ Node *CreateBVH(PrimitiveHandle *handles,int n, int depth, 
-                         int max_depth, int *totalNodes)
+
+/*
+* This BVH construction algorithm is adapted from the original proposal. 
+* It no longers manages memory dinamically getting a decent speedup. We also
+* perform axis comparison before sorting having a reduction of about 33% on sort
+* operations which on 7M triangle mesh reduced the construction time (on my machine)
+* from 2 minutes to 14 seconds.
+*/
+__host__ Node *_CreateBVH(PrimitiveHandle *handles,int n, int depth, 
+                          int max_depth, NodeDistribution *distr, int last_axis=-1)
 {
+    Node *node = GetNode(n, distr);
     int axis = int(3 * rand_float());
-    Node *node = CreateNode(n);
-    (*totalNodes)++;
-    if(axis == 0){
-        QuickSort(handles, n, CompareX);
-    }else if(axis == 1){
-        QuickSort(handles, n, CompareY);
-    }else if(axis == 2){
-        QuickSort(handles, n, CompareZ);
+    
+    if(axis != last_axis){
+        last_axis = axis;
+        distr->totalSorts ++;
+        if(axis == 0){
+            QuickSort(handles, n, CompareX);
+        }else if(axis == 1){
+            QuickSort(handles, n, CompareY);
+        }else if(axis == 2){
+            QuickSort(handles, n, CompareZ);
+        }
+    }else{
+        distr->skippedSorts ++;
     }
     
     if(n == 1){
-        NodeSetItens(node, n);
+        NodeSetItens(node, n, distr);
         memcpy(node->handles, handles, n * sizeof(PrimitiveHandle));
         node->bound = handles[0].bound;
         node->is_leaf = 1;
+        if(distr->maxElements < 1) distr->maxElements = 1;
         return node;
     }else if(n == 2){
-        node->left = CreateNode(0);
-        node->right = CreateNode(0);
-        (*totalNodes) += 2;
-        NodeSetItens(node->left, 1);
-        NodeSetItens(node->right, 1);
+        node->left = GetNode(0, distr);
+        node->right = GetNode(0, distr);
+        NodeSetItens(node->left, 1, distr);
+        NodeSetItens(node->right, 1, distr);
         memcpy(node->left->handles, &handles[0], sizeof(PrimitiveHandle));
         memcpy(node->right->handles, &handles[1], sizeof(PrimitiveHandle));
         node->left->is_leaf = 1;
         node->right->is_leaf = 1;
         node->left->bound = handles[0].bound;
         node->right->bound = handles[1].bound;
-    }else if(depth > max_depth){
-        NodeSetItens(node, n);
+        if(distr->maxElements < 2) distr->maxElements = 2;
+    }else if(depth >= max_depth){
+        NodeSetItens(node, n, distr);
         memcpy(node->handles, handles, n*sizeof(PrimitiveHandle));
         node->bound = handles[0].bound;
         for(int i = 1; i < n; i++){
@@ -519,10 +581,11 @@ __host__ Node *CreateBVH(PrimitiveHandle *handles,int n, int depth,
         }
         
         node->is_leaf = 1;
+        if(distr->maxElements < n) distr->maxElements = n;
         return node;
     }else{
-        node->left = CreateBVH(handles, n/2, depth+1, max_depth, totalNodes);
-        node->right = CreateBVH(&handles[n/2], n-n/2, depth+1, max_depth, totalNodes);
+        node->left  = _CreateBVH(handles, n/2, depth+1, max_depth, distr, last_axis);
+        node->right = _CreateBVH(&handles[n/2], n-n/2, depth+1, max_depth, distr, last_axis);
     }
     
     node->bound = Union(node->left->bound, node->right->bound);
@@ -546,8 +609,28 @@ __global__ void BuildSceneTable(Aggregator *scene){
     }
 }
 
+__host__ Node *CreateBVH(PrimitiveHandle *handles, int n, int depth, 
+                         int max_depth, int *totalNodes, int *maxNodes)
+{
+    NodeDistribution distr;
+    memset(&distr, 0x00, sizeof(NodeDistribution));
+    MakeNodeDistribution(&distr, n, max_depth);
+    clock_t start = clock();
+    Node *root = _CreateBVH(handles, n, depth, max_depth, &distr);
+    clock_t end = clock();
+    *maxNodes = distr.maxElements;
+    *totalNodes = distr.head;
+    double time_taken = to_cpu_time(start, end);
+    Float totalSorts = (Float)distr.totalSorts + (Float)distr.skippedSorts;
+    Float sortReduction = 100.0f * (((Float)distr.skippedSorts) / totalSorts);
+    printf(" * Time: %gs\n", time_taken);
+    printf(" * Sort reduction algorihtm: %g%%\n", sortReduction);
+    return root;
+}
+
 __host__ void Aggregator::Wrap(){
-    int max_depth = 12;
+    int max_depth = BVH_MAX_DEPTH;
+    int maxNodes = 0;
     totalNodes = 0;
     handles = cudaAllocateVx(PrimitiveHandle, head);
     
@@ -560,7 +643,7 @@ __host__ void Aggregator::Wrap(){
     BuildSceneTable<<<pBlocks, pThreads>>>(this);
     cudaDeviceAssert();
     
-    printf("Wrapping primitives...");
-    root = CreateBVH(handles, head, 0, max_depth, &totalNodes);
-    printf("OK [ Build BVH with %d nodes ]\n", totalNodes);
+    printf("Wrapping primitives\n");
+    root = CreateBVH(handles, head, 0, max_depth, &totalNodes, &maxNodes);
+    printf("[ Build BVH with %d nodes, max: %d ]\n", totalNodes, maxNodes);
 }

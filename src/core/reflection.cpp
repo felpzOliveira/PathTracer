@@ -1,4 +1,28 @@
 #include <reflection.h>
+#include <bssrdf.h>
+inline __bidevice__ Float SchlickWeight(Float cosTheta){
+    Float m = Clamp(1 - cosTheta, 0, 1);
+    return (m * m) * (m * m) * m;
+}
+
+inline __bidevice__ Float FrSchlick(Float R0, Float cosTheta) {
+    return Lerp(SchlickWeight(cosTheta), R0, 1.f);
+}
+
+inline __bidevice__ Spectrum FrSchlick(const Spectrum &R0, Float cosTheta) {
+    return Lerp(SchlickWeight(cosTheta), R0, Spectrum(1.));
+}
+
+inline __bidevice__ Float GTR1(Float cosTheta, Float alpha) {
+    Float alpha2 = alpha * alpha;
+    return (alpha2 - 1) / (Pi * std::log(alpha2) * (1 + (alpha2 - 1) * cosTheta * cosTheta));
+}
+
+inline __bidevice__ Float smithG_GGX(Float cosTheta, Float alpha) {
+    Float alpha2 = alpha * alpha;
+    Float cosTheta2 = cosTheta * cosTheta;
+    return 1 / (cosTheta + sqrt(alpha2 + cosTheta2 - alpha2 * cosTheta2));
+}
 
 __bidevice__ Float pow5(Float v){
     return v*v*v*v*v;
@@ -7,11 +31,6 @@ __bidevice__ Float pow5(Float v){
 __bidevice__ Spectrum SchlickFresnel(Float cosTheta, Spectrum Rs){
     return Rs + pow5(1 - cosTheta) * (Spectrum(1.) - Rs);
 }
-
-__bidevice__ Float FrDieletric(Float cosThetaI, Float etaI, Float etaT);
-
-__bidevice__ Spectrum FrConductor(Float cosThetaI, const Spectrum &etai,
-                                  const Spectrum &etat, const Spectrum &k);
 
 __bidevice__ Float BxDF::LambertianReflection_Pdf(const vec3f &wo, const vec3f &wi) const{
     return SameHemisphere(wo, wi) ? AbsCosTheta(wi) * InvPi : 0;
@@ -48,6 +67,19 @@ __bidevice__ Float BxDF::FresnelBlend_Pdf(const vec3f &wo, const vec3f &wi) cons
     Float dww = Dot(wo, wh);
     AssertA(!IsZero(dww), "FresnelBlend::Pdf zero");
     return .5f * (AbsCosTheta(wi) * InvPi + pdf_wh / (4 * dww));
+}
+
+__bidevice__ Float BxDF::BSSRDFAdapter_Pdf(const vec3f &wo, const vec3f &wi) const{
+    return SameHemisphere(wo, wi) ? AbsCosTheta(wi) * InvPi : 0;
+}
+
+__bidevice__ Float BxDF::DisneyClearcoat_Pdf(const vec3f &wo, const vec3f &wi) const{
+    if(!SameHemisphere(wo, wi)) return 0;
+    vec3f wh = wi + wo;
+    if(wh.IsBlack()) return 0;
+    wh = Normalize(wh);
+    Float Dr = GTR1(AbsCosTheta(wh), B);
+    return Dr * AbsCosTheta(wh) / (4 * Dot(wo, wh));
 }
 
 __bidevice__ Float BxDF::Pdf(const vec3f &wo, const vec3f &wi) const{
@@ -90,6 +122,21 @@ __bidevice__ Float BxDF::Pdf(const vec3f &wo, const vec3f &wi) const{
         
         case BxDFImpl::FresnelBlend:{
             return FresnelBlend_Pdf(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneySheen:
+        case BxDFImpl::DisneyRetro:
+        case BxDFImpl::DisneyFakeSS:
+        case BxDFImpl::DisneyDiffuse:{
+            return LambertianReflection_Pdf(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneyClearcoat:{
+            return DisneyClearcoat_Pdf(wo, wi);
+        } break;
+        
+        case BxDFImpl::BSSRDFAdapter:{
+            return BSSRDFAdapter_Pdf(wo, wi);
         } break;
         
         default:{
@@ -174,6 +221,71 @@ __bidevice__ Spectrum BxDF::FresnelBlend_f(const vec3f &wo, const vec3f &wi) con
     return diffuse + specular;
 }
 
+__bidevice__ Spectrum BxDF::BSSRDFAdapter_f(const vec3f &wo, const vec3f &wi) const{
+    Spectrum f = bssrdf->Sw(wi);
+    if(bssrdf->mode == TransportMode::Radiance)
+        f *= bssrdf->eta * bssrdf->eta;
+    return f;
+}
+
+Spectrum BxDF::DisneyDiffuse_f(const vec3f &wo, const vec3f &wi) const{
+    Float Fo = SchlickWeight(AbsCosTheta(wo));
+    Float Fi = SchlickWeight(AbsCosTheta(wi));
+    
+    // Diffuse fresnel - go from 1 at normal incidence to .5 at grazing.
+    // Burley 2015, eq (4).
+    return S * InvPi * (1 - Fo / 2) * (1 - Fi / 2);
+}
+
+Spectrum BxDF::DisneyFakeSS_f(const vec3f &wo, const vec3f &wi) const{
+    vec3f wh = wi + wo;
+    if(wh.IsBlack()) return Spectrum(0.);
+    wh = Normalize(wh);
+    Float cosThetaD = Dot(wi, wh);
+    
+    // Fss90 used to "flatten" retroreflection based on roughness
+    Float Fss90 = cosThetaD * cosThetaD * A;
+    Float Fo = SchlickWeight(AbsCosTheta(wo)),
+    Fi = SchlickWeight(AbsCosTheta(wi));
+    Float Fss = Lerp(Fo, 1.0f, Fss90) * Lerp(Fi, 1.0f, Fss90);
+    // 1.25 scale is used to (roughly) preserve albedo
+    Float ss = 1.25f * (Fss * (1 / (AbsCosTheta(wo) + AbsCosTheta(wi)) - .5f) + .5f);
+    
+    return S * InvPi * ss;
+}
+
+Spectrum BxDF::DisneyRetro_f(const vec3f &wo, const vec3f &wi) const{
+    vec3f wh = wi + wo;
+    if(wh.IsBlack()) return Spectrum(0.);
+    wh = Normalize(wh);
+    Float cosThetaD = Dot(wi, wh);
+    
+    Float Fo = SchlickWeight(AbsCosTheta(wo));
+    Float Fi = SchlickWeight(AbsCosTheta(wi));
+    Float Rr = 2 * A * cosThetaD * cosThetaD;
+    
+    // Burley 2015, eq (4).
+    return S * InvPi * Rr * (Fo + Fi + Fo * Fi * (Rr - 1));
+}
+
+Spectrum BxDF::DisneySheen_f(const vec3f &wo, const vec3f &wi) const{
+    vec3f wh = wi + wo;
+    if(wh.IsBlack()) return Spectrum(0.);
+    wh = Normalize(wh);
+    Float cosThetaD = Dot(wi, wh);
+    return S * SchlickWeight(cosThetaD);
+}
+
+__bidevice__ Spectrum BxDF::DisneyClearcoat_f(const vec3f &wo, const vec3f &wi) const{
+    vec3f wh = wi + wo;
+    if(wh.IsBlack()) return Spectrum(0.);
+    wh = Normalize(wh);
+    Float Dr = GTR1(AbsCosTheta(wh), B);
+    Float Fr = FrSchlick(.04, Dot(wo, wh));
+    Float Gr = smithG_GGX(AbsCosTheta(wo), .25) * smithG_GGX(AbsCosTheta(wi), .25);
+    return A * Gr * Fr * Dr / 4;
+}
+
 __bidevice__ Spectrum BxDF::f(const vec3f &wo, const vec3f &wi) const{
     if(!is_valid){
         return Spectrum(0);
@@ -214,6 +326,30 @@ __bidevice__ Spectrum BxDF::f(const vec3f &wo, const vec3f &wi) const{
         
         case BxDFImpl::FresnelBlend:{
             return FresnelBlend_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneyDiffuse:{
+            return DisneyDiffuse_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneyFakeSS:{
+            return DisneyFakeSS_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneyRetro:{
+            return DisneyRetro_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneySheen:{
+            return DisneySheen_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::DisneyClearcoat:{
+            return DisneyClearcoat_f(wo, wi);
+        } break;
+        
+        case BxDFImpl::BSSRDFAdapter:{
+            return BSSRDFAdapter_f(wo, wi);
         } break;
         
         default:{
@@ -327,6 +463,16 @@ __bidevice__ Spectrum BxDF::MicrofacetReflection_Sample_f(const vec3f &wo, vec3f
     return f(wo, *wi);
 }
 
+__bidevice__ Spectrum BxDF::BSSRDFAdapter_Sample_f(const vec3f &wo, vec3f *wi, 
+                                                   const Point2f &u,Float *pdf, 
+                                                   BxDFType *sampledType) const 
+{
+    *wi = CosineSampleHemisphere(u);
+    if (wo.z < 0) wi->z *= -1;
+    *pdf = Pdf(wo, *wi);
+    return f(wo, *wi);
+}
+
 __bidevice__ Spectrum BxDF::FresnelBlend_Sample_f(const vec3f &wo, vec3f *wi,
                                                   const Point2f &sample, Float *pdf,
                                                   BxDFType *sampledType) const
@@ -342,6 +488,25 @@ __bidevice__ Spectrum BxDF::FresnelBlend_Sample_f(const vec3f &wo, vec3f *wi,
         *wi = Reflect(wo, wh);
         if(!SameHemisphere(wo, *wi)) return Spectrum(0.f);
     }
+    
+    *pdf = Pdf(wo, *wi);
+    return f(wo, *wi);
+}
+
+__bidevice__ Spectrum BxDF::DisneyClearcoat_Sample_f(const vec3f &wo, vec3f *wi,
+                                                     const Point2f &u, Float *pdf,
+                                                     BxDFType *sampledType) const
+{
+    if(IsZero(wo.z)) return 0.;
+    Float alpha2 = B * B;
+    Float cosTheta = std::sqrt(Max(Float(0), (1 - std::pow(alpha2, 1 - u[0])) / (1 - alpha2)));
+    Float sinTheta = std::sqrt(Max((Float)0, 1 - cosTheta * cosTheta));
+    Float phi = 2 * Pi * u[1];
+    vec3f wh = SphericalDirection(sinTheta, cosTheta, phi);
+    if(!SameHemisphere(wo, wh)) wh = -wh;
+    
+    *wi = Reflect(wo, wh);
+    if(!SameHemisphere(wo, *wi)) return Spectrum(0.f);
     
     *pdf = Pdf(wo, *wi);
     return f(wo, *wi);
@@ -391,6 +556,21 @@ __bidevice__ Spectrum BxDF::Sample_f(const vec3f &wo, vec3f *wi,
         
         case BxDFImpl::FresnelBlend:{
             return FresnelBlend_Sample_f(wo, wi, sample, pdf, sampledType);
+        } break;
+        
+        case BxDFImpl::DisneySheen:
+        case BxDFImpl::DisneyRetro:
+        case BxDFImpl::DisneyFakeSS:
+        case BxDFImpl::DisneyDiffuse:{
+            return LambertianReflection_Sample_f(wo, wi, sample, pdf, sampledType);
+        };
+        
+        case BxDFImpl::DisneyClearcoat:{
+            return DisneyClearcoat_Sample_f(wo, wi, sample, pdf, sampledType);
+        } break;
+        
+        case BxDFImpl::BSSRDFAdapter:{
+            return BSSRDFAdapter_Sample_f(wo, wi, sample, pdf, sampledType);
         } break;
         
         default:{
