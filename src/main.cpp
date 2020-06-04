@@ -811,11 +811,11 @@ void CornellRandomScene(Camera *camera, Float aspect){
 void LightMapScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(0.f, 72.f, 70.f),
+    camera->Config(Point3f(0.f, 62.f, 90.f),
                    Point3f(-10, 0, -20),
-                   vec3f(0.f,1.f,0.f), 35.f, aspect);
+                   vec3f(0.f,1.f,0.f), 42.f, aspect);
     
-    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1));
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
     
     Transform er = Translate(0, 0, 0) * RotateX(90);
     RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
@@ -825,11 +825,13 @@ void LightMapScene(Camera *camera, Float aspect){
     //RectDescriptor backWall = MakeRectangle(br, 1000, 1000);
     //InsertPrimitive(backWall, gray);
     
-    MaterialDescriptor skin = MakeSubsurfaceMaterial("White Zinfandel", 10, 
+    MaterialDescriptor skin = MakeSubsurfaceMaterial("Ketchup", 1, 
+                                                     1.33, 0, 0.05, 0.05);
+    MaterialDescriptor milk = MakeSubsurfaceMaterial("Skin1", 1, 
                                                      1.33, 0, 0.05, 0.05);
     //MediumDescriptor medium = MakeMedium(Spectrum(0.03), Spectrum(0.05), -0.7);
-    
-    InsertEXRLightMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",  
+    //20060807_wells6_hd
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
                       RotateX(-90) * RotateZ(90), Spectrum(2.5));
     
     //SphereDescriptor lightSphere = MakeSphere(Translate(-20, 50, 71), 10);
@@ -837,10 +839,16 @@ void LightMapScene(Camera *camera, Float aspect){
     //InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *sssDragon = LoadObjOnly(MESH_FOLDER "sssDragonAligned.obj");
-    sssDragon->toWorld = Translate(0, 0, 0) * Scale(0.4) * RotateY(210) * RotateZ(4);
+    MeshProperties props; props.flip_x = 0;
+    ParsedMesh *sssDragonCopy = DuplicateMesh(sssDragon, &props);
+    
+    sssDragonCopy->toWorld = Translate(15, 0, 10) * Scale(0.4) * RotateY(280) * RotateZ(4);
+    sssDragon->toWorld = Translate(-25, 0, 15) * Scale(0.4) * RotateY(266) * RotateZ(4);
     MeshDescriptor sssDragonDesc = MakeMesh(sssDragon);
-    ///InsertPrimitive(sssDragonDesc, skin);
-    InsertPrimitive(sssDragonDesc, skin);
+    MeshDescriptor sssDragonDescCopy = MakeMesh(sssDragonCopy);
+    
+    InsertPrimitive(sssDragonDesc, milk);
+    InsertPrimitive(sssDragonDescCopy, skin);
     
     /*
     SphereDescriptor sphere = MakeSphere(Translate(17, 15, 0), 15);
@@ -1042,8 +1050,8 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        //int image_width = 1600;
-        int image_width = 500;
+        int image_width = 1600;
+        //int image_width = 500;
         int image_height = (int)((Float)image_width / aspect_ratio);
 #if 0
         image_width = 1200;

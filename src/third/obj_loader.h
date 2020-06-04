@@ -5,6 +5,10 @@
 #include <vector>
 #include <shape.h>
 
+struct MeshProperties{
+    int flip_x;
+};
+
 /*
 * NOTE: Heavily based on tiny_obj_loader. I'm basically splitting the mesh
 * into multiple objects, I don't like the way tiny_obj_loader does it,
@@ -22,3 +26,5 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
 * returned is already GPU ready for mesh binding operations.
 */
 __host__ ParsedMesh *LoadObjOnly(const char *path);
+
+__host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props);

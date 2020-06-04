@@ -441,3 +441,78 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
     
     return meshes;
 }
+
+__host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props){
+    ParsedMesh *duplicated = nullptr;
+    if(mesh && props){
+        duplicated = cudaAllocateVx(ParsedMesh, 1);
+        duplicated->toWorld = mesh->toWorld;
+        duplicated->nVertices = mesh->nVertices;
+        duplicated->nTriangles = mesh->nTriangles;
+        duplicated->nUvs = mesh->nUvs;
+        duplicated->nNormals = mesh->nNormals;
+        vec3f center;
+        Float w = 0.f;
+        if(mesh->p){
+            duplicated->p = cudaAllocateVx(Point3f, mesh->nVertices);
+            for(int i = 0; i < mesh->nVertices; i++){
+                center += vec3f(mesh->p[i]);
+                w += 1.f;
+            }
+            
+            Float invW = 1.f / w;
+            center = center * invW;
+        }
+        
+        if(mesh->uv){
+            duplicated->uv = cudaAllocateVx(Point2f, mesh->nUvs);
+        }
+        
+        if(mesh->indices){
+            duplicated->indices = cudaAllocateVx(Point3i, mesh->nTriangles * 3);
+        }
+        
+        //TODO:Tangents
+        duplicated->s = nullptr;
+        
+        if(mesh->n){
+            duplicated->n = cudaAllocateVx(Normal3f, mesh->nNormals);
+        }
+        
+        int ia = mesh->nTriangles * 3;
+        int ib = mesh->nVertices;
+        int ic = mesh->nNormals;
+        int id = mesh->nUvs;
+        
+        int maxl = Max(ia, Max(ib, Max(ic, id)));
+        
+        for(int i = 0; i < maxl; i++){
+            if(i < mesh->nVertices){
+                Point3f p = mesh->p[i];
+                if(props->flip_x){
+                    vec3f vp(p);
+                    vec3f op = vp - center;
+                    vec3f wp(-op.x, op.y, op.z);
+                    p = Point3f(wp.x + center.x,
+                                wp.y + center.y,
+                                wp.z + center.z);
+                }
+                duplicated->p[i] = p;
+            }
+            
+            if(i < mesh->nUvs){
+                duplicated->uv[i] = mesh->uv[i];
+            }
+            
+            if(i < mesh->nNormals){
+                duplicated->n[i] = mesh->n[i];
+            }
+            
+            if(i < ia){
+                duplicated->indices[i] = mesh->indices[i];
+            }
+        }
+    }
+    
+    return duplicated;
+}

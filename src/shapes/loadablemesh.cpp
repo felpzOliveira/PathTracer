@@ -30,7 +30,11 @@ __host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Poi
         mesh->s = nullptr;
         mesh->uv = nullptr;
         
-        memcpy(mesh->p, P, sizeof(Point3f) * mesh->nVertices);
+        //memcpy(mesh->p, P, sizeof(Point3f) * mesh->nVertices);
+        for(int i = 0; i < mesh->nVertices; i++){
+            Point3f p = P[i];
+            mesh->p[i] = Point3f(-p.x, p.y, p.z);
+        }
         memcpy(mesh->indices, _indices, sizeof(Point3i) * ic);
         
         if(UV){

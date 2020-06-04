@@ -264,6 +264,6 @@ inline __bidevice__ void PrintShape(Shape *shape){
 
 __host__ void WrapMesh(Mesh *mesh);
 __host__ bool LoadObjData(const char *obj, ParsedMesh **data);
-__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, int *_indices,
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Point3i *_indices,
                                         int nVerts, Point3f *P, vec3f *S, 
                                         Normal3f *N, Point2f *UV, int copy=0);
