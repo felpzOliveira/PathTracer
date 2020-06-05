@@ -229,7 +229,6 @@ __bidevice__ Spectrum Aggregator::EstimateDirect(const Interaction &it, BSDF *bs
     Float lightPdf = 0, scatteringPdf = 0;
     VisibilityTester visibility;
     Spectrum Li = light->Sample_Li(it, uLight, &wi, &lightPdf, &visibility);
-    
     //printf("Sampled " v3fA(Li) "\n", v3aA(Li));
     
     if(lightPdf > 0 && !Li.IsBlack() && !IsZero(lightPdf)){
@@ -553,14 +552,10 @@ __host__ Node *_CreateBVH(PrimitiveHandle *handles,int n, int depth,
         distr->skippedSorts ++;
     }
     
-    if(n == 1 || n == 2){
+    if(n == 1){
         NodeSetItens(node, n, distr);
         memcpy(node->handles, handles, n * sizeof(PrimitiveHandle));
         node->bound = handles[0].bound;
-        if(n == 2){
-            node->bound = Union(node->bound, handles[1].bound);
-        }
-        
         node->is_leaf = 1;
         if(distr->maxElements < n) distr->maxElements = n;
         return node;

@@ -86,8 +86,9 @@ __device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
         if(scene->lightCounter > 0){
             Point2f u2(rand_float(state), rand_float(state));
             Point3f u3(rand_float(state), rand_float(state), rand_float(state));
-            
-            L += scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+            Spectrum Ld = scene->UniformSampleOneLight(isect, &bsdf, u2, u3);
+            //printf(v3fA(Ld) "\n", v3aA(Ld));
+            L += Ld;
         }
     }
     
@@ -428,9 +429,9 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             Ray ray = camera->SpawnRay(u, v, sample);
-            //out += Li_Direct(ray, scene, pixel);
+            out += Li_Direct(ray, scene, pixel);
             //out += Li_Path(ray, scene, pixel);
-            out += Li_PathSampled(ray, scene, pixel);
+            //out += Li_PathSampled(ray, scene, pixel);
             //out += Li_VolPath(ray, scene, pixel);
             pixel->samples ++;
         }
@@ -580,6 +581,59 @@ void BoxesScene(Camera *camera, Float aspect){
     MediumDescriptor medium = MakeMedium(Spectrum(0.0003), Spectrum(0.0005), -0.7);
     InsertCameraMedium(medium);
 }
+
+
+void CornellRoomBalls(Camera *camera, Float aspect){
+    camera->Config(Point3f(-1, 5, -35), Point3f(0, 5.0f, 0.0f),
+                   vec3f(0,1,0), 40, aspect);
+    
+    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
+    MaterialDescriptor orange = MakeMatteMaterial(Spectrum(.73, .53, .33));
+    MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
+    ImageData *desert = LoadTextureImageData(TEXTURE_FOLDER "greek.jpg");
+    ImageData *grid = LoadTextureImageData(TEXTURE_FOLDER "orange.png");
+    ImageData *texView = LoadTextureImageData(MESH_FOLDER "Shabti.jpg");
+    MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
+                                                  Spectrum(0), Spectrum(0), 0.001, 
+                                                  0.001, Spectrum(1), 1.5f);
+    
+    TextureDescriptor deserttex = MakeTexture(desert);
+    MaterialDescriptor desertMat = MakeMatteMaterial(deserttex);
+    TextureDescriptor gridtex = MakeTexture(grid);
+    MaterialDescriptor gridMat = MakeMatteMaterial(gridtex);
+    TextureDescriptor texViewtex = MakeTexture(texView);
+    MaterialDescriptor texMat = MakeMatteMaterial(texViewtex);
+    
+    Float height = 17;
+    Float width = height * desert->GetAspectRatio();
+    
+    Transform backT = Translate(0, height/2, -15) * RotateY(0);
+    RectDescriptor backWall = MakeRectangle(backT, width, height);
+    InsertPrimitive(backWall, desertMat);
+    
+    Transform rightT = Translate(-width/2, height/2, -15) * RotateY(90);
+    RectDescriptor rightWall = MakeRectangle(rightT, width+20, height);
+    InsertPrimitive(rightWall, gridMat);
+    
+    Transform leftT = Translate(width/2, height/2, -15) * RotateY(90);
+    RectDescriptor leftWall = MakeRectangle(leftT, width+20, height);
+    InsertPrimitive(leftWall, gridMat);
+    
+    Transform bottomT = Translate(0, 0, -height/2) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+100);
+    InsertPrimitive(bottomWall, white);
+    
+    Transform topT = Translate(0, height, -height/2) * RotateX(90);
+    RectDescriptor topWall = MakeRectangle(topT, width, height+100);
+    InsertPrimitive(topWall, white);
+    
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
+    
+    Transform r = Translate(0, height - 0.001, -15) * RotateX(90);
+    RectDescriptor rect = MakeRectangle(r, height*0.8, width*0.5);
+    InsertPrimitive(rect, matEm);
+}
+
 
 void CornellRoom(Camera *camera, Float aspect){
     camera->Config(Point3f(-1, 1, -30), Point3f(0, 8.0f, 0.0f),
@@ -763,7 +817,8 @@ void render(Image *image){
     
     //NOTE: Use this function to perform scene setup
     //CornellRoom(camera, aspect);
-    DragonScene2(camera, aspect);
+    CornellRoomBalls(camera, aspect);
+    //DragonScene2(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
     //TwoDragonsScene(camera, aspect);
     //BoxesScene(camera, aspect);
