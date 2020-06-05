@@ -78,6 +78,7 @@ __device__ Spectrum Li_Direct(Ray ray, Aggregator *scene, Pixel *pixel){
         }
     }else{
         BSDF bsdf(isect);
+        
         isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
         vec3f wo = isect.wo;
         L += isect.Le(wo);
@@ -426,7 +427,6 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Float v = ((Float)j + rand_float(&state)) / (Float)height;
             
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
-            
             Ray ray = camera->SpawnRay(u, v, sample);
             //out += Li_Direct(ray, scene, pixel);
             //out += Li_Path(ray, scene, pixel);
@@ -442,33 +442,61 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
 void DragonScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
-    camera->Config(Point3f(53.f, 48.f, -43.f), 
-                   Point3f(-10.12833, 5.15341, 5.16229),
-                   vec3f(0.f,1.f,0.f), 40.f, aspect);
+    camera->Config(Point3f(60.f, 69.f, -43.f), 
+                   Point3f(-12.12833, 0., 3.16229),
+                   //camera->Config(Point3f(0.f, 48.f, -70.f), 
+                   //Point3f(0, 10.15341, 10.16229),
+                   vec3f(0.f,1.f,0.f), 38.f, aspect);
     
     MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
                                                   Spectrum(.7, .7, .7), 0.1);
-    MaterialDescriptor yellow = MakeMatteMaterial(Spectrum(.7,.7,.0));
-    MaterialDescriptor white  = MakeMatteMaterial(Spectrum(0.87, 0.87, 0.87));
-    MaterialDescriptor orange = MakeMatteMaterial(Spectrum(0.98, 0.56, 0.0));
-    MaterialDescriptor red    = MakeMatteMaterial(Spectrum(0.86, 0.2, 0.1));
+    
     MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
                                                     Spectrum(0.6f), 0.03);
-    MaterialDescriptor greenGlass = MakeGlassMaterial(Spectrum(1), Spectrum(1),
-                                                      1.5, 0.05, 0.05);
     
-    Transform er = Translate(0, -1.29, 0) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
-    InsertPrimitive(bottomWall, gray);
+    Transform er = Translate(0, 0, 0) * RotateX(90);
+    //RectDescriptor bottomWall = MakeRectangle(er, 500, 500);
+    SphereDescriptor bottomWall = MakeSphere(Translate(0, -1500, 0), 1500);
     
-    InsertEXRLightMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",  
+    
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
                       RotateX(-95) * RotateZ(50), Spectrum(2.5));
     
     ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "dragon_aligned.obj");
-    dragonMesh->toWorld = Translate(0, 13,0) * Scale(15) * RotateZ(-15) * RotateY(70);
+    dragonMesh->toWorld = Scale(15) * RotateZ(-1) * RotateY(70);
     MeshDescriptor dragon = MakeMesh(dragonMesh);
-    //SphereDescriptor sphere = MakeSphere(Translate(0, 13, 0), 13);
     InsertPrimitive(dragon, blue);
+    InsertPrimitive(bottomWall, gray);
+}
+
+void DragonScene2(Camera *camera, Float aspect){
+    AssertA(camera, "Invalid camera pointer");
+    
+    camera->Config(Point3f(60.f, 69.f, -43.f), 
+                   Point3f(-12.12833, 0., 3.16229),
+                   //camera->Config(Point3f(0.f, 48.f, -70.f), 
+                   //Point3f(0, 10.15341, 10.16229),
+                   vec3f(0.f,1.f,0.f), 38.f, aspect);
+    
+    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
+                                                  Spectrum(.7, .7, .7), 0.1);
+    
+    MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
+                                                    Spectrum(0.6f), 0.03);
+    
+    Transform er = Translate(0, 0, 0) * RotateX(90);
+    //RectDescriptor bottomWall = MakeRectangle(er, 500, 500);
+    SphereDescriptor bottomWall = MakeSphere(Translate(0, -1500, 0), 1500);
+    
+    
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
+                      RotateX(-95) * RotateZ(50), Spectrum(2.5));
+    
+    ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "collumn.obj");
+    dragonMesh->toWorld = Scale(1) * RotateZ(-1) * RotateY(70);
+    MeshDescriptor dragon = MakeMesh(dragonMesh);
+    InsertPrimitive(dragon, blue);
+    InsertPrimitive(bottomWall, gray);
 }
 
 void BoxesScene(Camera *camera, Float aspect){
@@ -554,17 +582,13 @@ void BoxesScene(Camera *camera, Float aspect){
 }
 
 void CornellRoom(Camera *camera, Float aspect){
-    camera->Config(Point3f(1, 1, -30), Point3f(0, 8.0f, 0.0f),
-                   vec3f(0,1,0), 43, aspect);
+    camera->Config(Point3f(-1, 1, -30), Point3f(0, 8.0f, 0.0f),
+                   vec3f(0,1,0), 40, aspect);
     
-#if 0
-    camera->Config(Point3f(6, 1, -22), Point3f(0, 0.0f, -22.0f),
-                   vec3f(0,1,0), 43, aspect);
-#endif
     MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
     MaterialDescriptor orange = MakeMatteMaterial(Spectrum(.73, .53, .33));
     MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
-    ImageData *desert = LoadTextureImageData(TEXTURE_FOLDER "egypt.jpg");
+    ImageData *desert = LoadTextureImageData(TEXTURE_FOLDER "greek.jpg");
     ImageData *grid = LoadTextureImageData(TEXTURE_FOLDER "orange.png");
     ImageData *texView = LoadTextureImageData(MESH_FOLDER "Shabti.jpg");
     MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
@@ -578,10 +602,10 @@ void CornellRoom(Camera *camera, Float aspect){
     TextureDescriptor texViewtex = MakeTexture(texView);
     MaterialDescriptor texMat = MakeMatteMaterial(texViewtex);
     
-    Float height = 15;
+    Float height = 17;
     Float width = height * desert->GetAspectRatio();
     
-    Transform backT = Translate(0, height/2, 0) * RotateY(0);
+    Transform backT = Translate(0, height/2, -15) * RotateY(0);
     RectDescriptor backWall = MakeRectangle(backT, width, height);
     InsertPrimitive(backWall, desertMat);
     
@@ -600,10 +624,6 @@ void CornellRoom(Camera *camera, Float aspect){
     Transform topT = Translate(0, height, -height/2) * RotateX(90);
     RectDescriptor topWall = MakeRectangle(topT, width, height+100);
     InsertPrimitive(topWall, white);
-    
-    //Float h2 = 6.5;
-    //SphereDescriptor sphere = MakeSphereProcedural(Translate(0, h2-0.7, -8), h2);
-    //InsertPrimitive(sphere, orange);
     
     std::vector<MeshMtl> mtls;
     std::vector<MTL *> mMaterials;
@@ -643,172 +663,12 @@ void CornellRoom(Camera *camera, Float aspect){
     
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
     
-#if 0
-    ParsedMesh *mesh = LoadObjOnly(MESH_FOLDER "lamp.obj");
-    mesh->toWorld = Translate(0,height-5,-10) * Scale(4);
-    MeshDescriptor md = MakeMesh(mesh);
-    InsertPrimitive(md, matUber);
-    
-    SphereDescriptor lightSphere = MakeSphere(Translate(0.2, 9.7-0.1, -10), 0.4);
-    InsertPrimitive(lightSphere, matEm);
-#endif
-    
     Transform r = Translate(0, height - 0.001, -15) * RotateX(90);
     RectDescriptor rect = MakeRectangle(r, height*0.8, width*0.5);
     InsertPrimitive(rect, matEm);
 }
 
-void CornellRandomScene(Camera *camera, Float aspect){
-    camera->Config(Point3f(-14, 5, -30), Point3f(-5, 8.0f, 0.0f),
-                   vec3f(0,1,0), 42, aspect);
-    
-    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
-    MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
-    ImageData *desert = LoadTextureImageData("/home/felpz/Downloads/desert.png");
-    ImageData *grid = LoadTextureImageData("/home/felpz/Downloads/desert_grid.png");
-    
-    TextureDescriptor deserttex = MakeTexture(desert);
-    MaterialDescriptor desertMat = MakeMatteMaterial(deserttex);
-    
-    TextureDescriptor gridtex = MakeTexture(grid);
-    MaterialDescriptor gridMat = MakeMatteMaterial(gridtex);
-    
-    Float height = 20;
-    Float width  = height * desert->GetAspectRatio();
-    
-    Transform backT = Translate(0, height/2, -4) * RotateY(0);
-    RectDescriptor backWall = MakeRectangle(backT, width, height);
-    InsertPrimitive(backWall, desertMat);
-    
-    Transform rightT = Translate(-width/2, height/2, 0) * RotateY(90);
-    RectDescriptor rightWall = MakeRectangle(rightT, width+20, height);
-    InsertPrimitive(rightWall, gridMat);
-    
-    Transform leftT = Translate(width/2, height/2, 0) * RotateY(90);
-    RectDescriptor leftWall = MakeRectangle(leftT, width+20, height);
-    InsertPrimitive(leftWall, gridMat);
-    
-    Transform bottomT = Translate(0, 0, -height/2) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+100);
-    InsertPrimitive(bottomWall, white);
-    
-    Transform topT = Translate(0, height, -height/2) * RotateX(90);
-    RectDescriptor topWall = MakeRectangle(topT, width, height+100);
-    InsertPrimitive(topWall, white);
-    
-    ParsedMesh *tableMesh;
-    LoadObjData(MESH_FOLDER "table.obj", &tableMesh);
-    tableMesh->toWorld = Translate(-10, -0.3, -12) * Scale(0.06) * RotateY(-10);
-    MeshDescriptor table = MakeMesh(tableMesh);
-    MaterialDescriptor tableMat = MakeMatteMaterial(SpectrumFromURGB(106,75,53),30);
-    InsertPrimitive(table, tableMat);
-    
-    Transform stuffT = Translate(-0.5, 3, -13) * Scale(0.02) * RotateY(230);
-    ParsedMesh *stuffedGrayMesh;
-    LoadObjData(MESH_FOLDER "stuff_gray.obj", &stuffedGrayMesh);
-    stuffedGrayMesh->toWorld = stuffT;
-    MeshDescriptor stuffGray = MakeMesh(stuffedGrayMesh);
-    MaterialDescriptor grayMat = MakePlasticMaterial(SpectrumFromURGB(244,244,244),
-                                                     Spectrum(0.9), 40);
-    InsertPrimitive(stuffGray, grayMat);
-    
-    ParsedMesh *stuffedWhiteMesh;
-    LoadObjData(MESH_FOLDER "stuff_white.obj", &stuffedWhiteMesh);
-    stuffedWhiteMesh->toWorld = stuffT;
-    MeshDescriptor stuffWhite = MakeMesh(stuffedWhiteMesh);
-    MaterialDescriptor whiteMat = MakePlasticMaterial(SpectrumFromURGB(90,90,90),
-                                                      Spectrum(0.9), 40);
-    InsertPrimitive(stuffWhite, whiteMat);
-    
-    ParsedMesh *stuffedBlackMesh;
-    LoadObjData(MESH_FOLDER "stuff_black.obj", &stuffedBlackMesh);
-    stuffedBlackMesh->toWorld = stuffT;
-    MeshDescriptor stuffBlack = MakeMesh(stuffedBlackMesh);
-    MaterialDescriptor blackMat = MakePlasticMaterial(SpectrumFromURGB(10,10,10),
-                                                      Spectrum(0.9), 40);
-    InsertPrimitive(stuffBlack, blackMat);
-    
-    ParsedMesh *chairMesh;
-    LoadObjData(MESH_FOLDER "chair.obj", &chairMesh);
-    chairMesh->toWorld = Translate(-11,-0.3,-8) * Scale(0.06) * RotateY(135);
-    MeshDescriptor chair = MakeMesh(chairMesh);
-    MaterialDescriptor chairMat = MakeGlassMaterial(Spectrum(0.99), 
-                                                    SpectrumFromURGB(152,251,152), 1.5);
-    InsertPrimitive(chair, chairMat);
-    
-    ParsedMesh *sofaMesh;
-    LoadObjData(MESH_FOLDER "sofa.obj", &sofaMesh);
-    sofaMesh->toWorld = Translate(0,-0.3,-12) * Scale(0.06);
-    MeshDescriptor sofa = MakeMesh(sofaMesh);
-    MaterialDescriptor sofaMat = MakePlasticMaterial(SpectrumFromURGB(255,222,173)*0.8, 
-                                                     Spectrum(0.3500), 0.03);
-    InsertPrimitive(sofa, sofaMat);
-    
-    struct box{
-        vec3f p;
-        Float len;
-    };
-    
-    std::vector<box> boxes;
-    
-    Transform bt = Translate(-10,4.6,-13);
-    for(int i = 0; i < 40; i++){
-        Float rad = rand_float() * 0.2 + 0.2;
-        Float x = -15.2 + rand_float() * 10;
-        Float z = -14.0 + rand_float() * 6;
-        Float y = 4.64 + rad;
-        
-        vec3f p(x, y, z);
-        bool insert = true;
-        for(int k = 0; k < boxes.size(); k++){
-            Float l = (p - boxes[i].p).Length();
-            if(l < boxes[i].len + rad){
-                insert = false;
-                break;
-            }
-        }
-        
-        if(insert){
-            box b;
-            b.p = p;
-            b.len = rad;
-            boxes.push_back(b);
-            Float f = rand_float();
-            MaterialDescriptor mdesc;
-            Spectrum rngSpec(rand_float(), rand_float(), rand_float());
-            if(f < 0.3){
-                mdesc = MakeMatteMaterial(rngSpec, rand_float() * 50);
-            }else if(f < 0.4){
-                mdesc = MakeMirrorMaterial(rngSpec);
-            }else if(f < 0.7){
-                mdesc = MakeGlassMaterial(rngSpec, Spectrum(0.99), 1.5,
-                                          rand_float() * 0.02, rand_float() * 0.02);
-            }else if(f < 0.8){
-                Spectrum kd(rand_float() * 0.05, rand_float() * 0.05, rand_float() * 0.05); 
-                mdesc = MakeUberMaterial(kd, rngSpec * 0.8, Spectrum(0), Spectrum(0),
-                                         0.001, 0.001, Spectrum(1), 1.5);
-            }else{
-                mdesc = MakeMetalMaterial(rngSpec, Spectrum(0.56), 1.f, 1.5f);
-            }
-            
-            if(rand_float() < 0.5){
-                SphereDescriptor desc = MakeSphere(Translate(x, y, z), rad);
-                InsertPrimitive(desc, mdesc);
-            }else{
-                Transform t = Translate(x, y, z) * RotateY(-60 + rand_float() * 120);
-                BoxDescriptor desc = MakeBox(t, 2*rad, 2*rad, 2*rad);
-                InsertPrimitive(desc, mdesc);
-            }
-        }
-    }
-    
-    Transform r = Translate(0, height - 0.001, -30) * RotateX(90);
-    RectDescriptor rect = MakeRectangle(r, height*0.8, width*0.5);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
-    InsertPrimitive(rect, matEm);
-}
-
-void LightMapScene(Camera *camera, Float aspect){
+void TwoDragonsScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 62.f, 90.f),
@@ -821,22 +681,12 @@ void LightMapScene(Camera *camera, Float aspect){
     RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
     InsertPrimitive(bottomWall, gray);
     
-    //Transform br = Translate(0, 0, -40);
-    //RectDescriptor backWall = MakeRectangle(br, 1000, 1000);
-    //InsertPrimitive(backWall, gray);
-    
     MaterialDescriptor skin = MakeSubsurfaceMaterial("Ketchup", 1, 
                                                      1.33, 0, 0.05, 0.05);
     MaterialDescriptor milk = MakeSubsurfaceMaterial("Skin1", 1, 
                                                      1.33, 0, 0.05, 0.05);
-    //MediumDescriptor medium = MakeMedium(Spectrum(0.03), Spectrum(0.05), -0.7);
-    //20060807_wells6_hd
     InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
                       RotateX(-90) * RotateZ(90), Spectrum(2.5));
-    
-    //SphereDescriptor lightSphere = MakeSphere(Translate(-20, 50, 71), 10);
-    //MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 10);
-    //InsertPrimitive(lightSphere, matEm);
     
     ParsedMesh *sssDragon = LoadObjOnly(MESH_FOLDER "sssDragonAligned.obj");
     MeshProperties props; props.flip_x = 0;
@@ -849,14 +699,6 @@ void LightMapScene(Camera *camera, Float aspect){
     
     InsertPrimitive(sssDragonDesc, milk);
     InsertPrimitive(sssDragonDescCopy, skin);
-    
-    /*
-    SphereDescriptor sphere = MakeSphere(Translate(17, 15, 0), 15);
-    InsertPrimitive(sphere, spec);
-    
-    SphereDescriptor sphere2 = MakeSphere(Translate(-17, 15, 0), 15);
-    InsertPrimitive(sphere2, ket);
-    */
 }
 
 void VolumetricCausticsScene(Camera *camera, Float aspect){
@@ -899,88 +741,6 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     InsertCameraMedium(medium);
 }
 
-void CornellBoxScene(Camera *camera, Float aspect){
-    AssertA(camera, "Invalid camera pointer");
-    
-    camera->Config(Point3f(-20.f, 20.f, -25.f), Point3f(0.0f, 5.f,-23.f), 
-                   vec3f(0.f,1.f,0.f), 45.f, aspect);
-    
-    MaterialDescriptor matUber = MakeUberMaterial(Spectrum(.05), Spectrum(.8), 
-                                                  Spectrum(0), Spectrum(0), 0.001, 
-                                                  0.001, Spectrum(1), 1.5f);
-    
-    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(0.025));
-    MaterialDescriptor red = MakeMatteMaterial(Spectrum(.65, .05, .05));
-    MaterialDescriptor green = MakeMatteMaterial(Spectrum(.12, .45, .15));
-    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.73, .73, .73));
-    
-    Transform lr = Translate(30, 25, 0) * RotateY(-90);
-    RectDescriptor leftWall = MakeRectangle(lr, 200, 50);
-    InsertPrimitive(leftWall, gray);
-#if 0
-    Transform ss = Translate(0,1,-30) * Scale(0.1) * RotateY(-90);
-    
-    std::vector<MeshMtl> mtls;
-    std::vector<MTL *> mMaterials;
-    std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "set.obj", &mtls, true);
-    bool rv = MTLParseAll(&mMaterials, &mtls, MESH_FOLDER);
-    
-    for(int i = 0; i < meshes->size(); i++){
-        ParsedMesh *m = meshes->at(i);
-        if(m->nTriangles > 0){
-            m->toWorld = ss;
-            // get object mtl
-            MTL *mPtr = MTLFindMaterial(mtls[i].name.c_str(), &mMaterials);
-            MeshDescriptor d = MakeMesh(m);
-            MaterialDescriptor mat = MakeMTLMaterial(mPtr);
-            InsertPrimitive(d, mat);
-        }
-    }
-#endif
-    
-    Transform rr = Translate(-30, 25, 0) * RotateY(90);
-    RectDescriptor rightWall = MakeRectangle(rr, 200, 50);
-    InsertPrimitive(rightWall, red);
-    
-    Transform br = Translate(0, 25, 5);
-    
-    RectDescriptor backWall = MakeRectangle(br, 60, 50);
-    InsertPrimitive(backWall, gray);
-    
-    Transform tr = Translate(0, 50, 0) * RotateX(90);
-    RectDescriptor topWall = MakeRectangle(tr, 60, 200);
-    InsertPrimitive(topWall, gray);
-    
-    Transform bt = Translate(0, 1, 0) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(bt, 60, 200);
-    InsertPrimitive(bottomWall, gray);
-    
-    
-    ParsedMesh *dragonMesh;
-    LoadObjData(MESH_FOLDER "dragon_aligned.obj", &dragonMesh);
-    dragonMesh->toWorld = Translate(0, 3,-25) * Scale(6) * RotateZ(-15) * RotateY(70);
-    MeshDescriptor dragon = MakeMesh(dragonMesh);
-    
-    SphereDescriptor glassSphere = MakeSphere(Translate(0,6,-25), 6);
-    MediumDescriptor medium = MakeMedium(Spectrum(.03), Spectrum(0.05), 0);
-    InsertPrimitive(dragon, medium);
-    
-    //MaterialDescriptor matGlass = MakeGlassMaterial(Spectrum(0.9), Spectrum(0.9), 1.5);
-    //InsertPrimitive(glassSphere, matGlass);
-    
-    Transform r = Translate(0, 40, -60);// * RotateX(90);
-    RectDescriptor rect = MakeRectangle(r, 40, 50);
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 8);
-    InsertPrimitive(rect, matEm);
-    
-    //Test for sampling
-    SphereDescriptor lightSphere = MakeSphere(Translate(0,45,0), 5);
-    //InsertPrimitive(lightSphere, matEm);
-    
-    DiskDescriptor disk = MakeDisk(r, 0, 10, 0, 360);
-    //InsertPrimitive(disk, matEm);
-}
-
 void render(Image *image){
     int tx = 8;
     int ty = 8;
@@ -1002,12 +762,10 @@ void render(Image *image){
     BeginScene(scene);
     
     //NOTE: Use this function to perform scene setup
-    //CornellBoxScene(camera, aspect);
-    //CornellRandomScene(camera, aspect);
     //CornellRoom(camera, aspect);
-    //DragonScene(camera, aspect);
+    DragonScene2(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
-    LightMapScene(camera, aspect);
+    //TwoDragonsScene(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
@@ -1050,8 +808,8 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        int image_width = 1600;
-        //int image_width = 500;
+        //int image_width = 1600;
+        int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
 #if 0
         image_width = 1200;

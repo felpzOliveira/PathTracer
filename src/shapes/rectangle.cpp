@@ -25,6 +25,7 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     Normal3f dndu(0), dndv(0);
     
     vec3f pError = gamma(5) * Abs((vec3f)pHit);
+    //vec3f pError(0);
     *isect = ObjectToWorld(SurfaceInteraction(pHit, pError, Point2f(u, v),
                                               -ray.d, dpdu, dpdv, dndu, dndv,
                                               ray.time, this));

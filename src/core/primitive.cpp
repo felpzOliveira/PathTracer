@@ -336,6 +336,7 @@ __bidevice__ bool Aggregator::IntersectNode(Node *node, const Ray &r,
 {
     Assert(node->n > 0 && node->is_leaf && node->handles);
     bool hit_anything = false;
+    
     for(int i = 0; i < node->n; i++){
         Primitive *pri = primitives[node->handles[i].handle];
         hit_anything |= pri->Intersect(r, isect);
@@ -352,7 +353,6 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     *stackPtr++ = NULL;
     
     NodePtr node = root;
-    SurfaceInteraction tmp;
     int curr_depth = 1;
     int hit_tests = 1;
     bool hit_anything = false;
@@ -366,9 +366,9 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
             if(hit_tests > pixel->stats.max_transverse_tests) 
                 pixel->stats.max_transverse_tests = hit_tests;
         }
-        
         return IntersectNode(node, r, isect);
     }
+    
     do{
         if(hit_bound){
             NodePtr childL = node->left;
@@ -383,14 +383,14 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
             
             if(hitl && childL->is_leaf){
                 hit_tests += childL->n;
-                if(IntersectNode(childL, r, &tmp)){
+                if(IntersectNode(childL, r, isect)){
                     hit_anything = true;
                 }
             }
             
             if(hitr && childR->is_leaf){
                 hit_tests += childR->n;
-                if(IntersectNode(childR, r, &tmp)){
+                if(IntersectNode(childR, r, isect)){
                     hit_anything = true;
                 }
             }
@@ -420,10 +420,6 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
         }
         
     }while(node != NULL);
-    
-    if(hit_anything){
-        *isect = tmp;
-    }
     
     if(pixel){
         if(pixel->stats.max_transverse_tests < hit_tests)
@@ -508,7 +504,11 @@ __bidevice__ int CompareZ(PrimitiveHandle *p0, PrimitiveHandle *p1){
 }
 
 __host__ Node *GetNode(int n, NodeDistribution *nodeDist){
-    AssertA(nodeDist->head < nodeDist->length, "Too many node requirement");
+    if(!(nodeDist->head < nodeDist->length)){
+        printf(" ** [ERROR] : Allocated %d but requested more nodes\n", nodeDist->length);
+        AssertA(0, "Too many node requirement");
+    }
+    
     Node *node = &nodeDist->nodes[nodeDist->head++];
     node->left = nullptr;
     node->right = nullptr;
@@ -553,25 +553,17 @@ __host__ Node *_CreateBVH(PrimitiveHandle *handles,int n, int depth,
         distr->skippedSorts ++;
     }
     
-    if(n == 1){
+    if(n == 1 || n == 2){
         NodeSetItens(node, n, distr);
         memcpy(node->handles, handles, n * sizeof(PrimitiveHandle));
         node->bound = handles[0].bound;
+        if(n == 2){
+            node->bound = Union(node->bound, handles[1].bound);
+        }
+        
         node->is_leaf = 1;
-        if(distr->maxElements < 1) distr->maxElements = 1;
+        if(distr->maxElements < n) distr->maxElements = n;
         return node;
-    }else if(n == 2){
-        node->left = GetNode(0, distr);
-        node->right = GetNode(0, distr);
-        NodeSetItens(node->left, 1, distr);
-        NodeSetItens(node->right, 1, distr);
-        memcpy(node->left->handles, &handles[0], sizeof(PrimitiveHandle));
-        memcpy(node->right->handles, &handles[1], sizeof(PrimitiveHandle));
-        node->left->is_leaf = 1;
-        node->right->is_leaf = 1;
-        node->left->bound = handles[0].bound;
-        node->right->bound = handles[1].bound;
-        if(distr->maxElements < 2) distr->maxElements = 2;
     }else if(depth >= max_depth){
         NodeSetItens(node, n, distr);
         memcpy(node->handles, handles, n*sizeof(PrimitiveHandle));
@@ -624,7 +616,7 @@ __host__ Node *CreateBVH(PrimitiveHandle *handles, int n, int depth,
     Float totalSorts = (Float)distr.totalSorts + (Float)distr.skippedSorts;
     Float sortReduction = 100.0f * (((Float)distr.skippedSorts) / totalSorts);
     printf(" * Time: %gs\n", time_taken);
-    printf(" * Sort reduction algorihtm: %g%%\n", sortReduction);
+    printf(" * Sort reduction algorihtm gain: %g%%\n", sortReduction);
     return root;
 }
 

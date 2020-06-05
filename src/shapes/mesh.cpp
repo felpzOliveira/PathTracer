@@ -234,7 +234,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
     bool degenerateUV = Absf(determinant) < 1e-8;
     
     // Attempt to save this triangle
-    if(degenerateUV && 0){ // Fallback to no uv mapping and try again
+    if(degenerateUV){ // Fallback to no uv mapping and try again
         st[0] = Point2f(0, 0);
         st[1] = Point2f(1, 0);
         st[2] = Point2f(1, 1);
