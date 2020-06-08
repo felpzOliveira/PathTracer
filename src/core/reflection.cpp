@@ -5,23 +5,24 @@ inline __bidevice__ Float SchlickWeight(Float cosTheta){
     return (m * m) * (m * m) * m;
 }
 
-inline __bidevice__ Float FrSchlick(Float R0, Float cosTheta) {
+inline __bidevice__ Float FrSchlick(Float R0, Float cosTheta){
     return Lerp(SchlickWeight(cosTheta), R0, 1.f);
 }
 
-inline __bidevice__ Spectrum FrSchlick(const Spectrum &R0, Float cosTheta) {
+inline __bidevice__ Spectrum FrSchlick(const Spectrum &R0, Float cosTheta){
     return Lerp(SchlickWeight(cosTheta), R0, Spectrum(1.));
 }
 
-inline __bidevice__ Float GTR1(Float cosTheta, Float alpha) {
+inline __bidevice__ Float GTR1(Float cosTheta, Float alpha){
+    if(alpha > 1) return InvPi;
     Float alpha2 = alpha * alpha;
     return (alpha2 - 1) / (Pi * std::log(alpha2) * (1 + (alpha2 - 1) * cosTheta * cosTheta));
 }
 
-inline __bidevice__ Float smithG_GGX(Float cosTheta, Float alpha) {
+inline __bidevice__ Float smithG_GGX(Float cosTheta, Float alpha){
     Float alpha2 = alpha * alpha;
     Float cosTheta2 = cosTheta * cosTheta;
-    return 1 / (cosTheta + sqrt(alpha2 + cosTheta2 - alpha2 * cosTheta2));
+    return 2.f / (1.f + sqrt(alpha2 + (1.0f - alpha2) * cosTheta2));
 }
 
 __bidevice__ Float pow5(Float v){
@@ -228,7 +229,7 @@ __bidevice__ Spectrum BxDF::BSSRDFAdapter_f(const vec3f &wo, const vec3f &wi) co
     return f;
 }
 
-Spectrum BxDF::DisneyDiffuse_f(const vec3f &wo, const vec3f &wi) const{
+__bidevice__ Spectrum BxDF::DisneyDiffuse_f(const vec3f &wo, const vec3f &wi) const{
     Float Fo = SchlickWeight(AbsCosTheta(wo));
     Float Fi = SchlickWeight(AbsCosTheta(wi));
     
@@ -237,7 +238,7 @@ Spectrum BxDF::DisneyDiffuse_f(const vec3f &wo, const vec3f &wi) const{
     return S * InvPi * (1 - Fo / 2) * (1 - Fi / 2);
 }
 
-Spectrum BxDF::DisneyFakeSS_f(const vec3f &wo, const vec3f &wi) const{
+__bidevice__ Spectrum BxDF::DisneyFakeSS_f(const vec3f &wo, const vec3f &wi) const{
     vec3f wh = wi + wo;
     if(wh.IsBlack()) return Spectrum(0.);
     wh = Normalize(wh);
@@ -254,7 +255,7 @@ Spectrum BxDF::DisneyFakeSS_f(const vec3f &wo, const vec3f &wi) const{
     return S * InvPi * ss;
 }
 
-Spectrum BxDF::DisneyRetro_f(const vec3f &wo, const vec3f &wi) const{
+__bidevice__ Spectrum BxDF::DisneyRetro_f(const vec3f &wo, const vec3f &wi) const{
     vec3f wh = wi + wo;
     if(wh.IsBlack()) return Spectrum(0.);
     wh = Normalize(wh);
@@ -268,12 +269,19 @@ Spectrum BxDF::DisneyRetro_f(const vec3f &wo, const vec3f &wi) const{
     return S * InvPi * Rr * (Fo + Fi + Fo * Fi * (Rr - 1));
 }
 
-Spectrum BxDF::DisneySheen_f(const vec3f &wo, const vec3f &wi) const{
+__bidevice__ Spectrum CalculateTint(Spectrum base){
+    Float luminance = Dot(Spectrum(0.3f, 0.6f, 1.0f), base);
+    return (luminance > 0) ? base * (1.f / luminance) : Spectrum(1);
+}
+
+__bidevice__ Spectrum BxDF::DisneySheen_f(const vec3f &wo, const vec3f &wi) const{
     vec3f wh = wi + wo;
     if(wh.IsBlack()) return Spectrum(0.);
     wh = Normalize(wh);
-    Float cosThetaD = Dot(wi, wh);
-    return S * SchlickWeight(cosThetaD);
+    Float cosThetaD = Absf(Dot(wi, wh));
+    Spectrum tint = CalculateTint(S);
+    Float fSch = SchlickWeight(cosThetaD);
+    return sheen * Mix(Spectrum(1), tint, sheenTint) * fSch;
 }
 
 __bidevice__ Spectrum BxDF::DisneyClearcoat_f(const vec3f &wo, const vec3f &wi) const{

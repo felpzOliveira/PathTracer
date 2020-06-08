@@ -249,7 +249,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         dpdu = (dst12[1] * dp02 - dst02[1] * dp12) * invdet;
         dpdv = (-dst12[0] * dp02 + dst02[0] * dp12) * invdet;
     }
-    
+#if 0
     if(degenerateUV || IsZero(Cross(dpdu, dpdv).LengthSquared())){
         // Handle zero determinant for triangle partial derivative matrix
         vec3f ng = Cross(p2 - p0, p1 - p0);
@@ -259,7 +259,7 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
         
         CoordinateSystem(Normalize(ng), &dpdu, &dpdv);
     }
-    
+#endif
     Float xAbsSum = (Absf(b0 * p0.x) + Absf(b1 * p1.x) + Absf(b2 * p2.x));
     Float yAbsSum = (Absf(b0 * p0.y) + Absf(b1 * p1.y) + Absf(b2 * p2.y));
     Float zAbsSum = (Absf(b0 * p0.z) + Absf(b1 * p1.z) + Absf(b2 * p2.z));

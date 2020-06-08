@@ -179,7 +179,7 @@ class SubsurfaceMaterial{
     __bidevice__ SubsurfaceMaterial(Texture<Spectrum> *kr, Texture<Spectrum> *kt,
                                     Texture<Spectrum> *sa, Texture<Spectrum> *ss,
                                     Texture<Float> *urough, Texture<Float> *vrough,
-                                    Float g, Float e, Float scale=10);
+                                    Float g, Float e, Float scale=1);
     
     __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
                                                  TransportMode mode, bool mLobes,
@@ -193,10 +193,64 @@ class SubsurfaceMaterial{
     }
 };
 
+class KdSubsurfaceMaterial{
+    public:
+    Float scale;
+    Texture<Spectrum> *Kr, *Kt, *Kd, *mfp;
+    Texture<Float> *uRough, *vRough;
+    Texture<Float> *bumpMap;
+    int has_bump;
+    Float eta;
+    BSSRDFTable *table;
+    
+    __bidevice__ KdSubsurfaceMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *kr,
+                                      Texture<Spectrum> *kt, Texture<Spectrum> *mfp,
+                                      Texture<Float> *urough, Texture<Float> *vrough,
+                                      Texture<Float> *map, Float e, Float scale);
+    
+    __bidevice__ KdSubsurfaceMaterial(Texture<Spectrum> *kd, Texture<Spectrum> *kr,
+                                      Texture<Spectrum> *kt, Texture<Spectrum> *mfp,
+                                      Texture<Float> *urough, Texture<Float> *vrough,
+                                      Float e, Float scale);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes,
+                                                 Material *sourceMat) const;
+    __bidevice__ ~KdSubsurfaceMaterial(){
+        TexPtrClean(Kr); TexPtrClean(Kt);
+        TexPtrClean(Kd);TexPtrClean(bumpMap);
+        TexPtrClean(vRough); TexPtrClean(uRough);
+        //TODO: cleanup BSSRDFTable
+    }
+};
+
+// This does not implement any material, it serves for Procedural shapes
+// that wish to have multiple Spectrums and BRDFs/BSSRDFs based on the
+// interaction->faceIndex. Can control the shape being referenced by the 
+// 'id' parameter.
+class PlayGroundMaterial{
+    public:
+    Texture<Spectrum> **Ls;
+    int size;
+    int id;
+    
+    __bidevice__ PlayGroundMaterial(Texture<Spectrum> **ls, int size, int id);
+    
+    __bidevice__ void ComputeScatteringFunctions(BSDF *bsdf, SurfaceInteraction *si, 
+                                                 TransportMode mode, bool mLobes,
+                                                 Material *sourceMat) const;
+    
+    __bidevice__ ~PlayGroundMaterial(){
+        for(int i = 0; i < size; i++){
+            TexPtrClean(Ls[i]);
+        }
+    }
+};
 
 enum MaterialType{
     Matte=1, Mirror, Glass, Metal, Translucent, Plastic, Uber,
-    Subsurface
+    Subsurface, KdSubsurface,
+    PlayGround
 };
 
 class Material{

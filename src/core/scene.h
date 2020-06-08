@@ -38,6 +38,12 @@ typedef struct{
 }DiskDescriptor;
 
 typedef struct{
+    Transform toWorld;
+    int id;
+    Bounds3f bound;
+}ProcToyDescriptor;
+
+typedef struct{
     Spectrum spec_val; //0
     Float fval; //1
     ImageData *image; //2
@@ -46,9 +52,11 @@ typedef struct{
 
 typedef struct{
     int is_emissive;
+    int specs_taken;
     MaterialType type;
     TextureDescriptor textures[16];
     Float vals[16];
+    int id;
 }MaterialDescriptor;
 
 typedef struct{
@@ -64,6 +72,7 @@ typedef struct{
     RectDescriptor rectDesc;
     BoxDescriptor boxDesc;
     DiskDescriptor diskDesc;
+    ProcToyDescriptor toyDesc;
     MaterialDescriptor mat;
     MediumDescriptor mediumDesc;
     int no_mat;
@@ -81,6 +90,8 @@ __host__ BoxDescriptor       MakeBox(Transform toWorld, Float sizex, Float sizey
 __host__ DiskDescriptor      MakeDisk(Transform toWorld, Float height, Float radius, 
                                       Float innerRadius, Float phiMax, 
                                       bool reverseOrientation=false);
+
+__host__ ProcToyDescriptor   MakeProceduralToy(Transform toWorld, Bounds3f bound, int id);
 
 __host__ TextureDescriptor   MakeTexture(Spectrum value);
 __host__ TextureDescriptor   MakeTexture(Float value);
@@ -106,10 +117,17 @@ __host__ MaterialDescriptor  MakeSubsurfaceMaterial(const char *name, Spectrum k
 __host__ MaterialDescriptor  MakeSubsurfaceMaterial(const char *name, Float scale, Float eta, 
                                                     Float g=0, Float uRough=0, Float vRough=0);
 
+__host__ MaterialDescriptor  MakeKdSubsurfaceMaterial(Spectrum kd, Spectrum kt, Spectrum kr,
+                                                      Spectrum mfp, Float urough, Float vrough,
+                                                      Float eta, Float scale);
+
 __host__ MaterialDescriptor  MakePlasticMaterial(Spectrum kd, Spectrum ks, Float rough);
 __host__ MaterialDescriptor  MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum kr, 
                                               Spectrum kt, Float uRough, Float vRough,
                                               Spectrum op, Float eta);
+
+__host__ MaterialDescriptor  MakePlayGroundMaterial(Spectrum L, int id=-1);
+__host__ MaterialDescriptor  MakePlayGroundMaterial(std::vector<Spectrum> Ls, int id=-1);
 
 //NOTE: Because MTL is phong based we really have few options for these,
 //      something like one of: matte, plastic or uber.
@@ -137,6 +155,8 @@ __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDes
                                              MediumDescriptor medium);
 __host__ void                InsertPrimitive(MeshDescriptor shape, MaterialDescriptor mat,
                                              MediumDescriptor medium);
+
+__host__ void                InsertPrimitive(ProcToyDescriptor shape, MaterialDescriptor mat);
 
 __host__ void                PrepareSceneForRendering(Aggregator *scene);
 

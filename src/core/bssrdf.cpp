@@ -297,6 +297,77 @@ __bidevice__ void ComputeBeamDiffusionBSSRDF(Float g, Float eta, BSSRDFTable *t)
     }
 }
 
+__bidevice__ Float InvertCatmullRom(int n, const Float *x, const Float *values, Float u){
+    // Stop when _u_ is out of bounds
+    if (!(u > values[0]))
+        return x[0];
+    else if (!(u < values[n - 1]))
+        return x[n - 1];
+    
+    // Map _u_ to a spline interval by inverting _values_
+    int i = FindInterval(n, [&](int i) { return values[i] <= u; });
+    
+    // Look up $x_i$ and function values of spline segment _i_
+    Float x0 = x[i], x1 = x[i + 1];
+    Float f0 = values[i], f1 = values[i + 1];
+    Float width = x1 - x0;
+    
+    // Approximate derivatives using finite differences
+    Float d0, d1;
+    if (i > 0)
+        d0 = width * (f1 - values[i - 1]) / (x1 - x[i - 1]);
+    else
+        d0 = f1 - f0;
+    if (i + 2 < n)
+        d1 = width * (values[i + 2] - f0) / (x[i + 2] - x0);
+    else
+        d1 = f1 - f0;
+    
+    // Invert the spline interpolant using Newton-Bisection
+    Float a = 0, b = 1, t = .5f;
+    Float Fhat, fhat;
+    while (true) {
+        // Fall back to a bisection step when _t_ is out of bounds
+        if (!(t > a && t < b)) t = 0.5f * (a + b);
+        
+        // Compute powers of _t_
+        Float t2 = t * t, t3 = t2 * t;
+        
+        // Set _Fhat_ using Equation (8.27)
+        Fhat = (2 * t3 - 3 * t2 + 1) * f0 + (-2 * t3 + 3 * t2) * f1 +
+            (t3 - 2 * t2 + t) * d0 + (t3 - t2) * d1;
+        
+        // Set _fhat_ using Equation (not present)
+        fhat = (6 * t2 - 6 * t) * f0 + (-6 * t2 + 6 * t) * f1 +
+            (3 * t2 - 4 * t + 1) * d0 + (3 * t2 - 2 * t) * d1;
+        
+        // Stop the iteration if converged
+        if (std::abs(Fhat - u) < 1e-6f || b - a < 1e-6f) break;
+        
+        // Update bisection bounds using updated _t_
+        if (Fhat - u < 0)
+            a = t;
+        else
+            b = t;
+        
+        // Perform a Newton step
+        t -= (Fhat - u) / fhat;
+    }
+    return x0 + t * width;
+}
+
+__bidevice__ void SubsurfaceFromDiffuse(BSSRDFTable *t, const Spectrum &rhoEff,
+                                        const Spectrum &mfp, Spectrum *sigma_a, 
+                                        Spectrum *sigma_s)
+{
+    for (int c = 0; c < 3; ++c){
+        Float rho = InvertCatmullRom(t->nRhoSamples, t->rhoSamples,
+                                     t->rhoEff, rhoEff[c]);
+        (*sigma_s)[c] = rho / mfp[c];
+        (*sigma_a)[c] = (1 - rho) / mfp[c];
+    }
+}
+
 __bidevice__ BSSRDFTable::BSSRDFTable(int nRhoSamples, int nRadiusSamples)
 : nRhoSamples(nRhoSamples), nRadiusSamples(nRadiusSamples)
 {
@@ -441,12 +512,21 @@ __bidevice__ Spectrum SeparableBSSRDF::Sample_Sp(Aggregator *scene, Float u1,
     * is just too sketchy, like I can't have 2 meshes using the same material?
     * I also don't understand why do we need to consider the whole scene, can't we
     * simply intersect the original primitive ? I'm putting this here
-    * as it is a huge speedup and I don't see any visual changes
+    * as it is a huge speedup and I don't see any visual changes, but mine implementation
+    * even tho is based on the book its not completely working, I can't tell, for some images
+    * I get really good results, and for some some bad ones. The amount of samples
+    * also needs to be high 4096+. PBRT uses 8k samples so this might just be a requirement.
+    * I'm planning a re-read on PBRT sometime soon so I'll be back later, for now I'll let it
+* be like this as it generates good images for the KdSubsurface material.
 */
     int nFound = 0;
     SurfaceInteraction *ptr = &si[nFound];
     while(true){
         Ray ray = base.SpawnRayTo(pTarget);
+        // NOTE: Originialy this is a scene intersection test,
+        //       this however makes the rendering really slow.
+        //       After rendering the scene with 2 sssDragons ( 14M triangles )
+        //       this optimization actually makes it feasible.
         bool hit = PrimitiveIntersect(isect->primitive, ray, ptr);
         if(ray.d.IsBlack() || !hit) break;
         
@@ -519,8 +599,8 @@ __bidevice__ Spectrum SeparableBSSRDF::Disney_S(const SurfaceInteraction &pi, co
     Float Fi = SchlickWeight(AbsCosTheta(wi));
     // this is the relation from page 6 ( relation 4 ). The fade term
     // is comming from PBRT, one of those things that if you are not
-    // in direct contact with people who publish it cause this isn't in
-    // the work.
+    // in direct contact with people who publish it you never get it 
+    // cause this isn't in the work.
     return fade * (1 - Fo / 2) * (1 - Fi / 2) * Sp(pi) / Pi;
 }
 
@@ -640,7 +720,6 @@ __bidevice__ void SeparableBSSRDF::Init_TabulatedBSSRDF(const Spectrum &sigma_a,
     table = t;
     type = BSSRDFType::BSSRDFTabulated;
     sigma_t = sigma_a + sigma_s;
-    //printf(v3fA(sigma_t) " " v3fA(sigma_a) " " v3fA(sigma_s) "\n", v3aA(sigma_t), v3aA(sigma_a), v3aA(sigma_s));
     for(int c = 0; c < 3; ++c)
         rho[c] = !IsZero(sigma_t[c]) ? (sigma_s[c] / sigma_t[c]) : 0;
 }

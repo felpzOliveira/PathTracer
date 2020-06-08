@@ -162,6 +162,6 @@ class SeparableBSSRDF{
 __bidevice__ Float BeamDiffusionSS(Float sigma_s, Float sigma_a, Float g, Float eta, Float r);
 __bidevice__ Float BeamDiffusionMS(Float sigma_s, Float sigma_a, Float g, Float eta, Float r);
 __bidevice__ void ComputeBeamDiffusionBSSRDF(Float g, Float eta, BSSRDFTable *t);
-__bidevice__ void SubsurfaceFromDiffuse(const BSSRDFTable &table, const Spectrum &rhoEff,
+__bidevice__ void SubsurfaceFromDiffuse(BSSRDFTable *table, const Spectrum &rhoEff,
                                         const Spectrum &mfp, Spectrum *sigma_a,
                                         Spectrum *sigma_s);

@@ -27,4 +27,8 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
 */
 __host__ ParsedMesh *LoadObjOnly(const char *path);
 
-__host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props);
+/*
+* Duplicates the information of a mesh applying the MeshProperties given
+* not very efficient but usefull.
+*/
+__host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props=nullptr);

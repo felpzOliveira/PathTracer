@@ -70,6 +70,8 @@ static MeasuredSS SubsurfaceParameterTable[] = {
 std::vector<PrimitiveDescriptor> hPrimitives;
 
 int any_mesh = 0;
+int mplayground_ids = 0;
+
 typedef struct{
     MipMap<Spectrum> *lightMap;
     Distribution2D *lightMapDist;
@@ -208,6 +210,14 @@ __host__ MeshDescriptor MakeMesh(ParsedMesh *mesh){
     return desc;
 }
 
+__host__ ProcToyDescriptor MakeProceduralToy(Transform toWorld, Bounds3f bound, int id){
+    ProcToyDescriptor desc;
+    desc.toWorld = toWorld;
+    desc.bound = bound;
+    desc.id = id;
+    return desc;
+}
+
 __host__ MaterialDescriptor MakeMatteMaterial(Spectrum kd, Float sigma){
     MaterialDescriptor desc;
     TextureDescriptor tkd, ts;
@@ -215,6 +225,33 @@ __host__ MaterialDescriptor MakeMatteMaterial(Spectrum kd, Float sigma){
     desc.is_emissive = 0;
     desc.textures[0] = MakeTexture(kd);
     desc.textures[1] = MakeTexture(sigma);
+    return desc;
+}
+
+__host__ MaterialDescriptor MakePlayGroundMaterial(Spectrum L, int id){
+    MaterialDescriptor desc;
+    desc.type = MaterialType::PlayGround;
+    desc.textures[0] = MakeTexture(L);
+    desc.is_emissive = 0;
+    desc.specs_taken = 1;
+    desc.id = id > -1 ? id : mplayground_ids;
+    mplayground_ids++;
+    return desc;
+}
+
+__host__ MaterialDescriptor MakePlayGroundMaterial(std::vector<Spectrum> Ls, int id){
+    MaterialDescriptor desc;
+    int maxc = sizeof(desc.textures) / sizeof(TextureDescriptor);
+    AssertA(Ls.size() < maxc, "Too many Spectrums for material");
+    desc.type = MaterialType::PlayGround;
+    desc.is_emissive = 0;
+    for(int i = 0; i < Ls.size(); i++){
+        desc.textures[i] = MakeTexture(Ls.at(i));
+    }
+    
+    desc.id = id > -1 ? id : mplayground_ids;
+    desc.specs_taken = Ls.size();
+    mplayground_ids++;
     return desc;
 }
 
@@ -227,8 +264,26 @@ __host__ MaterialDescriptor MakeMatteMaterial(TextureDescriptor kd, Float sigma)
     return desc;
 }
 
-__host__ MaterialDescriptor  MakeSubsurfaceMaterial(const char *name, Float scale, Float eta, 
-                                                    Float g, Float uRough, Float vRough)
+__host__ MaterialDescriptor MakeKdSubsurfaceMaterial(Spectrum kd, Spectrum kt, Spectrum kr,
+                                                     Spectrum mfp, Float urough, Float vrough,
+                                                     Float eta, Float scale)
+{
+    MaterialDescriptor desc;
+    desc.type = MaterialType::KdSubsurface;
+    desc.is_emissive = 0;
+    desc.textures[0] = MakeTexture(kd);
+    desc.textures[1] = MakeTexture(kt);
+    desc.textures[2] = MakeTexture(kr);
+    desc.textures[3] = MakeTexture(mfp);
+    desc.textures[4] = MakeTexture(urough);
+    desc.textures[5] = MakeTexture(vrough);
+    desc.vals[0] = eta;
+    desc.vals[1] = scale;
+    return desc;
+}
+
+__host__ MaterialDescriptor MakeSubsurfaceMaterial(const char *name, Float scale, Float eta, 
+                                                   Float g, Float uRough, Float vRough)
 {
     MaterialDescriptor desc;
     desc.type = MaterialType::Subsurface;
@@ -475,6 +530,18 @@ __host__ MediumDescriptor MakeMedium(Spectrum sigma_a, Spectrum sigma_s, Float g
     return desc;
 }
 
+__host__ void InsertPrimitive(ProcToyDescriptor shape, MaterialDescriptor mat){
+    PrimitiveDescriptor desc;
+    MediumDescriptor md;
+    md.is_valid = 0;
+    desc.mediumDesc = md;
+    desc.no_mat = 0;
+    desc.shapeType = ShapeType::COMPONENT_PROCEDURAL;
+    desc.mat = mat;
+    desc.toyDesc = shape;
+    hPrimitives.push_back(desc);
+}
+
 __host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat,
                               MediumDescriptor medium)
 {
@@ -499,7 +566,7 @@ __host__ void InsertPrimitive(BoxDescriptor shape, MaterialDescriptor mat){
     PrimitiveDescriptor desc;
     desc.mediumDesc = md;
     desc.no_mat = 0;
-    desc.shapeType = ShapeType::BOX;
+    desc.shapeType = ShapeType::BOX_PROCEDURAL;
     desc.mat = mat;
     desc.boxDesc = shape;
     hPrimitives.push_back(desc);
@@ -570,11 +637,10 @@ __host__ void InsertEXRLightMap(const char *path, const Transform &toWorld,
     if(hostScene){
         if(!hostScene->lightMap){
             LightMap *map = cudaAllocateVx(LightMap, 1);
-            printf(" * Gerenating light MipMap...");
+            printf("Generating environment map\n");
             map->lightMap = BuildSpectrumMipMap(path, &map->lightMapDist, scale);
             map->toWorld = toWorld;
             hostScene->lightMap = map;
-            printf("OK ( generated %d levels )\n", map->lightMap->Levels());
         }else{
             printf("Warning: Multiple calls to InsertLightMap\n");
         }
@@ -608,14 +674,21 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
         shape = new Rectangle(pri->rectDesc.toWorld, 
                               pri->rectDesc.sizex, pri->rectDesc.sizey,
                               pri->rectDesc.reverseOrientation);
-    }else if(pri->shapeType == ShapeType::BOX){
-        shape = new Box(pri->boxDesc.toWorld, pri->boxDesc.sizex,
-                        pri->boxDesc.sizey, pri->boxDesc.sizez,
-                        pri->boxDesc.reverseOrientation);
+    }else if(pri->shapeType == ShapeType::BOX_PROCEDURAL){
+        shape = new ProceduralBox(pri->boxDesc.toWorld, 
+                                  vec3f(pri->boxDesc.sizex, 
+                                        pri->boxDesc.sizey,
+                                        pri->boxDesc.sizez));
+        //shape = new Box(pri->boxDesc.toWorld, pri->boxDesc.sizex,
+        //pri->boxDesc.sizey, pri->boxDesc.sizez,
+        //pri->boxDesc.reverseOrientation);
     }else if(pri->shapeType == ShapeType::DISK){
         shape = new Disk(pri->diskDesc.toWorld, pri->diskDesc.height,
                          pri->diskDesc.radius, pri->diskDesc.innerRadius,
                          pri->diskDesc.phiMax, pri->diskDesc.reverseOrientation);
+    }else if(pri->shapeType == ShapeType::COMPONENT_PROCEDURAL){
+        shape = new ProceduralComponent(pri->toyDesc.toWorld, 
+                                        pri->toyDesc.bound, pri->toyDesc.id);
     }
     
     return shape;
@@ -640,6 +713,17 @@ __bidevice__ Texture<Spectrum> *SpectrumTexture(TextureDescriptor *desc){
     }else{
         return ImageTexture<Spectrum>(desc->image);
     }
+}
+
+__bidevice__ int SpectrumTextureList(MaterialDescriptor *mat, Texture<Spectrum> ***dlist){
+    AssertA(dlist && mat->specs_taken > 0, "Invalid pointer for texture list allocation");
+    Texture<Spectrum> **list = new Texture<Spectrum>*[mat->specs_taken];
+    for(int i = 0; i < mat->specs_taken; i++){
+        list[i] = SpectrumTexture(&mat->textures[i]);
+    }
+    
+    *dlist = list;
+    return mat->specs_taken;
 }
 
 __bidevice__ Material *MakeMaterial(PrimitiveDescriptor *pri){
@@ -697,6 +781,22 @@ __bidevice__ Material *MakeMaterial(PrimitiveDescriptor *pri){
                                                  FloatTexture(&mat->textures[5]),
                                                  mat->vals[2], mat->vals[1],
                                                  mat->vals[0]));
+        } break;
+        
+        case MaterialType::KdSubsurface:{
+            material->Set(new KdSubsurfaceMaterial(SpectrumTexture(&mat->textures[0]),
+                                                   SpectrumTexture(&mat->textures[1]),
+                                                   SpectrumTexture(&mat->textures[2]),
+                                                   SpectrumTexture(&mat->textures[3]),
+                                                   FloatTexture(&mat->textures[4]),
+                                                   FloatTexture(&mat->textures[5]),
+                                                   mat->vals[0], mat->vals[1]));
+        } break;
+        
+        case MaterialType::PlayGround:{
+            Texture<Spectrum> **list = nullptr;
+            int size = SpectrumTextureList(mat, &list);
+            material->Set(new PlayGroundMaterial(list, size, mat->id));
         } break;
         
         default:{

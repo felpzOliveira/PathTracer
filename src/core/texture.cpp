@@ -57,6 +57,7 @@ __host__ ImageData *LoadTextureImageData(const char *path){
 }
 
 
+
 template<typename T>
 __host__ T Texel(PyramidLevel<T> *pLevel, int s, int t, ImageWrap wrapMode){
     switch(wrapMode){
@@ -104,8 +105,10 @@ template<typename T> __host__
 PyramidLevel<T> *BuildMipMap(T *img, Point2i &resolution, int &nLevels, ImageWrap wrapMode){
     
     T *resampledImage = nullptr;
+    printf(" * Building MipMap");
     // resample the image to be power of 2
     if(!IsPowerOf2(resolution[0]) || !IsPowerOf2(resolution[1])){
+        printf("\r * Building MipMap [ Re-scaling ]");
         Point2i resPow2(RoundUpPow2(resolution[0]), RoundUpPow2(resolution[1]));
         
         resampledImage = cudaAllocateVx(T, resPow2[0] * resPow2[1]);
@@ -177,6 +180,7 @@ PyramidLevel<T> *BuildMipMap(T *img, Point2i &resolution, int &nLevels, ImageWra
     pLevel->ry = resolution[1];
     
     for(int i = 1; i < nLevels; i++){
+        printf("\r * Building MipMap [ Level: %d / %d ]", i, nLevels);
         PyramidLevel<T> *cLevel = &pyramid[i];
         pLevel = &pyramid[i-1];
         
@@ -199,7 +203,7 @@ PyramidLevel<T> *BuildMipMap(T *img, Point2i &resolution, int &nLevels, ImageWra
         cLevel->rx = sRes;
         cLevel->ry = tRes;
     }
-    
+    printf("\r * Building MipMap [ Level: %d / %d ]\n", nLevels, nLevels);
     return pyramid;
 }
 
@@ -208,11 +212,13 @@ __host__ MMSpectrum *BuildSpectrumMipMap(const char *path, Distribution2D **dist
 {
     int width, height;
     MMSpectrum *mipmap = cudaAllocateVx(MMSpectrum, 1);
+    printf(" * Reading EXR Map...");
     Spectrum *L = ReadImageEXR(path, width, height);
     for(int i = 0; i < width * height; i++){
         L[i] *= scale;
     }
     
+    printf("OK\n");
     Point2i resolution(width, height);
     mipmap->wrapMode = ImageWrap::Repeat;
     mipmap->pyramid = BuildMipMap(L, resolution, mipmap->nLevels, ImageWrap::Repeat);
@@ -224,6 +230,8 @@ __host__ MMSpectrum *BuildSpectrumMipMap(const char *path, Distribution2D **dist
         height = 2 * mipmap->Height();
         Float *img = cudaAllocateVx(Float, width * height);
         float fwidth = 0.5f / Min(width, height);
+        printf(" * Creating light distribution...");
+        fflush(stdout);
         for(int v = 0; v < height; v++){
             Float vp = (v + .5f) / (Float)height;
             Float sinTheta = Sin(Pi * (v + .5f) / height);
@@ -235,6 +243,8 @@ __host__ MMSpectrum *BuildSpectrumMipMap(const char *path, Distribution2D **dist
         }
         
         *distr = CreateDistribution2D(img, width, height);
+        printf("OK\n");
+        fflush(stdout);
     }
     
     cudaFree(L);

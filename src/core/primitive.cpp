@@ -189,7 +189,7 @@ __bidevice__ void Aggregator::SetLights(){
                 Primitive *pri = primitives[desc.shapeId];
                 GeometricEmitterPrimitive *gPri = (GeometricEmitterPrimitive *)pri;
                 /* Diffuse areas need to set geometry light pointer upon light creation */
-                light->Init_DiffuseArea(pri->Le(), pri->shape);
+                light->Init_DiffuseArea(pri->Le(), pri->shape, true);
                 gPri->light = light;
                 lightAreaCount++;
             }else if(desc.type == LightType::Distant){

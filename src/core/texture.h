@@ -114,7 +114,6 @@ struct PyramidLevel{
     int rx, ry;
 };
 
-
 template<typename T>
 class MipMap{
     public:
@@ -189,5 +188,11 @@ class MipMap{
 typedef MipMap<Spectrum> MMSpectrum;
 typedef MipMap<Float> MMFloat;
 
+/*
+* Builds a MipMap from a image source path. Returns the resulting MipMap and 
+* the power distribution for sampling this MipMap in case 'distr' is not nullptr.
+* It scales the values of the image with 'scale', this does not attempt to guess the
+* image type it assumes it is a EXR image.
+*/
 __host__ MMSpectrum *BuildSpectrumMipMap(const char *path, Distribution2D **distr,
                                          const Spectrum &scale = Spectrum(1));

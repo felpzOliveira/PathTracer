@@ -444,7 +444,7 @@ __host__ std::vector<ParsedMesh*> *LoadObj(const char *path, std::vector<MeshMtl
 
 __host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props){
     ParsedMesh *duplicated = nullptr;
-    if(mesh && props){
+    if(mesh){
         duplicated = cudaAllocateVx(ParsedMesh, 1);
         duplicated->toWorld = mesh->toWorld;
         duplicated->nVertices = mesh->nVertices;
@@ -489,14 +489,17 @@ __host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props){
         for(int i = 0; i < maxl; i++){
             if(i < mesh->nVertices){
                 Point3f p = mesh->p[i];
-                if(props->flip_x){
-                    vec3f vp(p);
-                    vec3f op = vp - center;
-                    vec3f wp(-op.x, op.y, op.z);
-                    p = Point3f(wp.x + center.x,
-                                wp.y + center.y,
-                                wp.z + center.z);
+                if(props){
+                    if(props->flip_x){
+                        vec3f vp(p);
+                        vec3f op = vp - center;
+                        vec3f wp(-op.x, op.y, op.z);
+                        p = Point3f(wp.x + center.x,
+                                    wp.y + center.y,
+                                    wp.z + center.z);
+                    }
                 }
+                
                 duplicated->p[i] = p;
             }
             

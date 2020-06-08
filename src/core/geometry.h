@@ -74,6 +74,7 @@ inline __bidevice__ Float Min(Float a, Float b){ return a < b ? a : b; }
 inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
 inline __bidevice__ Float Radians(Float deg) { return (Pi / 180) * deg; }
+inline __bidevice__ Float Degrees(Float rad) { return (rad * 180 / Pi); }
 inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 1e-8; }
 inline __bidevice__ Float Log2(Float x){
     const Float invLog2 = 1.442695040888963387004650940071;
@@ -406,6 +407,135 @@ template<typename T> class vec3{
     __bidevice__ Float Length() const{ return sqrt(LengthSquared()); }
 };
 
+
+template<typename T> class vec4{
+    public:
+    T x, y, z, w;
+    __bidevice__ vec4(){ x = y = z = (T)0; }
+    __bidevice__ vec4(T a){ x = y = z = w = a; }
+    __bidevice__ vec4(T a, T b, T c, T d): x(a), y(b), z(c), w(d){
+        //Assert(!HasNaN());
+    }
+    
+    __bidevice__ bool HasNaN(){
+        return IsNaN(x) || IsNaN(y) || IsNaN(z) || IsNaN(w);
+    }
+    
+    __bidevice__ bool HasNaN() const{
+        return IsNaN(x) || IsNaN(y) || IsNaN(z) || IsNaN(w);
+    }
+    
+    __bidevice__ bool IsBlack(){
+        return (IsZero(x) && IsZero(y) && IsZero(z) && IsZero(w));
+    }
+    
+    __bidevice__ bool IsBlack() const{
+        return (IsZero(x) && IsZero(y) && IsZero(z) && IsZero(w));
+    }
+    
+    __bidevice__ T operator[](int i) const{
+        Assert(i >= 0 && i < 3);
+        if(i == 0) return x;
+        if(i == 1) return y;
+        return z;
+    }
+    
+    __bidevice__ T &operator[](int i){
+        Assert(i >= 0 && i < 4);
+        if(i == 0) return x;
+        if(i == 1) return y;
+        if(i == 2) return z;
+        return w;
+    }
+    
+    __bidevice__ vec4<T> operator/(T f) const{
+        //Assert(!IsZero(f));
+        if(IsZero(f)){
+            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+        }
+        Float inv = (Float)1 / f;
+        return vec4<T>(x * inv, y * inv, z * inv, w * inv);
+    }
+    
+    __bidevice__ vec4<T> &operator/(T f){
+        //Assert(!IsZero(f));
+        if(IsZero(f)){
+            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+        }
+        
+        Float inv = (Float)1 / f;
+        x *= inv; y *= inv; z *= inv; w *= inv;
+        return *this;
+    }
+    
+    __bidevice__ vec4<T> operator/(const vec4<T> &v) const{
+        Assert(!v.HasNaN());
+        Float invx = (Float)1 / v.x;
+        Float invy = (Float)1 / v.y;
+        Float invz = (Float)1 / v.z;
+        Float invw = (Float)1 / v.w;
+        return vec4<T>(x * invx, y * invy, z * invz, w * invw);
+    }
+    
+    __bidevice__ vec4<T> &operator/(const vec4<T> &v){
+        Assert(!v.HasNaN());
+        Float invx = (Float)1 / v.x;
+        Float invy = (Float)1 / v.y;
+        Float invz = (Float)1 / v.z;
+        Float invw = (Float)1 / v.w;
+        x = x * invx; y = y * invy; z = z * invz; w *= invw;
+        return *this;
+    }
+    
+    __bidevice__ vec4<T> operator-(){
+        return vec4<T>(-x, -y, -z, -w);
+    }
+    
+    __bidevice__ vec4<T> operator-() const{
+        return vec4<T>(-x, -y, -z, -w);
+    }
+    
+    __bidevice__ vec4<T> operator-(const vec4<T> &v) const{
+        return vec4(x - v.x, y - v.y, z - v.z, w - v.w);
+    }
+    
+    __bidevice__ vec4<T> &operator-=(const vec4<T> &v){
+        x -= v.x; y -= v.y; z -= v.z; w -= v.w;
+        return *this;
+    }
+    
+    __bidevice__ vec4<T> operator+(const vec4<T> &v) const{
+        return vec4<T>(x + v.x, y + v.y, z + v.z, w + v.w);
+    }
+    
+    __bidevice__ vec4<T> operator+=(const vec4<T> &v){
+        x += v.x; y += v.y; z += v.z; w += v.w;
+        return *this;
+    }
+    
+    __bidevice__ vec4<T> operator*(const vec4<T> &v) const{
+        return vec4<T>(x * v.x, y * v.y, z * v.z, w * v.w);
+    }
+    
+    __bidevice__ vec4<T> &operator*=(const vec4<T> &v){
+        x *= v.x; y *= v.y; z *= v.z; w *= v.w;
+        return *this;
+    }
+    
+    __bidevice__ vec4<T> operator*(T s) const{
+        return vec4<T>(x * s, y * s, z * s, w * s);
+    }
+    
+    __bidevice__ vec4<T> &operator*=(T s){
+        x *= s; y *= s; z *= s; w *= s;
+        return *this;
+    }
+    
+    __bidevice__ Float LengthSquared() const{ return x * x + y * y + z * z + w * w; }
+    __bidevice__ Float Length() const{ return sqrt(LengthSquared()); }
+};
+
+
 template<typename T>
 inline __bidevice__ vec2<T> Clamp(const vec2<T> &val, const vec2<T> &low, const vec2<T> &high){
     return vec2<T>(Clamp(val.x, low.x, high.x),
@@ -420,6 +550,14 @@ inline __bidevice__ vec3<T> Clamp(const vec3<T> &val, const vec3<T> &low, const 
 }
 
 template<typename T>
+inline __bidevice__ vec4<T> Clamp(const vec4<T> &val, const vec4<T> &low, const vec4<T> &high){
+    return vec4<T>(Clamp(val.x, low.x, high.x),
+                   Clamp(val.y, low.y, high.y),
+                   Clamp(val.z, low.z, high.z),
+                   Clamp(val.w, low.w, high.w));
+}
+
+template<typename T>
 inline __bidevice__ vec3<T> Clamp(const vec3<T> &val){
     return Clamp(val, vec3<T>(-1), vec3<T>(1));
 }
@@ -431,7 +569,7 @@ inline __bidevice__ vec2<T> Round(const vec2<T> &val){
 
 template<typename T> inline __bidevice__ vec2<T> operator*(T s, vec2<T> &v){ return v * s; }
 template<typename T> inline __bidevice__ vec3<T> operator*(T s, vec3<T> &v){ return v * s; }
-
+template<typename T> inline __bidevice__ vec4<T> operator*(T s, vec4<T> &v){ return v * s; }
 template<typename T> inline __bidevice__ vec2<T> Abs(const vec2<T> &v){
     return vec2<T>(Absf(v.x), Absf(v.y));
 }
@@ -446,8 +584,17 @@ vec3<T> operator*(U s, const vec3<T> &v){
     return v * s;
 }
 
+template <typename T, typename U> inline __bidevice__ 
+vec4<T> operator*(U s, const vec4<T> &v){
+    return v * s;
+}
+
 template<typename T> inline vec3<T> __bidevice__ Abs(const vec3<T> &v){
     return vec3<T>(Absf(v.x), Absf(v.y), Absf(v.z));
+}
+
+template<typename T> inline vec4<T> __bidevice__ Abs(const vec4<T> &v){
+    return vec4<T>(Absf(v.x), Absf(v.y), Absf(v.z), Absf(v.w));
 }
 
 template<typename T> inline __bidevice__ T Dot(const vec2<T> &v1, const vec2<T> &v2){
@@ -458,7 +605,15 @@ template<typename T> inline __bidevice__ T Dot(const vec3<T> &v1, const vec3<T> 
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
+template<typename T> inline __bidevice__ T Dot(const vec4<T> &v1, const vec4<T> &v2){
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
+}
+
 template<typename T> inline __bidevice__ T AbsDot(const vec3<T> &v1, const vec3<T> &v2){
+    return Absf(Dot(v1, v2));
+}
+
+template<typename T> inline __bidevice__ T AbsDot(const vec4<T> &v1, const vec4<T> &v2){
     return Absf(Dot(v1, v2));
 }
 
@@ -474,6 +629,10 @@ template<typename T> inline __bidevice__ vec3<T> Normalize(const vec3<T> &v){
     return v / v.Length();
 }
 
+template<typename T> inline __bidevice__ vec4<T> Normalize(const vec4<T> &v){
+    return v / v.Length();
+}
+
 inline __bidevice__ Float Sin(const Float &v){
     return std::sin(v);
 }
@@ -484,6 +643,10 @@ template<typename T> inline __bidevice__ vec2<T> Sin(const vec2<T> &v){
 
 template<typename T> inline __bidevice__ vec3<T> Sin(const vec3<T> &v){
     return vec3<T>(std::sin(v.x), std::sin(v.y), std::sin(v.z));
+}
+
+template<typename T> inline __bidevice__ vec4<T> Sin(const vec4<T> &v){
+    return vec4<T>(std::sin(v.x), std::sin(v.y), std::sin(v.z), std::sin(v.w));
 }
 
 template<typename T> inline __bidevice__ T MinComponent(const vec3<T> &v){
@@ -502,12 +665,20 @@ template<typename T> inline __bidevice__ vec3<T> Min(const vec3<T> &v1, const ve
     return vec3<T>(Min(v1.x, v1.y), Min(v1.y, v2.y), Min(v1.z, v2.z));
 }
 
+template<typename T> inline __bidevice__ vec4<T> Min(const vec4<T> &v1, const vec4<T> &v2){
+    return vec4<T>(Min(v1.x, v1.y), Min(v1.y, v2.y), Min(v1.z, v2.z), Min(v1.w, v2.w));
+}
+
 template<typename T> inline __bidevice__ vec2<T> Max(const vec2<T> &v1, const vec2<T> &v2){
     return vec2<T>(Max(v1.x, v1.y), Max(v1.y, v2.y));
 }
 
 template<typename T> inline __bidevice__ vec3<T> Max(const vec3<T> &v1, const vec3<T> &v2){
     return vec3<T>(Max(v1.x, v1.y), Max(v1.y, v2.y), Max(v1.z, v2.z));
+}
+
+template<typename T> inline __bidevice__ vec4<T> Max(const vec4<T> &v1, const vec4<T> &v2){
+    return vec4<T>(Max(v1.x, v1.y), Max(v1.y, v2.y), Max(v1.z, v2.z), Max(v1.w, v2.w));
 }
 
 template<typename T> inline __bidevice__ vec3<T> Permute(const vec3<T> &v, int x, int y, int z){
@@ -554,6 +725,8 @@ typedef vec2<Float> vec2f;
 typedef vec2<int> vec2i;
 typedef vec3<Float> vec3f;
 typedef vec3<int> vec3i;
+typedef vec4<Float> vec4f;
+typedef vec4<int> vec4i;
 
 inline __bidevice__ vec3f Max(vec3f a, vec3f b){
     return vec3f(Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z));
@@ -793,6 +966,10 @@ template<typename T> inline __bidevice__ Float DistanceSquared(const Point2<T> &
 }
 
 template<typename T> inline __bidevice__ T Mix(const T &p0, const T &p1, T t){
+    return (1 - t) * p0 + t * p1;
+}
+
+inline __bidevice__ Spectrum Mix(const Spectrum &p0, const Spectrum &p1, Float t){
     return (1 - t) * p0 + t * p1;
 }
 

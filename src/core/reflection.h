@@ -75,7 +75,10 @@ class BxDF{
     
     MicrofacetDistribution mDist;
     
+    Spectrum sheen;
+    Float sheenTint;
     
+    Float clearCoat, alpha;
     
     SeparableBSSRDF *bssrdf;
     
@@ -84,17 +87,25 @@ class BxDF{
     
     __bidevice__ void Invalidate(){is_valid = 0;}
     
-    __bidevice__ void Init_DisneyClearcoat(Float weight, Float gloss){
+    __bidevice__ void Init_DisneyClearcoat(Float clearc, Float alp){
         type = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY);
         impl = BxDFImpl::DisneyClearcoat;
-        A = weight;
-        B = gloss;
+        clearCoat = clearc;
+        alpha = alp;
     }
     
-    __bidevice__ void Init_DisneySheen(const Spectrum &R){
+    /*
+    * Sheen term should be higher than one? The Spectrum values returned are 
+    * really low values.
+*/
+    __bidevice__ void Init_DisneySheen(const Spectrum &R, const Spectrum &_sheen,
+                                       Float sheenFactor)
+    {
         type = BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE);
         impl = BxDFImpl::DisneySheen;
         S = R;
+        sheen = _sheen;
+        sheenTint = sheenFactor;
     }
     
     __bidevice__ void Init_DisneyDiffuse(const Spectrum &R){

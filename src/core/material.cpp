@@ -95,6 +95,7 @@ __bidevice__ const char * GetMaterialName(MaterialType type){
         case MaterialType::Metal: return "Metal";
         case MaterialType::Translucent: return "Translucent";
         case MaterialType::Subsurface: return "Subsurface";
+        case MaterialType::KdSubsurface: return "KdSubsurface";
         default: return "(None)";
     }
 }
@@ -142,6 +143,16 @@ __bidevice__ void Material::ComputeScatteringFunctions(BSDF *bsdf, SurfaceIntera
             case MaterialType::Subsurface:{
                 SubsurfaceMaterial *sub = (SubsurfaceMaterial *) material;
                 sub->ComputeScatteringFunctions(bsdf, si, mode, mLobes, this);
+            } break;
+            
+            case MaterialType::KdSubsurface:{
+                KdSubsurfaceMaterial *kdsub = (KdSubsurfaceMaterial *) material;
+                kdsub->ComputeScatteringFunctions(bsdf, si, mode, mLobes, this);
+            } break;
+            
+            case MaterialType::PlayGround:{
+                PlayGroundMaterial *pg = (PlayGroundMaterial *)material;
+                pg->ComputeScatteringFunctions(bsdf, si, mode, mLobes, this);
             } break;
             
             default:{

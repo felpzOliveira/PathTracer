@@ -31,6 +31,17 @@ struct Matrix4x4 {
     }
     
     __bidevice__ friend Matrix4x4 Inverse(const Matrix4x4 &);
+    
+    __bidevice__ void PrintSelf(){
+        for(int i = 0; i < 4; ++i){
+            printf("[ ");
+            for(int j = 0; j < 4; ++j){
+                printf("%g  ", m[i][j]);
+            }
+            
+            printf("]\n");
+        }
+    }
 };
 
 class Transform {
