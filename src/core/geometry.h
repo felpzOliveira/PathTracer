@@ -662,23 +662,23 @@ template<typename T> inline __bidevice__ int MaxDimension(const vec3<T> &v){
 }
 
 template<typename T> inline __bidevice__ vec3<T> Min(const vec3<T> &v1, const vec3<T> &v2){
-    return vec3<T>(Min(v1.x, v1.y), Min(v1.y, v2.y), Min(v1.z, v2.z));
+    return vec3<T>(Min(v1.x, v2.x), Min(v1.y, v2.y), Min(v1.z, v2.z));
 }
 
 template<typename T> inline __bidevice__ vec4<T> Min(const vec4<T> &v1, const vec4<T> &v2){
-    return vec4<T>(Min(v1.x, v1.y), Min(v1.y, v2.y), Min(v1.z, v2.z), Min(v1.w, v2.w));
+    return vec4<T>(Min(v1.x, v2.x), Min(v1.y, v2.y), Min(v1.z, v2.z), Min(v1.w, v2.w));
 }
 
 template<typename T> inline __bidevice__ vec2<T> Max(const vec2<T> &v1, const vec2<T> &v2){
-    return vec2<T>(Max(v1.x, v1.y), Max(v1.y, v2.y));
+    return vec2<T>(Max(v1.x, v2.x), Max(v1.y, v2.y));
 }
 
 template<typename T> inline __bidevice__ vec3<T> Max(const vec3<T> &v1, const vec3<T> &v2){
-    return vec3<T>(Max(v1.x, v1.y), Max(v1.y, v2.y), Max(v1.z, v2.z));
+    return vec3<T>(Max(v1.x, v2.x), Max(v1.y, v2.y), Max(v1.z, v2.z));
 }
 
 template<typename T> inline __bidevice__ vec4<T> Max(const vec4<T> &v1, const vec4<T> &v2){
-    return vec4<T>(Max(v1.x, v1.y), Max(v1.y, v2.y), Max(v1.z, v2.z), Max(v1.w, v2.w));
+    return vec4<T>(Max(v1.x, v2.x), Max(v1.y, v2.y), Max(v1.z, v2.z), Max(v1.w, v2.w));
 }
 
 template<typename T> inline __bidevice__ vec3<T> Permute(const vec3<T> &v, int x, int y, int z){

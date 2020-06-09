@@ -431,8 +431,8 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Ray ray = camera->SpawnRay(u, v, sample);
             //out += Li_Direct(ray, scene, pixel);
             //out += Li_Path(ray, scene, pixel);
-            out += Li_PathSampled(ray, scene, pixel);
-            //out += Li_VolPath(ray, scene, pixel);
+            //out += Li_PathSampled(ray, scene, pixel);
+            out += Li_VolPath(ray, scene, pixel);
             pixel->samples ++;
         }
         
@@ -465,34 +465,6 @@ void DragonScene(Camera *camera, Float aspect){
     
     ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "dragon_aligned.obj");
     dragonMesh->toWorld = Scale(15) * RotateZ(-1) * RotateY(70);
-    MeshDescriptor dragon = MakeMesh(dragonMesh);
-    InsertPrimitive(dragon, blue);
-    InsertPrimitive(bottomWall, gray);
-}
-
-void DragonScene2(Camera *camera, Float aspect){
-    AssertA(camera, "Invalid camera pointer");
-    
-    camera->Config(Point3f(60.f, 69.f, -43.f), 
-                   Point3f(-12.12833, 0., 3.16229),
-                   vec3f(0.f,1.f,0.f), 38.f, aspect);
-    
-    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
-                                                  Spectrum(.7, .7, .7), 0.1);
-    
-    MaterialDescriptor blue   = MakePlasticMaterial(Spectrum(.1f, .1f, .4f), 
-                                                    Spectrum(0.6f), 0.03);
-    
-    Transform er = Translate(0, 0, 0) * RotateX(90);
-    //RectDescriptor bottomWall = MakeRectangle(er, 500, 500);
-    SphereDescriptor bottomWall = MakeSphere(Translate(0, -1500, 0), 1500);
-    
-    
-    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
-                      RotateX(-95) * RotateZ(50), Spectrum(2.5));
-    
-    ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "collumn.obj");
-    dragonMesh->toWorld = Scale(1) * RotateZ(-1) * RotateY(70);
     MeshDescriptor dragon = MakeMesh(dragonMesh);
     InsertPrimitive(dragon, blue);
     InsertPrimitive(bottomWall, gray);
@@ -584,13 +556,12 @@ void BoxesScene(Camera *camera, Float aspect){
 void Helmet(Camera *camera, Float aspect){
     camera->Config(Point3f(-1.401275, -1.344, -10), Point3f(-0.7501275, -0.7f, 0.0f),
                    vec3f(0,1,0), 22, aspect);
-    //InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
-    //RotateX(-90) * RotateZ(90), Spectrum(2.5));
     
     std::vector<MeshMtl> mtls;
     std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "helmet.obj", &mtls, true);
     Transform r = RotateY(180);
-    MaterialDescriptor mat = MakeMatteMaterial(Spectrum(.5));
+    
+#if 1
     for(int i = 0; i < meshes->size(); i++){
         ParsedMesh *m = meshes->at(i);
         if(m->nTriangles > 0){
@@ -607,11 +578,18 @@ void Helmet(Camera *camera, Float aspect){
                                                          0.01, Spectrum(1), 1.5f);
                 InsertPrimitive(d, ub);
             }else if(mtls[i].name == "Material.002"){
-                MaterialDescriptor pl = MakePlasticMaterial(Spectrum(.1), Spectrum(.7), .05);
-                InsertPrimitive(d, pl);
+                //MaterialDescriptor pl = MakePlasticMaterial(Spectrum(.1), Spectrum(.7), .05);
+                //InsertPrimitive(d, pl);
             }else if(mtls[i].name == "white"){
-                MaterialDescriptor ml = MakePlasticMaterial(Spectrum(0.78), Spectrum(1),
-                                                            .01);
+#if 0
+                MaterialDescriptor ml = MakeKdSubsurfaceMaterial(Spectrum(.9),
+                                                                 Spectrum(1), Spectrum(1),
+                                                                 Spectrum(.1), 0, 0, 
+                                                                 1.33, 1.);
+#else
+                MaterialDescriptor ml = MakeSubsurfaceMaterial("Skin1", 1, 
+                                                               1.33, 0, 0.05, 0.05);
+#endif
                 InsertPrimitive(d, ml);
             }else{
                 printf(" ** [ERROR] : Unhandled material\n");
@@ -620,13 +598,15 @@ void Helmet(Camera *camera, Float aspect){
             
         }
     }
-    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 10);
+#endif
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
     
-    SphereDescriptor sphere = MakeSphere(Translate(0, 1.5, -10), 1);
-    InsertPrimitive(sphere, matEm);
+    Transform er = Translate(0, -6, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
+    InsertPrimitive(bottomWall, gray);
     
-    //Transform rectT = Translate(0.6, 1.4, 0.5) * RotateX(90);
-    //RectDescriptor lightRect = MakeRectangle(rectT, 1, 1.5);
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
 }
 
 
@@ -820,8 +800,8 @@ void OrigamiScene(Camera *camera, Float aspect){
     RectDescriptor bottomWall = MakeRectangle(er, 2000, 2000);
     InsertPrimitive(bottomWall, gray);
     
-    InsertEXRLightMap(TEXTURE_FOLDER "sky.exr", 
-                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr", 
+                      RotateX(-90) * RotateZ(90) * RotateY(180), Spectrum(2.5));
     
     Float len = 15;
     Float h = 1.5;
@@ -894,9 +874,7 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 18.f, 70.f),
-                   //Point3f(53.f, 48.f, -70.f), 
                    Point3f(0, 21.15341, 0),
-                   //Point3f(-10.12833, 5.15341, 5.16229),
                    vec3f(0.f,1.f,0.f), 40.f, aspect);
     
     MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1,.1, .1), 
@@ -921,10 +899,8 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     InsertPrimitive(lightSphere, matEm);
     InsertPrimitive(lightSphere2, matEm);
     
-    //SphereDescriptor lightSphere = MakeSphere(Translate(0, 160, 0), 100);
-    //InsertPrimitive(lightSphere, matEm);
-    MediumDescriptor medium = MakeMedium(Spectrum(0.03), Spectrum(0.05), -0.7);
-    Transform glassT = Translate(0, 13, 0) * RotateY(45);
+    MediumDescriptor medium = MakeMedium(Spectrum(.0007), Spectrum(0.005), 0);
+    Transform glassT = Translate(0, 26, 0) * RotateY(45);
     SphereDescriptor spehre = MakeSphere(glassT, 13);
     InsertPrimitive(spehre, greenGlass);
     InsertCameraMedium(medium);
@@ -952,10 +928,9 @@ void render(Image *image){
     
     //NOTE: Use this function to perform scene setup
     //CornellRoom2(camera, aspect);
-    OrigamiScene(camera, aspect);
+    //OrigamiScene(camera, aspect);
     //Helmet(camera, aspect);
-    //DragonScene2(camera, aspect);
-    //Vader(camera, aspect);
+    Vader(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
     //TwoDragonsScene(camera, aspect);
     //BoxesScene(camera, aspect);
@@ -965,7 +940,7 @@ void render(Image *image){
     PrepareSceneForRendering(scene);
     std::cout << "Done" << std::endl;
     
-    int it = 5000;
+    int it = 8000;
     clock_t start = clock();
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){
@@ -1000,8 +975,8 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        int image_width = 1600;
-        //int image_width = 800;
+        //int image_width = 1600;
+        int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
 #if 0
         image_width = 1200;
