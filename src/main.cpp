@@ -896,7 +896,7 @@ void TwoDragonsScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
     camera->Config(Point3f(0.f, 62.f, 90.f),
-                   Point3f(-10, 0, -20),
+                   Point3f(-10, 0, -10),
                    vec3f(0.f,1.f,0.f), 42.f, aspect);
     
     MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
@@ -905,9 +905,9 @@ void TwoDragonsScene(Camera *camera, Float aspect){
     RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
     InsertPrimitive(bottomWall, gray);
     
-    MaterialDescriptor skin = MakeSubsurfaceMaterial("Ketchup", 1, 
+    MaterialDescriptor skin = MakeSubsurfaceMaterial("Ketchup", 10, 
                                                      1.33, 0, 0.05, 0.05);
-    MaterialDescriptor milk = MakeSubsurfaceMaterial("Skin1", 1, 
+    MaterialDescriptor milk = MakeSubsurfaceMaterial("Skin1", 10, 
                                                      1.33, 0, 0.05, 0.05);
     InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
                       RotateX(-90) * RotateZ(90), Spectrum(2.5));
@@ -988,8 +988,8 @@ void render(Image *image){
     //Helmet(camera, aspect);
     //Vader(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
-    //TwoDragonsScene(camera, aspect);
-    SubsurfaceSpheres(camera, aspect);
+    TwoDragonsScene(camera, aspect);
+    //SubsurfaceSpheres(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
@@ -1033,8 +1033,8 @@ int main(int argc, char **argv){
         cudaInitEx();
         
         Float aspect_ratio = 16.0 / 9.0;
-        //int image_width = 1600;
-        int image_width = 800;
+        int image_width = 1600;
+        //int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
 #if 0
         image_width = 1200;
