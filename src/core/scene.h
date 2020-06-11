@@ -126,6 +126,10 @@ __host__ MaterialDescriptor  MakeUberMaterial(Spectrum kd, Spectrum ks, Spectrum
                                               Spectrum kt, Float uRough, Float vRough,
                                               Spectrum op, Float eta);
 
+__host__ MaterialDescriptor  MakeTranslucentMaterial(Spectrum kd, Spectrum ks,
+                                                     Spectrum reflect, Spectrum transmit,
+                                                     Float rough);
+
 __host__ MaterialDescriptor  MakePlayGroundMaterial(Spectrum L, int id=-1);
 __host__ MaterialDescriptor  MakePlayGroundMaterial(std::vector<Spectrum> Ls, int id=-1);
 

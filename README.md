@@ -9,6 +9,7 @@ so I remade a few images from those using the new code, but now we have a bunch 
 ![Alt text](/images/room.png)
 ![Alt text](/images/scene0.png)
 ![Alt text](/images/budda_sub.png)
+![Alt text](/images/spheresSub.png)
 ![Alt text](/images/cornell.png)
 ![Alt text](/images/vol_caustic.png)
 ![Alt text](/images/room2.png)

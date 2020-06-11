@@ -465,6 +465,7 @@ __bidevice__ Spectrum SeparableBSSRDF::Sample_Sp(Aggregator *scene, Float u1,
 {
     vec3f vx, vy, vz;
     int specChannels = 3;
+    *pdf = 0;
     if(u1 < .5f){
         vx = ss; vy = ts; vz = ToVec3(ns); u1 *= 2;
     }else if(u1 < .75f){
@@ -493,6 +494,8 @@ __bidevice__ Spectrum SeparableBSSRDF::Sample_Sp(Aggregator *scene, Float u1,
     base.time = po.time;
     Point3f pTarget = base.p + l * vz;
     
+    //printf("Base distance: %g\n", Distance(pTarget, base.p));
+    
     /*
     * Alright look, I know this should be a dynamic list. But we cannot aford to 
     * do that, so here is the deal: after running a few samples of f11-15 they only
@@ -519,24 +522,31 @@ __bidevice__ Spectrum SeparableBSSRDF::Sample_Sp(Aggregator *scene, Float u1,
     * I'm planning a re-read on PBRT sometime soon so I'll be back later, for now I'll let it
 * be like this as it generates good images for the KdSubsurface material.
 */
+    
+    /*
+    * NOTE Update: Found the bug, don't know how to fix. Hit distances are showing
+    * stupid values (< 1e-6) this probably means we have rays that do not have
+    * origin outside the object, I don't know why that is the case I kinda followed
+    * the recipe from PBRT, maybe cuda is breaking the numbers, for now I'll add the dumb
+    * += 0.001 * d in ray generation, hopefully won't break everything. There is heavy
+    * improvements but we still have some fireflies so we still have a bug.
+*/
     int nFound = 0;
     SurfaceInteraction *ptr = &si[nFound];
     while(true){
         Ray ray = base.SpawnRayTo(pTarget);
-        // NOTE: Originialy this is a scene intersection test,
-        //       this however makes the rendering really slow.
-        //       After rendering the scene with 2 sssDragons ( 14M triangles )
-        //       this optimization actually makes it feasible.
-        bool hit = PrimitiveIntersect(isect->primitive, ray, ptr);
+        //bool hit = PrimitiveIntersect(isect->primitive, ray, ptr);
+        bool hit = scene->Intersect(ray, ptr);
         if(ray.d.IsBlack() || !hit) break;
         
         base = *ptr;
-        if(ptr->primitive == isect->primitive){
+        if(ptr->primitive == isect->primitive && 
+           ptr->primitive->shape == isect->primitive->shape)
+        {
             nFound++;
             ptr = &si[nFound];
             if(nFound > maxSi-1){
-                //Float dist = Distance(pTarget, ptr->p);
-                //printf("Warning: Not enough interaction vectors for sampling BSSRDF [%g]\n", dist);
+                printf("Warning: Possible trapped ray with intersection distance: %g\n", ray.tMax);
                 break;
             }
         }

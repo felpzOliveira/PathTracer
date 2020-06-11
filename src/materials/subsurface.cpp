@@ -11,8 +11,10 @@ __bidevice__ SubsurfaceMaterial::SubsurfaceMaterial(Texture<Spectrum> *kr,
 : Kr(kr), Kt(kt), sigma_a(sa), sigma_s(ss), uRough(urough), vRough(vrough), eta(e)
 {
     scale = s;
+    printf(" * Initializing BSSRDF table { Subsurface }...");
     table = new BSSRDFTable(100, 64);
     ComputeBeamDiffusionBSSRDF(g, eta, table);
+    printf("OK\n");
 }
 
 

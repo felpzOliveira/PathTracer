@@ -35,6 +35,9 @@
 #define MIN_FLT -FLT_MAX
 #define MAX_FLT  FLT_MAX
 
+#define WarnErrorZero(f) printf("Warning: Possible error propagation with 0 value: %g [%s:%d]\n", f, __FILE__, __LINE__)
+#define WarnErrorNaN() printf("Error: Propagating NaN value [%s:%d]\n", __FILE__, __LINE__)
+
 typedef float Float;
 //typedef double Float;
 
@@ -75,7 +78,10 @@ inline __bidevice__ Float Absf(Float v){ return v > 0 ? v : -v; }
 inline __bidevice__ bool IsNaN(Float v){ return v != v; }
 inline __bidevice__ Float Radians(Float deg) { return (Pi / 180) * deg; }
 inline __bidevice__ Float Degrees(Float rad) { return (rad * 180 / Pi); }
-inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 1e-8; }
+
+/* if MachineEpsilon is e-8 ~ e-9 what is Zero */
+inline __bidevice__ bool IsZero(Float a){ return Absf(a) < 1e-9; }
+inline __bidevice__ bool IsUnsafeHit(Float a) { return Absf(a) < 1e-6; }
 inline __bidevice__ Float Log2(Float x){
     const Float invLog2 = 1.442695040888963387004650940071;
     return std::log(x) * invLog2;
@@ -283,6 +289,9 @@ template<typename T> class vec3{
     __bidevice__ vec3(){ x = y = z = (T)0; }
     __bidevice__ vec3(T a){ x = y = z = a; }
     __bidevice__ vec3(T a, T b, T c): x(a), y(b), z(c){
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
         //Assert(!HasNaN());
     }
     
@@ -317,19 +326,19 @@ template<typename T> class vec3{
     }
     
     __bidevice__ vec3<T> operator/(T f) const{
-        //Assert(!IsZero(f));
         if(IsZero(f)){
-            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+            WarnErrorZero(f);
         }
+        //Assert(!IsZero(f));
         Float inv = (Float)1 / f;
         return vec3<T>(x * inv, y * inv, z * inv);
     }
     
     __bidevice__ vec3<T> &operator/(T f){
-        //Assert(!IsZero(f));
         if(IsZero(f)){
-            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+            WarnErrorZero(f);
         }
+        //Assert(!IsZero(f));
         
         Float inv = (Float)1 / f;
         x *= inv; y *= inv; z *= inv;
@@ -414,6 +423,9 @@ template<typename T> class vec4{
     __bidevice__ vec4(){ x = y = z = (T)0; }
     __bidevice__ vec4(T a){ x = y = z = w = a; }
     __bidevice__ vec4(T a, T b, T c, T d): x(a), y(b), z(c), w(d){
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
         //Assert(!HasNaN());
     }
     
@@ -434,10 +446,11 @@ template<typename T> class vec4{
     }
     
     __bidevice__ T operator[](int i) const{
-        Assert(i >= 0 && i < 3);
+        Assert(i >= 0 && i < 4);
         if(i == 0) return x;
         if(i == 1) return y;
-        return z;
+        if(i == 2) return z;
+        return w;
     }
     
     __bidevice__ T &operator[](int i){
@@ -449,18 +462,18 @@ template<typename T> class vec4{
     }
     
     __bidevice__ vec4<T> operator/(T f) const{
-        //Assert(!IsZero(f));
         if(IsZero(f)){
-            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+            WarnErrorZero(f);
         }
+        //Assert(!IsZero(f));
+        
         Float inv = (Float)1 / f;
         return vec4<T>(x * inv, y * inv, z * inv, w * inv);
     }
     
     __bidevice__ vec4<T> &operator/(T f){
-        //Assert(!IsZero(f));
         if(IsZero(f)){
-            printf("Warning: Propagating error ( division by 0 with value: %g )\n", f);
+            WarnErrorZero(f);
         }
         
         Float inv = (Float)1 / f;
@@ -721,6 +734,10 @@ vec3<T> Exp(const vec3<T> &v){
     return vec3<T>(std::exp(v.x), std::exp(v.y), std::exp(v.z));
 }
 
+inline __bidevice__ Float Exp(Float e){
+    return std::exp(e);
+}
+
 typedef vec2<Float> vec2f;
 typedef vec2<int> vec2i;
 typedef vec3<Float> vec3f;
@@ -745,19 +762,28 @@ template<typename T> class Point3{
     __bidevice__ Point3(){ x = y = z = (T)0; }
     __bidevice__ Point3(T a){ x = y = z = a; }
     __bidevice__ Point3(T a, T b, T c): x(a), y(b), z(c){
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     template<typename U> explicit __bidevice__ Point3(const vec3<U> &v) 
         : x(v.x), y(v.y), z(v.z)
     {
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     template<typename U> explicit __bidevice__ Point3(const Point3<U> &p)
         :x((T)p.x), y((T)p.y), z((T)p.z)
     {
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     template<typename U> explicit __bidevice__ operator vec3<U>() const{
@@ -855,15 +881,24 @@ template<typename T> class Point2{
     T x, y;
     __bidevice__ Point2(){ x = y = (T)0; }
     __bidevice__ Point2(T a, T b): x(a), y(b){
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     __bidevice__ explicit Point2(const Point3<T> &p): x(p.x), y(p.y){
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     __bidevice__ explicit Point2(const vec2<T> &v): x(v.x), y(v.y){
-        Assert(!HasNaN());
+        if(HasNaN()){
+            WarnErrorNaN();
+        }
+        //Assert(!HasNaN());
     }
     
     __bidevice__ Point2<T> operator*(T s) const{
@@ -1469,7 +1504,7 @@ bool Bounds3<T>::IntersectP(const Ray &ray, const vec3f &invDir,
 inline __bidevice__ Point3f OffsetRayOrigin(const Point3f &p, const vec3f &pError,
                                             const Normal3f &n, const vec3f &w)
 {
-    Float d = Dot(Abs(n), pError);
+    Float d = Dot(Abs(n), pError) + 0.0001;
     vec3f offset = d * ToVec3(n);
     if(Dot(w, ToVec3(n)) < 0) offset = -offset;
     Point3f po = p + offset;

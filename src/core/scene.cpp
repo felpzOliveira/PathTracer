@@ -264,6 +264,21 @@ __host__ MaterialDescriptor MakeMatteMaterial(TextureDescriptor kd, Float sigma)
     return desc;
 }
 
+__host__ MaterialDescriptor MakeTranslucentMaterial(Spectrum kd, Spectrum ks,
+                                                    Spectrum reflect, Spectrum transmit,
+                                                    Float rough)
+{
+    MaterialDescriptor desc;
+    desc.type = MaterialType::Translucent;
+    desc.is_emissive = 0;
+    desc.textures[0] = MakeTexture(kd);
+    desc.textures[1] = MakeTexture(ks);
+    desc.textures[2] = MakeTexture(reflect);
+    desc.textures[3] = MakeTexture(transmit);
+    desc.textures[4] = MakeTexture(rough);
+    return desc;
+}
+
 __host__ MaterialDescriptor MakeKdSubsurfaceMaterial(Spectrum kd, Spectrum kt, Spectrum kr,
                                                      Spectrum mfp, Float urough, Float vrough,
                                                      Float eta, Float scale)
@@ -791,6 +806,14 @@ __bidevice__ Material *MakeMaterial(PrimitiveDescriptor *pri){
                                                    FloatTexture(&mat->textures[4]),
                                                    FloatTexture(&mat->textures[5]),
                                                    mat->vals[0], mat->vals[1]));
+        } break;
+        
+        case MaterialType::Translucent:{
+            material->Set(new TranslucentMaterial(SpectrumTexture(&mat->textures[0]),
+                                                  SpectrumTexture(&mat->textures[1]),
+                                                  SpectrumTexture(&mat->textures[2]),
+                                                  SpectrumTexture(&mat->textures[3]),
+                                                  FloatTexture(&mat->textures[4])));
         } break;
         
         case MaterialType::PlayGround:{

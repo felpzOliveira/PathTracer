@@ -35,7 +35,8 @@ __bidevice__ Spectrum ExponentialMap(Spectrum value, Float exposure){
 
 __bidevice__ vec3i GetPixelRGB(Pixel *pixel, Float exposure, ToneMapAlgorithm algo){
     Spectrum e = pixel->we;
-    Float invNs = 1.0f / pixel->samples;
+    AssertA(!IsZero(pixel->accWeight), "Zero accWeight");
+    Float invNs = 1.0f / pixel->accWeight;
     e *= invNs;
     switch(algo){
         case Reinhard: e = ReinhardMap(e, exposure); break;

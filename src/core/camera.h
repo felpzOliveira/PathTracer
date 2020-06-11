@@ -24,6 +24,7 @@ struct Pixel{
     curandState state;
     Spectrum we;
     Float u, v;
+    double accWeight;
     long samples;
     PixelStats stats;
 };

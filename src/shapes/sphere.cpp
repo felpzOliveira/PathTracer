@@ -121,7 +121,7 @@ __bidevice__ bool Sphere::Intersect(const Ray &r, Float *tHit,
     
     if(t0 > ray.tMax || t1 <= 0) return false;
     Float tShapeHit = t0;
-    if(tShapeHit <= 0){
+    if(tShapeHit <= 0 || IsUnsafeHit(tShapeHit)){
         tShapeHit = t1;
         if(tShapeHit > ray.tMax) return false;
     }
@@ -135,7 +135,7 @@ __bidevice__ bool Sphere::Intersect(const Ray &r, Float *tHit,
     
     if((zMin > -radius && pHit.z < zMin) || (zMax < radius && pHit.z > zMax) || phi > phiMax)
     {
-        if (tShapeHit == t1) return false;
+        if (IsZero(tShapeHit - t1)) return false;
         if (t1 > ray.tMax) return false;
         tShapeHit = t1;
         pHit = ray((Float)tShapeHit);

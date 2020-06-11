@@ -44,6 +44,7 @@ __global__ void SetupPixels(Image *image, unsigned long long seed){
     if(i < width && j < height){
         int pixel_index = j * width + i;
         image->pixels[pixel_index].we = Spectrum(0.f);
+        image->pixels[pixel_index].accWeight = 0;
         image->pixels[pixel_index].samples = 0;
         memset(&image->pixels[pixel_index].stats, 0, sizeof(PixelStats));
         curand_init(seed, pixel_index, 0, &image->pixels[pixel_index].state);
@@ -408,6 +409,16 @@ __device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
     return L;
 }
 
+__bidevice__ Float GetFilterWeight(Float u0, Float u1, Float u, Float v){
+    Float x = Absf(u - u0);
+    Float y = Absf(v - u1);
+    //return Max(0.f, 1.f - Absf(x)) * Max(0.f, 1.f - Absf(y)); //triangle
+    Float alpha = 2.f;
+    Float e = Exp(-alpha);
+    return Max(0.f, Float(Exp(-alpha * x * x) - e)) * 
+        Max(0.f, Float(Exp(-alpha * y * y) - e));
+}
+
 __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -423,16 +434,22 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
         curandState state = pixel->state;
         
         Spectrum out = image->pixels[pixel_index].we;
+        Float u0 = (Float)i / (Float)width;
+        Float u1 = (Float)j / (Float)height;
         for(int n = 0; n < ns; n++){
             Float u = ((Float)i + rand_float(&state)) / (Float)width;
             Float v = ((Float)j + rand_float(&state)) / (Float)height;
             
             Point2f sample = ConcentricSampleDisk(rand_point2(&state));
             Ray ray = camera->SpawnRay(u, v, sample);
-            //out += Li_Direct(ray, scene, pixel);
-            //out += Li_Path(ray, scene, pixel);
-            //out += Li_PathSampled(ray, scene, pixel);
-            out += Li_VolPath(ray, scene, pixel);
+            //Spectrum L = Li_Direct(ray, scene, pixel);
+            //Spectrum L = Li_Path(ray, scene, pixel);
+            Spectrum L = Li_PathSampled(ray, scene, pixel);
+            //Spectrum L = Li_VolPath(ray, scene, pixel);
+            
+            Float w = GetFilterWeight(u0, u1, u, v);
+            out += w * L;
+            pixel->accWeight += w;
             pixel->samples ++;
         }
         
@@ -561,7 +578,12 @@ void Helmet(Camera *camera, Float aspect){
     std::vector<ParsedMesh *> *meshes = LoadObj(MESH_FOLDER "helmet.obj", &mtls, true);
     Transform r = RotateY(180);
     
+    
 #if 1
+    MaterialDescriptor kdSub = MakeKdSubsurfaceMaterial(Spectrum(.9),
+                                                        Spectrum(1), Spectrum(1),
+                                                        Spectrum(.1), 0, 0, 
+                                                        1.33, 1.);
     for(int i = 0; i < meshes->size(); i++){
         ParsedMesh *m = meshes->at(i);
         if(m->nTriangles > 0){
@@ -581,16 +603,7 @@ void Helmet(Camera *camera, Float aspect){
                 //MaterialDescriptor pl = MakePlasticMaterial(Spectrum(.1), Spectrum(.7), .05);
                 //InsertPrimitive(d, pl);
             }else if(mtls[i].name == "white"){
-#if 0
-                MaterialDescriptor ml = MakeKdSubsurfaceMaterial(Spectrum(.9),
-                                                                 Spectrum(1), Spectrum(1),
-                                                                 Spectrum(.1), 0, 0, 
-                                                                 1.33, 1.);
-#else
-                MaterialDescriptor ml = MakeSubsurfaceMaterial("Skin1", 1, 
-                                                               1.33, 0, 0.05, 0.05);
-#endif
-                InsertPrimitive(d, ml);
+                InsertPrimitive(d, kdSub);
             }else{
                 printf(" ** [ERROR] : Unhandled material\n");
                 cudaSafeExit();
@@ -836,6 +849,48 @@ void OrigamiScene(Camera *camera, Float aspect){
     InsertPrimitive(box, dragonMat);
 }
 
+void SubsurfaceSpheres(Camera *camera, Float aspect){
+    AssertA(camera, "Invalid camera pointer");
+    
+    camera->Config(Point3f(0.f, 62.f, 90.f),
+                   Point3f(-10, 0, -20),
+                   vec3f(0.f,1.f,0.f), 42.f, aspect);
+    
+    //MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
+    MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1), Spectrum(.7), 0.1);
+    
+    Transform er = Translate(0, 0, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
+    InsertPrimitive(bottomWall, gray);
+    
+    MaterialDescriptor ket = MakeSubsurfaceMaterial("Ketchup", 1, 
+                                                    1.33, 0, 0.05, 0.05);
+    //MaterialDescriptor spec = MakeSubsurfaceMaterial("Skin2", 1, 
+    //1.33, 0, 0.05, 0.05);
+    
+    MaterialDescriptor spec = MakeKdSubsurfaceMaterial(Spectrum(.2, .5, .7),
+                                                       Spectrum(1), Spectrum(1),
+                                                       Spectrum(.1), 0.05, 0.05, 
+                                                       1.33, 1);
+    
+    MaterialDescriptor coke = MakeSubsurfaceMaterial("Coke", 1, 
+                                                     1.33, 0, 0.05, 0.05);
+    MaterialDescriptor apple = MakeSubsurfaceMaterial("Apple", 1, 
+                                                      1.33, 0, 0.05, 0.05);
+    
+    InsertEXRLightMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",  
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
+    
+    SphereDescriptor desc0 = MakeSphere(Translate(20, 20, 10), 18);
+    SphereDescriptor desc1 = MakeSphere(Translate(-30, 20, 10), 18);
+    SphereDescriptor desc2 = MakeSphere(Translate(6, 20, -20), 18);
+    SphereDescriptor desc3 = MakeSphere(Translate(-60, 20, -20), 18);
+    
+    InsertPrimitive(desc0, ket);
+    InsertPrimitive(desc1, apple);
+    InsertPrimitive(desc2, spec);
+    InsertPrimitive(desc3, coke);
+}
 
 void TwoDragonsScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
@@ -926,13 +981,15 @@ void render(Image *image){
     Camera *camera = cudaAllocateVx(Camera, 1);
     BeginScene(scene);
     
-    //NOTE: Use this function to perform scene setup
+    //NOTE: Use this place to set the scene
+    ////////////////////////////////////////////////
     //CornellRoom2(camera, aspect);
     //OrigamiScene(camera, aspect);
     //Helmet(camera, aspect);
-    Vader(camera, aspect);
+    //Vader(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
     //TwoDragonsScene(camera, aspect);
+    SubsurfaceSpheres(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
@@ -966,10 +1023,11 @@ void render(Image *image){
 int main(int argc, char **argv){
     if(argc > 1){
         if(argc != 3){
-            printf("Converter is: %s <INPUT_PPM_FILE> <OUTPUT_PNG_FILE>\n", argv[0]);
+            printf("Converter is: %s <PATH_TO_PPM> <PATH_TO_PNG>\n", argv[0]);
         }else{
             ConvertPPMtoPNG(argv[1], argv[2]);
         }
+        
         return 0;
     }else{
         cudaInitEx();

@@ -74,8 +74,10 @@ void graphy_display_pixels(Image *image, int count, int filter){
             Pixel *pixel = &image->pixels[k];
             Spectrum we = pixel->we;
             if(filter){
-                AssertA(pixel->samples != 0, "Zero samples on graphy_display");
-                Float invNS = 1.0f / (Float)(pixel->samples);
+                AssertA(!IsZero(image->pixels[k].accWeight), 
+                        "Zero accWeight on graphy_display");
+                
+                Float invNS = 1.0f / pixel->accWeight;
                 we = ExponentialMap(pixel->we * invNS, 1.f);
             }
             
@@ -96,18 +98,16 @@ void graphy_display_pixels(Image *image, int count, int filter){
     }
 }
 
-void graphy_display_pixels(Spectrum *pixels, int width, int height){
+void graphy_display_pixels(Spectrum *pixels, int width, int height, int map){
     if(graphy_ok == 0) graphy_initialize(width, height);
     int it = 0;
     if(graphy_ok > 0){
         for(int k = 0; k < width * height; k++){
             Spectrum we = pixels[k];
-            we = ExponentialMap(we, 1.f);
+            if(map) we = ExponentialMap(we, 1.f);
             vals[it++] = we[0]; vals[it++] = we[1]; vals[it++] = we[2];
         }
         
-        if(graphy_ok > 0){
-            graphy_render_pixels(vals, width, height, display);
-        }
+        graphy_render_pixels(vals, width, height, display);
     }
 }

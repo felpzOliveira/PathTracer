@@ -1,4 +1,5 @@
 #include <ppm.h>
+#include <geometry.h>
 
 bool PPMWriteFloat(float *values, int width, int height,
                    const char *path, Process handler)
@@ -91,6 +92,41 @@ bool PPMReadFloat(const char *path, float **values, int &width, int &height){
                 pixels[pidx+0] = static_cast<float>(((int)color[0]))/255.f;
                 pixels[pidx+1] = static_cast<float>(((int)color[1]))/255.f;
                 pixels[pidx+2] = static_cast<float>(((int)color[2]))/255.f;
+            }
+        }
+        
+        *values = pixels;
+        (void)fclose(fp);
+        rv = true;
+    }
+    
+    return rv;
+}
+
+bool PPMReadSpectrum(const char *path, Spectrum **values, int &width, int &height){
+    bool rv = false;
+    FILE *fp = fopen(path, "rb");
+    if(fp){
+        char *line = nullptr;
+        size_t len = 0;
+        (void)getline(&line, &len, fp);
+        (void)getline(&line, &len, fp);
+        sscanf(line, "%d %d", &width, &height);
+        (void)getline(&line, &len, fp);
+        Spectrum *pixels = new Spectrum[width * height];
+        if(!pixels){
+            (void)fclose(fp);
+            return rv;
+        }
+        
+        for(int j = height-1; j >= 0; --j){
+            for(int i = 0; i < width; ++i){
+                unsigned char color[3];
+                size_t pidx = j*width + i;
+                (void)fread(color, 1, 3, fp);
+                pixels[pidx] = Spectrum(static_cast<float>(((int)color[0]))/255.f,
+                                        static_cast<float>(((int)color[1]))/255.f,
+                                        static_cast<float>(((int)color[2]))/255.f);
             }
         }
         

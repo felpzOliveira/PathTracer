@@ -12,9 +12,11 @@ __bidevice__ KdSubsurfaceMaterial::KdSubsurfaceMaterial(Texture<Spectrum> *kd,
 scale(s)
 {
     has_bump = 1;
+    printf(" * Initializing BSSRDF table { KdSubsurface }...");
     table = new BSSRDFTable(100, 64);
     //g = 0
     ComputeBeamDiffusionBSSRDF(0, eta, table);
+    printf("OK\n");
 }
 
 __bidevice__ KdSubsurfaceMaterial::KdSubsurfaceMaterial(Texture<Spectrum> *kd, 
@@ -27,9 +29,11 @@ __bidevice__ KdSubsurfaceMaterial::KdSubsurfaceMaterial(Texture<Spectrum> *kd,
 : Kd(kd), Kt(kt), Kr(kr), mfp(mffp), uRough(urough), vRough(vrough), eta(e), scale(s)
 {
     has_bump = 0;
+    printf(" * Initializing BSSRDF table { KdSubsurface }...");
     table = new BSSRDFTable(100, 64);
     //g = 0
     ComputeBeamDiffusionBSSRDF(0, eta, table);
+    printf("OK\n");
 }
 
 __bidevice__ void KdSubsurfaceMaterial::ComputeScatteringFunctions(BSDF *bsdf, 

@@ -3,6 +3,7 @@
 #include <util.h>
 #include <camera.h>
 #include <light.h>
+#define DangerousDistance 1e-6
 
 int BVH_MAX_DEPTH = 20;
 
@@ -52,7 +53,14 @@ __bidevice__ bool PrimitiveIntersect(const Primitive *primitive, const Ray &ray,
                                      SurfaceInteraction *isect)
 {
     Float tHit;
-    if(!primitive->shape->Intersect(ray, &tHit, isect)) return false;
+    SurfaceInteraction tmp;
+    if(!primitive->shape->Intersect(ray, &tHit, &tmp)) return false;
+    
+    if(IsZero(tHit - DangerousDistance)){
+        //printf("Warning: Possible self intersection with distance: %g\n", tHit);
+    }
+    
+    *isect = tmp;
     ray.tMax = tHit;
     
     if(primitive->mediumInterface.IsMediumTransition())

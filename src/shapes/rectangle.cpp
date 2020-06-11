@@ -14,6 +14,7 @@ __bidevice__ bool Rectangle::Intersect(const Ray &r, Float *tHit,
     bool rv = rec.IntersectP(ray, &tmin, &tfar);
     
     if(!rv) return false;
+    if(IsUnsafeHit(tmin)) return false;
     
     pHit = ray(tmin);
     if(pHit.x < -hx || pHit.x > hx || pHit.y < -hy || pHit.y > hy) return false;

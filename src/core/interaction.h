@@ -17,11 +17,7 @@ class Interaction{
     
     __bidevice__ Interaction(){}
     
-    __bidevice__ Ray SpawnRay(const vec3f &d) const{
-        Point3f o = OffsetRayOrigin(p, pError, n, d);
-        return Ray(o, d, Infinity, time, GetMedium(d));
-    }
-    
+    __bidevice__ Ray SpawnRay(const vec3f &d) const;
     __bidevice__ Ray SpawnRayTo(const Interaction &it) const;
     __bidevice__ Ray SpawnRayTo(const Point3f &it) const;
     
