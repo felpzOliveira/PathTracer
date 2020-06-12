@@ -1,5 +1,30 @@
 #include <shape.h>
 
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Point3i *indices,
+                                        int nVerts, Point3f *P)
+{
+    ParsedMesh *mesh = cudaAllocateVx(ParsedMesh, 1);
+    mesh->nUvs = 0;
+    mesh->nNormals = 0;
+    mesh->s = nullptr;
+    mesh->uv = nullptr;
+    mesh->n = nullptr;
+    mesh->toWorld = toWorld;
+    mesh->nVertices = nVerts;
+    mesh->nTriangles = nTris;
+    mesh->p = cudaAllocateVx(Point3f, nVerts);
+    mesh->indices = cudaAllocateVx(Point3i, 3 * nTris);
+    
+    memcpy(mesh->p, P, sizeof(Point3f) * nVerts);
+    memcpy(mesh->indices, indices, sizeof(Point3i) * 3 * nTris);
+    
+    return mesh;
+}
+
+__host__ ParsedMesh *ParsedMeshFromData(int nTris, Point3i *indices, int nVerts, Point3f *P){
+    return ParsedMeshFromData(Translate(0,0,0), nTris, indices, nVerts, P);
+}
+
 __bidevice__ Mesh::Mesh(const Transform &toWorld, ParsedMesh *pMesh, int copy) 
 : Shape(toWorld)
 {
@@ -337,6 +362,76 @@ __bidevice__ bool Mesh::IntersectTriangle(const Ray &ray, SurfaceInteraction * i
 #endif
     *tHit = t;
     return true;
+}
+
+__bidevice__ Float Mesh::Area() const{
+    printf("Warning: Slow method called with Mesh::Area()\n");
+    Float area = 0;
+    for(int i = 0; i < nTriangles; i++){
+        area += TriangleArea(i);
+    }
+    
+    return area;
+}
+
+__bidevice__ Float Mesh::TriangleArea(int triNum) const{
+    int i0 = indices[3 * triNum + 0].x;
+    int i1 = indices[3 * triNum + 1].x;
+    int i2 = indices[3 * triNum + 2].x;
+    Point3f p0 = p[i0];
+    Point3f p1 = p[i1];
+    Point3f p2 = p[i2];
+    return 0.5 * Cross(p1 - p0, p2 - p0).Length();
+}
+
+__bidevice__ Interaction Mesh::Sample(const Interaction &ref, const Point2f &u,
+                                      Float *pdf) const
+{
+    int triNum = ref.faceIndex;
+    int i0 = indices[3 * triNum + 0].x;
+    int i1 = indices[3 * triNum + 1].x;
+    int i2 = indices[3 * triNum + 2].x;
+    Point3f p0 = p[i0];
+    Point3f p1 = p[i1];
+    Point3f p2 = p[i2];
+    
+    Point2f b = UniformSampleTriangle(u);
+    Interaction it;
+    it.p = b[0] * p0 + b[1] * p1 + (1 - b[0] - b[1]) * p2;
+    it.faceIndex = triNum;
+    it.n = Normalize(Normal3f(Cross(p1 - p0, p2 - p0)));
+    
+    if(reverseOrientation ^ transformSwapsHandedness){
+        it.n *= -1;
+    }
+    
+    Point3f pAbsSum = Abs(b[0] * p0) + Abs(b[1] * p1) + Abs((1 - b[0] - b[1]) * p2);
+    it.pError = gamma(6) * vec3f(pAbsSum.x, pAbsSum.y, pAbsSum.z);
+    *pdf = 1.f / TriangleArea(triNum); // area integral
+    
+    vec3f wi = it.p - ref.p;
+    if(IsZero(wi.LengthSquared())){ // if somehow this is zero ignore
+        *pdf = 0;
+    }else{
+        wi = Normalize(wi);
+        *pdf *= DistanceSquared(ref.p, it.p) / AbsDot(it.n, -wi); // solid angle integral
+    }
+    
+    if(std::isinf(*pdf)) *pdf = 0; // assure we didn't break something
+    return it;
+}
+
+__bidevice__ Float Mesh::Pdf(const Interaction &ref, const vec3f &wi) const{
+    Ray ray = ref.SpawnRay(wi);
+    Float tHit;
+    SurfaceInteraction isectLight;
+    if(!IntersectTriangle(ray, &isectLight, ref.faceIndex, &tHit)) return 0;
+    
+    Float f = (AbsDot(isectLight.n, -wi) * TriangleArea(ref.faceIndex));
+    AssertAEx(!IsZero(f), "Zero Mesh::Pdf");
+    Float pdf = DistanceSquared(ref.p, isectLight.p) / f;
+    if(std::isinf(pdf)) pdf = 0.f;
+    return pdf;
 }
 
 __bidevice__ bool Mesh::IntersectMeshNode(Node *node, const Ray &r, 

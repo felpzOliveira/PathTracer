@@ -18,6 +18,7 @@ void _check(cudaError_t err, int line, const char *filename){
 std::string get_time_string(clock_t start, clock_t end, int i, int it){
     double tt = to_cpu_time(start, end);
     double est = tt * it / (i + 1);
+    est -= tt; // left
     std::stringstream stt, sest;
     stt << tt; sest << est;
     std::string ts = time_to_string(stt.str(), 8);

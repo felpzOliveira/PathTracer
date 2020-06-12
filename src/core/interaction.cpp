@@ -2,8 +2,6 @@
 #include <primitive.h>
 #include <light.h>
 
-#define OffsetRay 0.001
-
 __bidevice__ Ray Interaction::SpawnRayTo(const Interaction &it) const{
     Point3f origin = OffsetRayOrigin(p, pError, n, it.p - p);
     Point3f target = OffsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
@@ -27,11 +25,12 @@ SurfaceInteraction::SurfaceInteraction(const Point3f &p, const vec3f &pError,
                                        const Point2f &uv, const vec3f &wo,
                                        const vec3f &dpdu, const vec3f &dpdv,
                                        const Normal3f &dndu, const Normal3f &dndv, 
-                                       Float time, const Shape *sh, int faceIndex)
+                                       Float time, const Shape *sh, int fid)
 : Interaction(p, Normal3f(Normalize(Cross(dpdu, dpdv))), pError, wo, time),
 uv(uv), dpdu(dpdu), dpdv(dpdv), dndu(dndu), dndv(dndv), 
-shape(sh), faceIndex(faceIndex)
+shape(sh)
 {
+    faceIndex = fid;
     if(shape){
         if(shape->reverseOrientation ^ shape->transformSwapsHandedness){
             n *= -1;

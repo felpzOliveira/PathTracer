@@ -41,10 +41,17 @@ __host__ ImageData *LoadTextureImageData(const char *path){
         
         int imit = 0;
         for(int i = 0; i < nx * ny; i++){
-            Float r = ptr[imit+0] / 255.f;
-            Float g = ptr[imit+1] / 255.f;
-            Float b = ptr[imit+2] / 255.f;
-            imit += 3;
+            Float r = 0, g = 0, b = 0;
+            if(nn > 0){
+                r = ptr[imit] / 255.f; imit++;
+            }
+            if(nn > 1){
+                g = ptr[imit] / 255.f; imit++;
+            }
+            if(nn > 2){
+                b = ptr[imit] / 255.f; imit++;
+            }
+            
             if(nn == 4) imit++; //skip alpha
             tImage->data[i] = Spectrum(r, g, b);
         }

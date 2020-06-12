@@ -264,6 +264,36 @@ __host__ MaterialDescriptor MakeMatteMaterial(TextureDescriptor kd, Float sigma)
     return desc;
 }
 
+__host__ MaterialDescriptor MakeGlassMaterial(TextureDescriptor kr, TextureDescriptor kt,
+                                              Float index, TextureDescriptor rough)
+{
+    MaterialDescriptor desc;
+    desc.is_emissive = 0;
+    desc.type = MaterialType::Glass;
+    int i = 0;
+    desc.textures[i++] = kr;
+    desc.textures[i++] = kt;
+    desc.textures[i++] = rough;
+    desc.textures[i++] = rough;
+    desc.textures[i++] = MakeTexture(index);
+    return desc;
+}
+
+__host__ MaterialDescriptor MakeGlassMaterial(Spectrum kr, Spectrum kt, Float index,
+                                              TextureDescriptor rough)
+{
+    MaterialDescriptor desc;
+    desc.is_emissive = 0;
+    desc.type = MaterialType::Glass;
+    int i = 0;
+    desc.textures[i++] = MakeTexture(kr);
+    desc.textures[i++] = MakeTexture(kt);
+    desc.textures[i++] = rough;
+    desc.textures[i++] = rough;
+    desc.textures[i++] = MakeTexture(index);
+    return desc;
+}
+
 __host__ MaterialDescriptor MakeTranslucentMaterial(Spectrum kd, Spectrum ks,
                                                     Spectrum reflect, Spectrum transmit,
                                                     Float rough)

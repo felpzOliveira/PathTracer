@@ -23,7 +23,7 @@ void convertIn(const Spectrum &from, Spectrum *to, Float scale, bool gamma){
 
 template<typename T> class Texture{
     public:
-    __bidevice__ virtual T Evaluate(SurfaceInteraction *) const = 0;
+    __bidevice__ virtual T Evaluate(SurfaceInteraction *, bool g = true) const = 0;
     __bidevice__ virtual void Release() = 0;
 };
 
@@ -31,7 +31,7 @@ template<typename T> class TextureConstant : public Texture<T>{
     public:
     T value;
     __bidevice__ TextureConstant(const T &val) : value(val) {}
-    __bidevice__ virtual T Evaluate(SurfaceInteraction *) const override{
+    __bidevice__ virtual T Evaluate(SurfaceInteraction *, bool) const override{
         return value;
     }
     
@@ -47,14 +47,14 @@ template<typename T> class TextureImage : public Texture<T>{
         SetDim(T(0));
     }
     
-    __bidevice__ virtual T Evaluate(SurfaceInteraction *si) const override{
+    __bidevice__ virtual T Evaluate(SurfaceInteraction *si, bool gamma) const override{
         //TODO: Needs mapping for scaling and stuff
         int i = si->uv.x * image->width;
         int j = si->uv.y * image->height;
         if(i < 0) i = 0; if(i > image->width - 1)  i = image->width  - 1;
         if(j < 0) j = 0; if(j > image->height - 1) j = image->height - 1;
         Spectrum rgb = image->data[i + image->width * j];
-        convertIn(rgb, &rgb, 1.f, true);
+        convertIn(rgb, &rgb, 1.f, gamma);
         return ConvertOut(rgb, T(0));
     }
     

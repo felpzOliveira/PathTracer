@@ -203,10 +203,11 @@ class Mesh: public Shape{
     
     __bidevice__ virtual Bounds3f GetBounds() const override;
     
-    __bidevice__ virtual Float Area() const override{
-        UMETHOD();
-        return 1;
-    }
+    __bidevice__ Float TriangleArea(int triNum) const;
+    __bidevice__ virtual Float Area() const override;
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override;
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override;
     
     __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const{
         UMETHOD();
@@ -214,19 +215,7 @@ class Mesh: public Shape{
         return Interaction();
     }
     
-    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
-                                            Float *pdf) const override
-    {
-        UMETHOD();
-        *pdf = 0;
-        return Interaction();
-    }
-    
     __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
-    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
-        UMETHOD();
-        return 0.f;
-    }
     
     private:
     __bidevice__ bool IntersectMeshNode(Node *node, const Ray &r, 
@@ -264,6 +253,7 @@ inline __bidevice__ void PrintShape(Shape *shape){
 
 __host__ void WrapMesh(Mesh *mesh);
 __host__ bool LoadObjData(const char *obj, ParsedMesh **data);
-__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Point3i *_indices,
-                                        int nVerts, Point3f *P, vec3f *S, 
-                                        Normal3f *N, Point2f *UV, int copy=0);
+
+__host__ ParsedMesh *ParsedMeshFromData(int nTris, Point3i *indices, int nVerts, Point3f *P);
+__host__ ParsedMesh *ParsedMeshFromData(const Transform &toWorld, int nTris, Point3i *indices,
+                                        int nVerts, Point3f *P);

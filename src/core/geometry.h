@@ -1585,6 +1585,12 @@ Float UniformConePdf(Float cosThetaMax){
     return 1 / (2 * Pi * (1 - cosThetaMax));
 }
 
+inline __bidevice__ 
+Point2f UniformSampleTriangle(const Point2f &u){
+    Float su0 = std::sqrt(u[0]);
+    return Point2f(1 - su0, u[1] * su0);
+}
+
 //Centered at +Z
 inline __bidevice__ Float CosTheta(const vec3f &w) { return w.z; }
 inline __bidevice__ Float Cos2Theta(const vec3f &w) { return w.z * w.z; }

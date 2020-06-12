@@ -849,6 +849,53 @@ void OrigamiScene(Camera *camera, Float aspect){
     InsertPrimitive(box, dragonMat);
 }
 
+
+void IceSpheres(Camera *camera, Float aspect){
+    AssertA(camera, "Invalid camera pointer");
+    
+    camera->Config(Point3f(0.f, 30.f, 30.f),
+                   Point3f(0, 0, 0),
+                   vec3f(0.f,1.f,0.f), 45.f, aspect);
+    
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
+    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.8));
+    MaterialDescriptor em = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 10);
+    
+    Point3f ps[] = {
+        Point3f(10, 5, 10), Point3f(10, 10, 10), 
+        Point3f(0, 5, 10), Point3f(0, 10, 10),
+    };
+    
+    Point3i id[] = {
+        Point3i(0, 0, 0), Point3i(1, 0, 0), Point3i(2, 0, 0),
+        Point3i(2, 0, 0), Point3i(1, 0, 0), Point3i(3, 0, 0),
+    };
+    
+    ParsedMesh *t = ParsedMeshFromData(2, &id[0], 4, &ps[0]);
+    MeshDescriptor ground = MakeMesh(t);
+    InsertPrimitive(ground, em);
+    
+    Transform er = Translate(0, 0, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
+    InsertPrimitive(bottomWall, gray);
+    
+#if 0
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
+    
+    
+    MaterialDescriptor kdsub = MakeKdSubsurfaceMaterial(Spectrum(.2, .7, .5),
+                                                        Spectrum(1), Spectrum(1),
+                                                        Spectrum(0.1), 0, 0, 1.5, 10);
+    
+    ParsedMesh *budda = LoadObjOnly(MESH_FOLDER "articDragon.obj");
+    budda->toWorld = Translate(-10, 20, 26) * Scale(0.29);
+    MeshDescriptor desc0 = MakeMesh(budda);
+    InsertPrimitive(desc0, kdsub);
+#endif
+}
+
+
 void SubsurfaceSpheres(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
     
@@ -856,7 +903,6 @@ void SubsurfaceSpheres(Camera *camera, Float aspect){
                    Point3f(-10, 0, -20),
                    vec3f(0.f,1.f,0.f), 42.f, aspect);
     
-    //MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
     MaterialDescriptor gray = MakePlasticMaterial(Spectrum(.1), Spectrum(.7), 0.1);
     
     Transform er = Translate(0, 0, 0) * RotateX(90);
@@ -865,8 +911,6 @@ void SubsurfaceSpheres(Camera *camera, Float aspect){
     
     MaterialDescriptor ket = MakeSubsurfaceMaterial("Ketchup", 1, 
                                                     1.33, 0, 0.05, 0.05);
-    //MaterialDescriptor spec = MakeSubsurfaceMaterial("Skin2", 1, 
-    //1.33, 0, 0.05, 0.05);
     
     MaterialDescriptor spec = MakeKdSubsurfaceMaterial(Spectrum(.2, .5, .7),
                                                        Spectrum(1), Spectrum(1),
@@ -988,8 +1032,9 @@ void render(Image *image){
     //Helmet(camera, aspect);
     //Vader(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
-    TwoDragonsScene(camera, aspect);
+    //TwoDragonsScene(camera, aspect);
     //SubsurfaceSpheres(camera, aspect);
+    IceSpheres(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
@@ -1032,9 +1077,10 @@ int main(int argc, char **argv){
     }else{
         cudaInitEx();
         
-        Float aspect_ratio = 16.0 / 9.0;
-        int image_width = 1600;
-        //int image_width = 800;
+        //Float aspect_ratio = 16.0 / 9.0;
+        Float aspect_ratio = 4.0 / 3.0;
+        //int image_width = 1600;
+        int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
 #if 0
         image_width = 1200;

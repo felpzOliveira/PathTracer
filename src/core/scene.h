@@ -105,6 +105,12 @@ __host__ MaterialDescriptor  MakeMetalMaterial(Spectrum kr, Spectrum k,
 __host__ MaterialDescriptor  MakeGlassMaterial(Spectrum kr, Spectrum kt, Float index,
                                                Float uRough=0, Float vRough=0);
 
+__host__ MaterialDescriptor  MakeGlassMaterial(Spectrum kr, Spectrum kt, Float index,
+                                               TextureDescriptor rough);
+
+__host__ MaterialDescriptor  MakeGlassMaterial(TextureDescriptor kr, TextureDescriptor kt,
+                                               Float index, TextureDescriptor rough);
+
 __host__ MaterialDescriptor  MakeSubsurfaceMaterial(Spectrum kr, Spectrum kt,
                                                     Spectrum sa, Spectrum ss,
                                                     Float scale, Float eta, Float g=0,

@@ -14,6 +14,7 @@ class Interaction{
     vec3f wo;
     Normal3f n;
     MediumInterface mediumInterface;
+    int faceIndex;
     
     __bidevice__ Interaction(){}
     
@@ -57,7 +58,6 @@ class SurfaceInteraction : public Interaction{
     Normal3f dndu, dndv;
     const Shape *shape = nullptr;
     const Primitive *primitive = nullptr;
-    int faceIndex;
     
     __bidevice__ SurfaceInteraction(){}
     __bidevice__ SurfaceInteraction(const Point3f &p, const vec3f &pError,
