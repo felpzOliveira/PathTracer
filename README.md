@@ -1,5 +1,5 @@
 # Toy-Tracer
-This is my personal Path Tracer code. I'm writing this as I read PBRT, it now supports Volumetric effects and subsurface scattering (might have bugs tho), a few images:
+This is my personal Path Tracer code. I'm writing this in PBRT style, it now supports Volumetric effects and subsurface scattering (might have bugs tho), a few images:
 
 ![Alt text](/images/sssDragon2.png)
 ![Alt text](/images/room.png)
