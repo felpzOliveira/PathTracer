@@ -19,6 +19,14 @@ class SDF{
     static __bidevice__ Float OrigamiDragon(vec3f p, vec3f boxHalfLen, int *shapeId);
     static __bidevice__ Float OrigamiWhale(vec3f p, vec3f boxHalfLen, int *shapeId);
     static __bidevice__ Float OrigamiBird(vec3f p, vec3f boxHalfLen, int *shapeId);
+    static __bidevice__ Float Terrain(vec3f p, vec3f boxHalfLen, int *shapeId);
+};
+
+class ProceduralMath{
+    public:
+    static __bidevice__ Float Hash1(Float n);
+    static __bidevice__ Float Hash1(const vec2f &p);
+    static __bidevice__ vec3f Noise32d(const vec2f &p);
 };
 
 class ProceduralShape: public Shape{

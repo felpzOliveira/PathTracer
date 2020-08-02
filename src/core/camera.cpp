@@ -47,9 +47,7 @@ __bidevice__ vec3i GetPixelRGB(Pixel *pixel, Float exposure, ToneMapAlgorithm al
         }
     }
     
-    return vec3i((int)(255.999 * e.x),
-                 (int)(255.999 * e.y),
-                 (int)(255.999 * e.z));
+    return vec3i((int)(255.999 * e.x), (int)(255.999 * e.y), (int)(255.999 * e.z));
 }
 
 __host__ void ImageWrite(Image *image, const char *path, Float exposure, 

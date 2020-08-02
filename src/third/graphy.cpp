@@ -78,7 +78,7 @@ void graphy_display_pixels(Image *image, int count, int filter){
                         "Zero accWeight on graphy_display");
                 
                 Float invNS = 1.0f / pixel->accWeight;
-                we = ExponentialMap(pixel->we * invNS, 1.f);
+                we = ExponentialMap(pixel->we * invNS, 2.f);
             }
             
             vals[it++] = we[0]; vals[it++] = we[1]; vals[it++] = we[2];

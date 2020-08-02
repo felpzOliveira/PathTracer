@@ -5,9 +5,18 @@
 #include <stdio.h>
 #include <stdint.h>
 
+//#define WITH_ASSERT
+
+#ifdef WITH_ASSERT
 #define Assert(x) __assert_check((x), #x, __FILE__, __LINE__, NULL)
 #define AssertA(x, msg) __assert_check((x), #x, __FILE__, __LINE__, msg)
 #define AssertAEx(x, msg) AssertA(x, msg)
+#else
+#define Assert(x)
+#define AssertA(x, msg)
+#define AssertAEx(x, msg)
+#endif
+
 #define Infinity FLT_MAX
 #define __vec3_strfmtA(v) "%s = [%g %g %g]"
 #define __vec3_strfmt(v) "[%g %g %g]"
@@ -725,6 +734,11 @@ vec3<T> Sqrt(const vec3<T> &v){
 }
 
 template<typename T> inline __bidevice__ 
+vec2<T> Pow(const vec2<T> &v, const vec2<T> &val){
+    return vec2<T>(std::pow(v.x, val.x), std::pow(v.y, val.y));
+}
+
+template<typename T> inline __bidevice__ 
 vec3<T> Pow(const vec3<T> &v, Float val){
     return vec3<T>(std::pow(v.x, val), std::pow(v.y, val), std::pow(v.z, val));
 }
@@ -1022,6 +1036,15 @@ template<typename T> inline __bidevice__ vec3<T> Lerp(Float t, const vec3<T> &p0
                                                       const vec3<T> &p1)
 {
     return (1 - t) * p0 + t * p1;
+}
+
+inline __bidevice__ vec2f Smoothstep(Float edge0, Float edge1, vec2f x){
+    AssertA(!IsZero(edge1 - edge0), "Invalid smoothstep interval");
+    vec2f k = (x - vec2f(edge0)) / (edge1 - edge0);
+    vec2f t(0);
+    t.x = Clamp(k.x, 0.f, 1.f);
+    t.y = Clamp(k.y, 0.f, 1.f);
+    return  t * t * (vec2f(3.f) - 2.f * t);
 }
 
 template<typename T> inline __bidevice__ Point3<T> Min(const Point3<T> &p0, 

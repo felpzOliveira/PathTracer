@@ -415,8 +415,7 @@ __bidevice__ Float GetFilterWeight(Float u0, Float u1, Float u, Float v){
     //return Max(0.f, 1.f - Absf(x)) * Max(0.f, 1.f - Absf(y)); //triangle
     Float alpha = 2.f;
     Float e = Exp(-alpha);
-    return Max(0.f, Float(Exp(-alpha * x * x) - e)) * 
-        Max(0.f, Float(Exp(-alpha * y * y) - e));
+    return Max(0.f, Float(Exp(-alpha * x * x) - e)) * Max(0.f, Float(Exp(-alpha * y * y) - e));
 }
 
 __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
@@ -444,8 +443,8 @@ __global__ void Render(Image *image, Aggregator *scene, Camera *camera, int ns){
             Ray ray = camera->SpawnRay(u, v, sample);
             //Spectrum L = Li_Direct(ray, scene, pixel);
             //Spectrum L = Li_Path(ray, scene, pixel);
-            Spectrum L = Li_PathSampled(ray, scene, pixel);
-            //Spectrum L = Li_VolPath(ray, scene, pixel);
+            //Spectrum L = Li_PathSampled(ray, scene, pixel);
+            Spectrum L = Li_VolPath(ray, scene, pixel);
             
             Float w = GetFilterWeight(u0, u1, u, v);
             out += w * L;
@@ -739,8 +738,8 @@ void Vader(Camera *camera, Float aspect){
 }
 
 
-void CornellRoom2(Camera *camera, Float aspect){
-    camera->Config(Point3f(0, 7, -25), Point3f(0, 5, 0.0f),
+void CornellRoomBasic(Camera *camera, Float aspect){
+    camera->Config(Point3f(0, 4, -25), Point3f(0, 4, 0.0f),
                    vec3f(0,1,0), 40, aspect);
     
     MaterialDescriptor white  = MakeMatteMaterial(Spectrum(.73, .73, .73));
@@ -748,6 +747,10 @@ void CornellRoom2(Camera *camera, Float aspect){
     MaterialDescriptor red    = MakeMatteMaterial(Spectrum(.65, .05, .05));
     MaterialDescriptor mirror = MakeMirrorMaterial(Spectrum(.9));
     MaterialDescriptor blue   = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.34);
+    ImageData *image = LoadTextureImageData(TEXTURE_FOLDER "grid.png");
+    TextureDescriptor gridTex = MakeTexture(image);
+    
+    MaterialDescriptor uvMat = MakeMatteMaterial(gridTex);
     
     Float height = 14;
     Float width = height * 1.2;
@@ -764,8 +767,60 @@ void CornellRoom2(Camera *camera, Float aspect){
     RectDescriptor leftWall = MakeRectangle(leftT, width+extend, height);
     InsertPrimitive(leftWall, green);
     
-    Transform bottomT = Translate(0, 0, -height/2) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+extend);
+    Float bottomExt = 5;
+    Transform bottomT = Translate(0, 0, -(height+bottomExt)/2) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+bottomExt);
+    InsertPrimitive(bottomWall, uvMat);
+    
+    Transform frontT = Translate(0,height/2,-28);
+    RectDescriptor frontWall = MakeRectangle(frontT, width, height);
+    InsertPrimitive(frontWall, white);
+    
+    Transform topT = Translate(0, height, -height/2) * RotateX(90);
+    RectDescriptor topWall = MakeRectangle(topT, width, height);
+    InsertPrimitive(topWall, white);
+    
+    Transform boxT = Translate(-3.5, 2,-width*0.5) * RotateY(-25);
+    BoxDescriptor box = MakeBox(boxT, 4, 4, 4);
+    InsertPrimitive(box, white);
+    
+    Transform boxBT = Translate(3.0, 4.25, -width*0.25) * RotateY(30);
+    BoxDescriptor bbox = MakeBox(boxBT, 4.5, 8.5, 4.5);
+    InsertPrimitive(bbox, mirror);
+    
+    MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 6);
+    Transform r = Translate(0, height-0.01, -height/2) * RotateX(90);
+    DiskDescriptor disk = MakeDisk(r, 0, width*0.15, 0.f, 360);
+    InsertPrimitive(disk, matEm);
+}
+
+void CornellRoomSkull(Camera *camera, Float aspect){
+    camera->Config(Point3f(0, 4, -25), Point3f(0, 4, 0.0f),
+                   vec3f(0,1,0), 40, aspect);
+    
+    MaterialDescriptor white  = MakeMatteMaterial(Spectrum(.73, .73, .73));
+    MaterialDescriptor green  = MakeMatteMaterial(Spectrum(.05, .65, .05));
+    MaterialDescriptor red    = MakeMatteMaterial(Spectrum(.65, .05, .05));
+    MaterialDescriptor wPlast = MakePlasticMaterial(Spectrum(.53), Spectrum(1.f), 30);
+    
+    Float height = 14;
+    Float width = height * 1.2;
+    Float extend = 30;
+    Transform backT = Translate(0, height/2, 0) * RotateY(0);
+    RectDescriptor backWall = MakeRectangle(backT, width, height);
+    InsertPrimitive(backWall, white);
+    
+    Transform rightT = Translate(-width/2, height/2, -height/2) * RotateY(90);
+    RectDescriptor rightWall = MakeRectangle(rightT, width+extend, height);
+    InsertPrimitive(rightWall, red);
+    
+    Transform leftT = Translate(width/2, height/2, -height/2) * RotateY(90);
+    RectDescriptor leftWall = MakeRectangle(leftT, width+extend, height);
+    InsertPrimitive(leftWall, green);
+    
+    Float bottomExt = 5;
+    Transform bottomT = Translate(0, 0, -(height+bottomExt)/2) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(bottomT, width, height+bottomExt);
     InsertPrimitive(bottomWall, white);
     
     Transform frontT = Translate(0,height/2,-28);
@@ -776,20 +831,19 @@ void CornellRoom2(Camera *camera, Float aspect){
     RectDescriptor topWall = MakeRectangle(topT, width, height);
     InsertPrimitive(topWall, white);
     
-    Transform boxT = Translate(-3.5, 2,-width*0.5) * RotateY(90);
-    BoxDescriptor box = MakeBox(boxT, 4, 4, 4);
-    InsertPrimitive(box, white);
-    
-    Transform boxBT = Translate(3.0, 4.25, -width*0.25) * RotateY(0);
-    BoxDescriptor bbox = MakeBox(boxBT, 4.5, 8.5, 4.5);
-    InsertPrimitive(bbox, white);
+    ParsedMesh *skull = LoadObjOnly(MESH_FOLDER "skull2.obj");
+    skull->toWorld = Translate(0.0, 3.33, -width*0.45) * Scale(0.05);
+    MeshDescriptor skDesc = MakeMesh(skull);
+    InsertPrimitive(skDesc, wPlast);
     
     MaterialDescriptor matEm = MakeEmissive(Spectrum(0.992, 0.964, 0.390) * 6);
     Transform r = Translate(0, height-0.01, -height/2) * RotateX(90);
     DiskDescriptor disk = MakeDisk(r, 0, width*0.15, 0.f, 360);
     InsertPrimitive(disk, matEm);
+    
+    MediumDescriptor medium = MakeMedium(Spectrum(.008), Spectrum(.01), 0);
+    InsertCameraMedium(medium);
 }
-
 
 void OrigamiScene(Camera *camera, Float aspect){
     AssertA(camera, "Invalid camera pointer");
@@ -847,52 +901,6 @@ void OrigamiScene(Camera *camera, Float aspect){
     transf = Translate(len, 1.6 * len, -len * 0.5) * RotateY(200);
     ProcToyDescriptor box = MakeProceduralToy(transf, bo2, 3);
     InsertPrimitive(box, dragonMat);
-}
-
-
-void IceSpheres(Camera *camera, Float aspect){
-    AssertA(camera, "Invalid camera pointer");
-    
-    camera->Config(Point3f(0.f, 30.f, 30.f),
-                   Point3f(0, 0, 0),
-                   vec3f(0.f,1.f,0.f), 45.f, aspect);
-    
-    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
-    MaterialDescriptor white = MakeMatteMaterial(Spectrum(.8));
-    MaterialDescriptor em = MakeEmissive(Spectrum(0.992, 0.964, 0.890) * 10);
-    
-    Point3f ps[] = {
-        Point3f(10, 5, 10), Point3f(10, 10, 10), 
-        Point3f(0, 5, 10), Point3f(0, 10, 10),
-    };
-    
-    Point3i id[] = {
-        Point3i(0, 0, 0), Point3i(1, 0, 0), Point3i(2, 0, 0),
-        Point3i(2, 0, 0), Point3i(1, 0, 0), Point3i(3, 0, 0),
-    };
-    
-    ParsedMesh *t = ParsedMeshFromData(2, &id[0], 4, &ps[0]);
-    MeshDescriptor ground = MakeMesh(t);
-    InsertPrimitive(ground, em);
-    
-    Transform er = Translate(0, 0, 0) * RotateX(90);
-    RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
-    InsertPrimitive(bottomWall, gray);
-    
-#if 0
-    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
-                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
-    
-    
-    MaterialDescriptor kdsub = MakeKdSubsurfaceMaterial(Spectrum(.2, .7, .5),
-                                                        Spectrum(1), Spectrum(1),
-                                                        Spectrum(0.1), 0, 0, 1.5, 10);
-    
-    ParsedMesh *budda = LoadObjOnly(MESH_FOLDER "articDragon.obj");
-    budda->toWorld = Translate(-10, 20, 26) * Scale(0.29);
-    MeshDescriptor desc0 = MakeMesh(budda);
-    InsertPrimitive(desc0, kdsub);
-#endif
 }
 
 
@@ -1027,14 +1035,14 @@ void render(Image *image){
     
     //NOTE: Use this place to set the scene
     ////////////////////////////////////////////////
-    //CornellRoom2(camera, aspect);
+    //CornellRoomBasic(camera, aspect);
+    CornellRoomSkull(camera, aspect);
     //OrigamiScene(camera, aspect);
     //Helmet(camera, aspect);
     //Vader(camera, aspect);
     //VolumetricCausticsScene(camera, aspect);
     //TwoDragonsScene(camera, aspect);
     //SubsurfaceSpheres(camera, aspect);
-    IceSpheres(camera, aspect);
     //BoxesScene(camera, aspect);
     ////////////////////////////////////////////////
     
@@ -1077,8 +1085,8 @@ int main(int argc, char **argv){
     }else{
         cudaInitEx();
         
-        //Float aspect_ratio = 16.0 / 9.0;
-        Float aspect_ratio = 4.0 / 3.0;
+        Float aspect_ratio = 16.0 / 9.0;
+        //Float aspect_ratio = 4.0 / 3.0;
         //int image_width = 1600;
         int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
@@ -1092,7 +1100,7 @@ int main(int argc, char **argv){
         
         render(image);
         
-        ImageWrite(image, "output.png", 1.f, ToneMapAlgorithm::Exponential);
+        ImageWrite(image, "output.png", 2.f, ToneMapAlgorithm::Exponential);
         
         ImageStats(image);
         

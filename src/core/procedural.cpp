@@ -34,6 +34,43 @@ __bidevice__ Float SmoothMin(Float a, Float b, Float k){
     return Mix(b, a, h) - k * h * (1.0 - h);
 }
 
+// MATH STUFF
+__bidevice__ Float ProceduralMath::Hash1(Float n){
+    return Fract(n * 17.0 * Fract(n * 0.3183099));
+}
+
+__bidevice__ Float ProceduralMath::Hash1(const vec2f &q){
+    vec2f p = 50.0 * Fract(q * 0.3183099);
+    return Fract(p.x * p.y * (p.x + p.y));
+}
+
+__bidevice__ vec3f ProceduralMath::Noise32d(const vec2f &q){
+    vec2f p = Floor(q);
+    vec2f w = Fract(q);
+    
+    vec2f u = w*w*w*(w*(w*6.0-15.0)+10.0);
+    vec2f du = 5.0*w*w*(w*(w-2.0)+1.0);
+    
+    Float a = Hash1(p + vec2f(0,0));
+    Float b = Hash1(p + vec2f(1,0));
+    Float c = Hash1(p + vec2f(0,1));
+    Float d = Hash1(p + vec2f(1,1));
+    
+    Float k0 = a;
+    Float k1 = b - a;
+    Float k2 = c - a;
+    Float k4 = a - b - c + d;
+    Float tx = -1.0 + 2.0 * (k0 + k1 * u.x + k2 * u.y + k4 * u.x * u.y);
+    vec2f ty = 2.0 * du * vec2f(k1 + k4 * u.y, k2 + k4 * u.x);
+    
+    return vec3f(tx, ty.x, ty.y);
+}
+
+
+
+/////////////////////////////////////////////////////////
+
+
 __bidevice__ Float SDF::Sphere(vec3f p, Float radius){
     return p.Length() - radius;
 }
@@ -183,7 +220,7 @@ __bidevice__ bool ProceduralShape::Intersect(const Ray &r, Float *tHit,
             break;
         }
         
-        t += Absf(d);
+        t += d;
         
         if(!Inside(ray(t), localBound)) break;
     }
@@ -348,6 +385,7 @@ __bidevice__ Float ProceduralComponent::Map(Point3f p, Point2f *uv, int *shapeId
         case 1: return SDF::OrigamiDragon(ToVec3(p), half, shapeId);
         case 2: return SDF::OrigamiWhale(ToVec3(p), half, shapeId);
         case 3: return SDF::OrigamiBird(ToVec3(p), half, shapeId);
+        case 4: return SDF::Terrain(ToVec3(p), half, shapeId);
         default:{
             printf("Unknown component id\n");
         }
@@ -357,6 +395,10 @@ __bidevice__ Float ProceduralComponent::Map(Point3f p, Point2f *uv, int *shapeId
 }
 
 ////////////////////// MOVE THIS TO A SPECIFIC FILE
+__bidevice__ Float SDF::Terrain(vec3f q, vec3f half, int *shapeId){
+    return SDF::Box(q, half);
+}
+
 __bidevice__ Float SDF::OrigamiBird(vec3f p, vec3f half, int *shapeId){
     vec3f q(p.x, p.y, Absf(p.z));
     vec3f Q0(-half.x * 0.25,  half.y * 0.88, half.z * 0.30);
