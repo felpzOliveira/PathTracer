@@ -7,7 +7,7 @@
 #include <camera.h>
 #include <ppm.h>
 
-#define GraphyPath "/home/felpz/Documents/Graphics/build/libgraphy.so"
+#define GraphyPath "/home/felipe/Documents/Graphics/build/libgraphy.so"
 #define BACKUP_SAVE "temp.ppm"
 #define BACKUP_AT_EACH 10
 #define USE_THREADS 0

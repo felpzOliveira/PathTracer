@@ -70,6 +70,7 @@ static MeasuredSS SubsurfaceParameterTable[] = {
 std::vector<PrimitiveDescriptor> hPrimitives;
 
 int any_mesh = 0;
+int any_cloud = 0;
 int mplayground_ids = 0;
 
 typedef struct{
@@ -207,6 +208,15 @@ __host__ MeshDescriptor MakeMesh(ParsedMesh *mesh){
     MeshDescriptor desc;
     desc.mesh = mesh;
     any_mesh += 1;
+    return desc;
+}
+
+__host__ ParticleCloudDescripor MakeParticleCloud(vec3f *positions, int n, Float size){
+    ParticleCloudDescripor desc;
+    desc.pos = positions;
+    desc.npos = n;
+    desc.scale = size;
+    any_cloud += 1;
     return desc;
 }
 
@@ -587,6 +597,20 @@ __host__ void InsertPrimitive(ProcToyDescriptor shape, MaterialDescriptor mat){
     hPrimitives.push_back(desc);
 }
 
+__host__ void InsertPrimitive(ParticleCloudDescripor shape, 
+                              MaterialDescriptor mat)
+{
+    PrimitiveDescriptor desc;
+    MediumDescriptor md;
+    md.is_valid = 0;
+    desc.mediumDesc = md;
+    desc.no_mat = 0;
+    desc.shapeType = ShapeType::PARTICLECLOUD;
+    desc.partDesc = shape;
+    desc.mat = mat;
+    hPrimitives.push_back(desc);
+}
+
 __host__ void InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat,
                               MediumDescriptor medium)
 {
@@ -734,6 +758,9 @@ __bidevice__ Shape *MakeShape(Aggregator *scene, PrimitiveDescriptor *pri){
     }else if(pri->shapeType == ShapeType::COMPONENT_PROCEDURAL){
         shape = new ProceduralComponent(pri->toyDesc.toWorld, 
                                         pri->toyDesc.bound, pri->toyDesc.id);
+    }else if(pri->shapeType == ShapeType::PARTICLECLOUD){
+        shape = scene->AddParticleCloud(pri->partDesc.pos, pri->partDesc.npos, 
+                                        pri->partDesc.scale);
     }
     
     return shape;
@@ -938,6 +965,8 @@ __host__ void PrepareSceneForRendering(Aggregator *scene){
         hostScene->nprimitives = hPrimitives.size();
         if(any_mesh > 0)
             scene->ReserveMeshes(any_mesh);
+        if(any_cloud)
+            scene->ReserveParticleClouds(any_cloud);
         
         MakeSceneGPU<<<1,1>>>(scene, hostScene);
         cudaDeviceAssert();

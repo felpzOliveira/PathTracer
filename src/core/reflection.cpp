@@ -599,11 +599,12 @@ __bidevice__ Spectrum BSDF::Sample_f(const vec3f &woWorld, vec3f *wiWorld, const
                                      Float *pdf, BxDFType type, BxDFType *sampledType) const
 {
     int matchingComps = NumComponents(type);
-    if (matchingComps == 0) {
+    if(matchingComps == 0){
         *pdf = 0;
         if (sampledType) *sampledType = BxDFType(0);
         return Spectrum(0);
     }
+    
     int comp = Min((int)std::floor(u[0] * matchingComps), matchingComps - 1);
     
     BxDF *bxdf = nullptr;

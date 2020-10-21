@@ -123,6 +123,25 @@ __host__ void Aggregator::ReserveMeshes(int n){
     nMeshes = 0;
 }
 
+__host__ void Aggregator::ReserveParticleClouds(int n){
+    nAllowedpClouds = n;
+    pClouds = cudaAllocateVx(ParticleCloud*, n);
+    npClouds = 0;
+}
+
+__bidevice__ ParticleCloud *Aggregator::AddParticleCloud(vec3f *pos, int n, Float scale){
+    ParticleCloud *ptr = nullptr;
+    if(npClouds < nAllowedpClouds){
+        pClouds[npClouds] = new ParticleCloud(pos, n, scale);
+        ptr = pClouds[npClouds];
+        npClouds++;
+    }else{
+        printf("Hit maximum particle clouds allowed [%d] \n", npClouds);
+    }
+    
+    return ptr;
+}
+
 __bidevice__ Mesh *Aggregator::AddMesh(const Transform &toWorld, ParsedMesh *pMesh, int copy){
     Mesh *ptr = nullptr;
     if(nMeshes < nAllowedMeshes){
@@ -360,73 +379,48 @@ __bidevice__ bool Aggregator::Intersect(const Ray &r, SurfaceInteraction *isect,
     *stackPtr++ = NULL;
     
     NodePtr node = root;
-    int curr_depth = 1;
-    int hit_tests = 1;
+    int hit_tests = 0;
     bool hit_anything = false;
     
-    Float t0, t1;
-    bool hit_bound = node->bound.IntersectP(r, &t0, &t1);
-    
-    if(hit_bound && node->is_leaf){
-        hit_tests += node->n;
-        if(pixel){
-            if(hit_tests > pixel->stats.max_transverse_tests) 
-                pixel->stats.max_transverse_tests = hit_tests;
-        }
-        return IntersectNode(node, r, isect);
-    }
-    
-    do{
+    while(node != nullptr){
+        bool hit_bound = node->bound.IntersectP(r);
         if(hit_bound){
-            NodePtr childL = node->left;
-            NodePtr childR = node->right;
-            bool hitl = false;
-            bool hitr = false;
-            if(childL->n > 0 || childR->n > 0){
-                hit_tests += 2;
-                hitl = childL->bound.IntersectP(r, &t0, &t1);
-                hitr = childR->bound.IntersectP(r, &t0, &t1);
-            }
-            
-            if(hitl && childL->is_leaf){
-                hit_tests += childL->n;
-                if(IntersectNode(childL, r, isect)){
-                    hit_anything = true;
-                }
-            }
-            
-            if(hitr && childR->is_leaf){
-                hit_tests += childR->n;
-                if(IntersectNode(childR, r, isect)){
-                    hit_anything = true;
-                }
-            }
-            
-            bool transverseL = (hitl && !childL->is_leaf);
-            bool transverseR = (hitr && !childR->is_leaf);
-            if(!transverseR && !transverseL){
+            if(node->is_leaf){
+                hit_anything |= IntersectNode(node, r, isect);
+                hit_tests += node->n;
                 node = *--stackPtr;
-                curr_depth -= 1;
             }else{
-                node = (transverseL) ? childL : childR;
-                if(transverseL && transverseR){
-                    *stackPtr++ = childR;
-                    curr_depth += 1;
+                Float tl0, tr0;
+                NodePtr childL = node->left;
+                NodePtr childR = node->right;
+                bool shouldVisitLeft  = childL->bound.IntersectP(r, &tl0);
+                bool shouldVisitRight = childR->bound.IntersectP(r, &tr0);
+                hit_tests += 2;
+                
+                if(shouldVisitRight && shouldVisitLeft){
+                    NodePtr firstChild = nullptr, secondChild = nullptr;
+                    if(tr0 < tl0){
+                        firstChild  = childR;
+                        secondChild = childL;
+                    }else{
+                        firstChild  = childL;
+                        secondChild = childR;
+                    }
+                    
+                    *stackPtr++ = secondChild;
+                    node = firstChild;
+                }else if(shouldVisitLeft){
+                    node = childL;
+                }else if(shouldVisitRight){
+                    node = childR;
+                }else{
+                    node = *--stackPtr;
                 }
             }
         }else{
             node = *--stackPtr;
-            curr_depth -= 1;
         }
-        
-        Assert(curr_depth <= MAX_STACK_SIZE-2);
-        
-        if(node){
-            hit_tests += 1;
-            hit_bound = node->bound.IntersectP(r, &t0, &t1);
-        }
-        
-    }while(node != NULL);
+    }
     
     if(pixel){
         if(pixel->stats.max_transverse_tests < hit_tests)
@@ -631,6 +625,10 @@ __host__ void Aggregator::Wrap(){
     
     for(int i = 0; i < nMeshes; i++){
         WrapMesh(meshPtrs[i]);
+    }
+    
+    for(int i = 0; i < npClouds; i++){
+        WrapParticleCloud(pClouds[i]);
     }
     
     size_t pThreads = 64;

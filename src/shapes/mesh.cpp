@@ -450,9 +450,69 @@ __bidevice__ bool Mesh::IntersectMeshNode(Node *node, const Ray &r,
     return hit_anything;
 }
 
-//TODO: This is a duplicated of the primitive.cpp call, refactor?
+
 __bidevice__ bool Mesh::Intersect(const Ray &r, Float *tHit,
                                   SurfaceInteraction *isect) const
+{
+    NodePtr stack[MAX_STACK_SIZE];
+    NodePtr *stackPtr = stack;
+    *stackPtr++ = NULL;
+    
+    SurfaceInteraction tmp;
+    NodePtr node = bvh;
+    bool hit_anything = false;
+    
+    while(node != nullptr){
+        bool hit_bound = node->bound.IntersectP(r);
+        if(hit_bound){
+            if(node->is_leaf){
+                hit_anything |= IntersectMeshNode(node, r, isect, tHit);
+                node = *--stackPtr;
+            }else{
+                Float tl0, tr0;
+                NodePtr childL = node->left;
+                NodePtr childR = node->right;
+                bool shouldVisitLeft  = childL->bound.IntersectP(r, &tl0);
+                bool shouldVisitRight = childR->bound.IntersectP(r, &tr0);
+                
+                if(shouldVisitRight && shouldVisitLeft){
+                    NodePtr firstChild = nullptr, secondChild = nullptr;
+                    if(tr0 < tl0){
+                        firstChild  = childR;
+                        secondChild = childL;
+                    }else{
+                        firstChild  = childL;
+                        secondChild = childR;
+                    }
+                    
+                    *stackPtr++ = secondChild;
+                    node = firstChild;
+                }else if(shouldVisitLeft){
+                    node = childL;
+                }else if(shouldVisitRight){
+                    node = childR;
+                }else{
+                    node = *--stackPtr;
+                }
+            }
+        }else{
+            node = *--stackPtr;
+        }
+    }
+    
+    
+    if(hit_anything){
+        *isect = tmp;
+    }
+    
+    return hit_anything;
+}
+
+
+#if 0
+//TODO: This is a duplicated of the primitive.cpp call, refactor?
+__bidevice__ bool Mesh::Intersect2(const Ray &r, Float *tHit,
+                                   SurfaceInteraction *isect) const
 {
     NodePtr stack[MAX_STACK_SIZE];
     NodePtr *stackPtr = stack;
@@ -529,6 +589,7 @@ __bidevice__ bool Mesh::Intersect(const Ray &r, Float *tHit,
     
     return hit_anything;
 }
+#endif
 
 __bidevice__ Bounds3f Mesh::GetBounds() const{
     if(bvh){

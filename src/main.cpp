@@ -16,9 +16,10 @@
 #include <obj_loader.h>
 #include <ctime>
 #include <sstream>
+#include <part_loader.h>
 
-#define MESH_FOLDER "/home/felpz/Documents/models/"
-#define TEXTURE_FOLDER "/home/felpz/Documents/models/Textures/"
+#define MESH_FOLDER "/home/felipe/Documents/CGStuff/models/"
+#define TEXTURE_FOLDER "/home/felipe/Documents/CGStuff/textures/"
 
 __device__ Float rand_float(curandState *state){
     return curand_uniform(state);
@@ -252,7 +253,7 @@ __device__ Spectrum Li_PathSampled(Ray r, Aggregator *scene, Pixel *pixel){
     RayDifferential ray(r);
     bool specularBounce = false;
     int bounces;
-    int max_bounces = 4;
+    int max_bounces = 10;
     Float rrThreshold = 1;
     
     curandState *state = &pixel->state;
@@ -378,7 +379,6 @@ __device__ Spectrum Li_Path(Ray ray, Aggregator *scene, Pixel *pixel){
             isect.ComputeScatteringFunctions(&bsdf, ray, TransportMode::Radiance, true);
             Spectrum Le = isect.primitive->Le();
             L += beta * Le;
-            
             Spectrum f = bsdf.Sample_f(wo, &wi, u, &pdf, BSDF_ALL);
             if(IsZero(pdf)) break;
             
@@ -479,7 +479,7 @@ void DragonScene(Camera *camera, Float aspect){
     InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
                       RotateX(-95) * RotateZ(50), Spectrum(2.5));
     
-    ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "dragon_aligned.obj");
+    ParsedMesh *dragonMesh = LoadObjOnly(MESH_FOLDER "dragon.obj");
     dragonMesh->toWorld = Scale(15) * RotateZ(-1) * RotateY(70);
     MeshDescriptor dragon = MakeMesh(dragonMesh);
     InsertPrimitive(dragon, blue);
@@ -546,7 +546,7 @@ void BoxesScene(Camera *camera, Float aspect){
     
     SphereDescriptor cSphere = MakeSphere(Translate(50, 150, -150), 50);
     InsertPrimitive(cSphere, matGlass);
-    
+#if 0
     ParsedMesh *winged;
     LoadObjData(MESH_FOLDER "winged.obj", &winged);
     winged->toWorld = Translate(-100,100,-200) * RotateY(65);
@@ -558,6 +558,7 @@ void BoxesScene(Camera *camera, Float aspect){
     budda->toWorld = Translate(160, 20, -270) * Scale(100) * RotateY(180);
     MeshDescriptor buddaDesc = MakeMesh(budda);
     InsertPrimitive(buddaDesc, red);
+#endif
     
     MaterialDescriptor matEm = MakeEmissive(Spectrum(7));
     Transform lightModel = Translate(0,554,0) * RotateX(90);
@@ -717,24 +718,30 @@ void Vader(Camera *camera, Float aspect){
                    Point3f(-10, 0, -20), //fov = 42
                    vec3f(0.f,1.f,0.f), 42.f, aspect);
     
-    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.1, .1, .1));
+    MaterialDescriptor gray = MakeMatteMaterial(Spectrum(.68));
     MaterialDescriptor glass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
     
     Transform er = Translate(0, 0, 0) * RotateX(90);
     RectDescriptor bottomWall = MakeRectangle(er, 1000, 1000);
     InsertPrimitive(bottomWall, gray);
     
-    InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr",  
+    InsertEXRLightMap(TEXTURE_FOLDER "skylight-day.exr",  
                       RotateX(-90) * RotateZ(90), Spectrum(2.5));
     
     MaterialDescriptor kdsub = MakeKdSubsurfaceMaterial(Spectrum(.2, .5, .7),
                                                         Spectrum(1), Spectrum(1),
                                                         Spectrum(.1), 0, 0, 1.33, 1);
     
+    Transform boxT = Translate(0,15,0) * RotateY(-25);
+    BoxDescriptor box = MakeBox(boxT, 30,30,30);
+    InsertPrimitive(box, glass);
+    
+#if 0
     ParsedMesh *darth = LoadObjOnly(MESH_FOLDER "darth.obj");
     darth->toWorld = Translate(-10, 0, 33) * Scale(6.7) * RotateZ(4);
     MeshDescriptor darthDesc = MakeMesh(darth);
     InsertPrimitive(darthDesc, kdsub);
+#endif
 }
 
 
@@ -868,7 +875,7 @@ void OrigamiScene(Camera *camera, Float aspect){
     InsertPrimitive(bottomWall, gray);
     
     InsertEXRLightMap(TEXTURE_FOLDER "skylight-sunset.exr", 
-                      RotateX(-90) * RotateZ(90) * RotateY(180), Spectrum(2.5));
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
     
     Float len = 15;
     Float h = 1.5;
@@ -1013,6 +1020,80 @@ void VolumetricCausticsScene(Camera *camera, Float aspect){
     InsertCameraMedium(medium);
 }
 
+void FluidDragonInBox(Camera *camera, Float aspect){
+    AssertA(camera, "Invalid camera pointer");
+    camera->Config(Point3f(0.f, 1.5f, 7.0f), Point3f(0.f, -0.5f, 0.f),
+                   vec3f(0.f,1.f,0.f), 35.f, aspect);
+    
+    MaterialDescriptor white = MakeMatteMaterial(Spectrum(2.0));
+    
+    PParser parser;
+    PParserInitialize(&parser, "vs");
+    PParserParse(&parser, "/home/felipe/Documents/Fluids/boundaries/gpu/output/sim6_0.txt");
+    
+    Float radius = 0.012;
+    int amount = 0;
+    vec3f *pos = PParserGetVectorPtr(&parser, 0, &amount);
+    Float *bou = PParserGetScalarPtr(&parser, 0, &amount);
+    
+    MaterialDescriptor materials[] = {
+        MakeMatteMaterial(Spectrum(0.97,0.00,0.10)),
+        MakeMatteMaterial(Spectrum(0.90,0.44,0.10)),
+        MakeMatteMaterial(Spectrum(0.95,0.76,0.30)),
+        MakeMatteMaterial(Spectrum(0.45,0.70,0.84)),
+        MakeMatteMaterial(Spectrum(0.15,0.40,0.74)),
+        MakeMatteMaterial(Spectrum(0.78,0.78,0.74))
+    };
+    
+    printf("Splitting by levels ... ");
+    int found = 0;
+    int level = 1;
+    do{
+        int count = 0;
+        for(int i = 0; i < amount; i++){
+            if(bou[i] == level) count++;
+        }
+        
+        found = count > 0;
+        if(found){
+            vec3f *lpos = cudaAllocateVx(vec3f, count);
+            int id = 0;
+            for(int i = 0; i < amount; i++){
+                if(bou[i] == level){
+                    lpos[id++] = pos[i];
+                }
+            }
+            
+            ParticleCloudDescripor desc = MakeParticleCloud(lpos, count, radius);
+            if(level < 7){
+                InsertPrimitive(desc, materials[level-1]);
+            }else{
+                InsertPrimitive(desc, materials[5]);
+            }
+            
+            level++;
+            //if(level > 2) break;
+        }
+        
+    }while(found);
+    printf("OK {%d}\n", level-1);
+    
+    InsertEXRLightMap(TEXTURE_FOLDER "20060807_wells6_hd.exr",  
+                      RotateX(-90) * RotateZ(90), Spectrum(2.5));
+    
+    Transform er = Translate(0, -1.43, 0) * RotateX(90);
+    RectDescriptor bottomWall = MakeRectangle(er, 100, 100);
+    InsertPrimitive(bottomWall, white);
+    
+    Transform br = Translate(0, 0, -20);
+    RectDescriptor backWall = MakeRectangle(br, 100, 100);
+    InsertPrimitive(backWall, white);
+    
+    BoxDescriptor box = MakeBox(Transform(), 2.25052, 2.85056, 4.90718);
+    MaterialDescriptor glass = MakeGlassMaterial(Spectrum(1), Spectrum(1), 1.5);
+    //InsertPrimitive(box, glass);
+}
+
 void render(Image *image){
     int tx = 8;
     int ty = 8;
@@ -1036,21 +1117,22 @@ void render(Image *image){
     //NOTE: Use this place to set the scene
     ////////////////////////////////////////////////
     //CornellRoomBasic(camera, aspect);
-    CornellRoomSkull(camera, aspect);
+    //CornellRoomSkull(camera, aspect);
     //OrigamiScene(camera, aspect);
     //Helmet(camera, aspect);
     //Vader(camera, aspect);
-    //VolumetricCausticsScene(camera, aspect);
+    VolumetricCausticsScene(camera, aspect);
     //TwoDragonsScene(camera, aspect);
     //SubsurfaceSpheres(camera, aspect);
     //BoxesScene(camera, aspect);
+    //FluidDragonInBox(camera, aspect);
     ////////////////////////////////////////////////
     
     std::cout << "Building scene\n" << std::flush;
     PrepareSceneForRendering(scene);
     std::cout << "Done" << std::endl;
     
-    int it = 8000;
+    int it = 500;
     clock_t start = clock();
     std::cout << "Rendering..." << std::endl;
     for(int i = 0; i < it; i++){
@@ -1090,7 +1172,7 @@ int main(int argc, char **argv){
         //int image_width = 1600;
         int image_width = 800;
         int image_height = (int)((Float)image_width / aspect_ratio);
-#if 0
+#if 1
         image_width = 1200;
         image_height = 900;
 #endif

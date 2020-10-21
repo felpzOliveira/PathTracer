@@ -102,7 +102,7 @@ static bool parseTriple(const char **token, int vsize, int vnsize, int vtsize,
 
 
 
-static std::istream &GetLine(std::istream &is, std::string &t){
+std::istream &GetLine(std::istream &is, std::string &t){
     t.clear();
     std::istream::sentry se(is, true);
     std::streambuf *sb = is.rdbuf();
@@ -121,7 +121,7 @@ static std::istream &GetLine(std::istream &is, std::string &t){
     return is;
 }
 
-static inline Float ParseFloat(const char **token){
+Float ParseFloat(const char **token){
     (*token) += strspn((*token), " \t");
     const char *end = (*token) + strcspn((*token), " \t\r");
     Float val = 0;
@@ -131,11 +131,11 @@ static inline Float ParseFloat(const char **token){
     return f;
 }
 
-static inline void ParseV3(vec3f *v, const char **token){
+void ParseV3(vec3f *v, const char **token){
     *v = Flip(vec3f(ParseFloat(token), ParseFloat(token), ParseFloat(token)));
 }
 
-static inline void ParseV2(vec2f *v, const char **token){
+void ParseV2(vec2f *v, const char **token){
     *v = Flip(vec2f(ParseFloat(token), ParseFloat(token)));
 }
 

@@ -32,3 +32,11 @@ __host__ ParsedMesh *LoadObjOnly(const char *path);
 * not very efficient but usefull.
 */
 __host__ ParsedMesh *DuplicateMesh(ParsedMesh *mesh, MeshProperties *props=nullptr);
+
+/*
+* Utility for parsers.
+*/
+std::istream &GetLine(std::istream &is, std::string &t);
+Float ParseFloat(const char **token);
+void ParseV3(vec3f *v, const char **token);
+void ParseV2(vec2f *v, const char **token);

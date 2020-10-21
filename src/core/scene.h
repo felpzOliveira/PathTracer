@@ -38,6 +38,12 @@ typedef struct{
 }DiskDescriptor;
 
 typedef struct{
+    vec3f *pos;
+    int npos;
+    Float scale;
+}ParticleCloudDescripor;
+
+typedef struct{
     Transform toWorld;
     int id;
     Bounds3f bound;
@@ -73,6 +79,7 @@ typedef struct{
     BoxDescriptor boxDesc;
     DiskDescriptor diskDesc;
     ProcToyDescriptor toyDesc;
+    ParticleCloudDescripor partDesc;
     MaterialDescriptor mat;
     MediumDescriptor mediumDesc;
     int no_mat;
@@ -92,6 +99,9 @@ __host__ DiskDescriptor      MakeDisk(Transform toWorld, Float height, Float rad
                                       bool reverseOrientation=false);
 
 __host__ ProcToyDescriptor   MakeProceduralToy(Transform toWorld, Bounds3f bound, int id);
+
+__host__ ParticleCloudDescripor MakeParticleCloud(vec3f *positions, int n, Float size);
+
 
 __host__ TextureDescriptor   MakeTexture(Spectrum value);
 __host__ TextureDescriptor   MakeTexture(Float value);
@@ -160,6 +170,8 @@ __host__ void                InsertPrimitive(DiskDescriptor shape, MaterialDescr
 
 __host__ void                InsertPrimitive(SphereDescriptor shape, MediumDescriptor medium);
 __host__ void                InsertPrimitive(MeshDescriptor shape, MediumDescriptor medium);
+__host__ void                InsertPrimitive(ParticleCloudDescripor shape, 
+                                             MaterialDescriptor mat);
 
 __host__ void                InsertPrimitive(SphereDescriptor shape, MaterialDescriptor mat,
                                              MediumDescriptor medium);

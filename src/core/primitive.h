@@ -83,6 +83,10 @@ class Aggregator{
     PrimitiveHandle *handles;
     int totalNodes;
     
+    ParticleCloud **pClouds;
+    int nAllowedpClouds;
+    int npClouds;
+    
     Mesh **meshPtrs;
     int nAllowedMeshes;
     int nMeshes;
@@ -106,12 +110,14 @@ class Aggregator{
     __bidevice__ void Release();
     __bidevice__ void PrintHandle(int which=-1);
     __bidevice__ Mesh *AddMesh(const Transform &toWorld, ParsedMesh *mesh, int copy=0);
+    __bidevice__ ParticleCloud *AddParticleCloud(vec3f *pos, int n, Float scale);
     __bidevice__ void SetLights();
     __bidevice__ Spectrum UniformSampleOneLight(const Interaction &it, BSDF *bsdf,
                                                 Point2f u2, Point3f u3,
                                                 bool handleMedium = false) const;
     
     __host__ void ReserveMeshes(int n);
+    __host__ void ReserveParticleClouds(int n);
     __host__ void Wrap();
     __bidevice__ Bounds3f WorldBound() const;
     

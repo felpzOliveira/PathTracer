@@ -6,7 +6,7 @@
 #include <util.h>
 
 enum ShapeType{
-    SPHERE, RECTANGLE, DISK, BOX, MESH,
+    SPHERE, RECTANGLE, DISK, BOX, MESH, PARTICLECLOUD,
     SPHERE_PROCEDURAL, BOX_PROCEDURAL, COMPONENT_PROCEDURAL,
 };
 
@@ -229,6 +229,50 @@ class Mesh: public Shape{
     __bidevice__ void GetNormals(Normal3f n[3], int nTri) const;
 };
 
+class ParticleCloud : public Shape{
+    public:
+    vec3f *positions;
+    int nParticles;
+    Float radius;
+    PrimitiveHandle *handles;
+    Node *bvh;
+    
+    __bidevice__ ParticleCloud() : Shape(Transform()){ type = ShapeType::PARTICLECLOUD; }
+    __bidevice__ ParticleCloud(vec3f *pos, int n, Float scale);
+    
+    __bidevice__ virtual bool Intersect(const Ray &ray, Float *tHit,
+                                        SurfaceInteraction *isect) const override;
+    
+    __bidevice__ virtual Bounds3f GetBounds() const override;
+    
+    __bidevice__ Float ParticleArea(int triNum) const;
+    __bidevice__ virtual Float Area() const override;
+    
+    __bidevice__ virtual Interaction Sample(const Interaction &ref, const Point2f &u,
+                                            Float *pdf) const override;
+    
+    __bidevice__ Interaction SampleIndex(const Point2f &u, Float *pdf, 
+                                         int index) const;
+    
+    __bidevice__ virtual Float Pdf(const Interaction &ref, const vec3f &wi) const override{
+        UMETHOD();
+        return 0;
+    }
+    
+    __bidevice__ virtual Interaction Sample(const Point2f &u, Float *pdf) const{
+        UMETHOD();
+        *pdf = 0;
+        return Interaction();
+    }
+    
+    __bidevice__ virtual Float Pdf(const Interaction &) const override{ return 1 / Area(); }
+    private:
+    __bidevice__ bool IntersectParticleCloudNode(Node *node, const Ray &r, 
+                                                 SurfaceInteraction *, Float *) const;
+    __bidevice__ bool IntersectSphere(const Ray &r, SurfaceInteraction * isect,
+                                      int partNum, Float *tHit) const;
+};
+
 inline __bidevice__ void PrintShape(Shape *shape){
     if(shape->type == ShapeType::SPHERE){
         Sphere *sphere = (Sphere *)shape;
@@ -252,6 +296,7 @@ inline __bidevice__ void PrintShape(Shape *shape){
 }
 
 __host__ void WrapMesh(Mesh *mesh);
+__host__ void WrapParticleCloud(ParticleCloud *pCloud);
 __host__ bool LoadObjData(const char *obj, ParsedMesh **data);
 
 __host__ ParsedMesh *ParsedMeshFromData(int nTris, Point3i *indices, int nVerts, Point3f *P);
